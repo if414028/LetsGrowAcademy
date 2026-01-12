@@ -1,0 +1,53 @@
+####################################
+# OS & Editor files
+####################################
+.DS_Store
+Thumbs.db
+
+/.idea
+/.vscode
+/.fleet
+/.zed
+.phpactor.json
+
+####################################
+# Environment & secrets (WAJIB IGNORE)
+####################################
+.env
+.env.*
+!.env.example
+auth.json
+
+####################################
+# Logs & cache
+####################################
+*.log
+.phpunit.result.cache
+/.phpunit.cache
+
+####################################
+# Dependencies
+####################################
+/vendor
+/node_modules
+
+####################################
+# Laravel generated files
+####################################
+/public/storage
+/storage/*.key
+/storage/pail
+/public/hot
+/public/build
+
+####################################
+# Laravel dev / tooling
+####################################
+Homestead.json
+Homestead.yaml
+/.nova
+
+####################################
+# Testing
+####################################
+/coverage

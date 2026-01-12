@@ -1,0 +1,174 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\User;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+
+class RolePermissionSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        //Permissions List
+        $userPermissions = [
+            'view users',
+            'create users',
+            'edit users',
+            'delete users',
+
+            'view user hierarchy',
+            'manage user hierarchy',
+
+            'view roles',
+            'create roles',
+            'edit roles',
+            'delete roles',
+
+            'assign roles',
+            'assign permissions',
+        ];
+
+        $salesPermissions = [
+            'view sales performance',
+            'view sales orders',
+            'create sales orders',
+            'edit sales orders',
+            'cancel sales orders',
+
+            'view customers',
+            'create customers',
+            'edit customers',
+
+            'view products',
+            'create products',
+            'edit products',
+            'deactivate products',
+
+            'view sales kpi',
+        ];
+
+        $installationPermissions = [
+            'mark installation complete',
+            'view installation status',
+
+            'approve ccp',
+            'reject ccp',
+        ];
+
+        $contestPermissions = [
+            'view contest',
+            'create contest',
+            'edit contest',
+            'delete contest',
+
+            'publish contest',
+            'close contest',
+
+            'join contest',
+            'view contest progress',
+
+            'calculate contest winner',
+            'view contest winner',
+        ];
+
+        $systemPermissions = [
+            'view dashboard',
+            'view reports',
+            'export reports',
+        ];
+
+        $permissions = array_merge(
+            $userPermissions,
+            $salesPermissions,
+            $installationPermissions,
+            $contestPermissions,
+            $systemPermissions
+        );
+
+        foreach ($permissions as $permission) {
+            Permission::firstOrCreate(['name' => $permission]);
+        }
+
+        //Roles
+        $admin = Role::firstOrCreate(['name' => 'Admin']);
+        $sm    = Role::firstOrCreate(['name' => 'Sales Manager']);
+        $hm    = Role::firstOrCreate(['name' => 'Health Manager']);
+        $hp    = Role::firstOrCreate(['name' => 'Health Planner']);
+
+        //Assign permissions role
+        //Admin: all
+        $admin->syncPermissions(Permission::all());
+
+        // SM
+        $sm->syncPermissions([
+            'view dashboard',
+            'view reports', 'export reports',
+
+            'view users',
+            'view user hierarchy',
+
+            'view sales performance',
+            'view sales orders',
+            'view customers',
+            'view products',
+            'view sales kpi',
+
+            'view contest', 'create contest', 'edit contest',
+            'publish contest', 'close contest',
+            'view contest progress',
+            'view contest winner',
+        ]);
+
+        // HM
+        $hm->syncPermissions([
+            'view dashboard',
+
+            'view users',
+            'view user hierarchy',
+
+            'view sales performance',
+            'view sales orders',
+            'view customers',
+            'view products',
+            'view sales kpi',
+
+            'view installation status',
+            'approve ccp', 'reject ccp',
+
+            'view contest',
+            'join contest',
+            'view contest progress',
+            'view contest winner',
+        ]);
+
+        // HP
+        $hp->syncPermissions([
+            'view dashboard',
+
+            'view sales orders', 'create sales orders',
+            'view customers', 'create customers',
+            'view products',
+
+            'mark installation complete',
+            'view installation status',
+
+            'view contest',
+            'join contest',
+            'view contest progress',
+        ]);
+
+        //Create Super Admin User
+        $user = User::create([
+            'name' => 'Lets Grow Academy Admin',
+            'email' => 'letsgrowacademydev@gmail.com',
+            'password' => bcrypt('letsgrowacademy2025')
+        ]);
+        $user->assignRole($admin);
+    }
+}
