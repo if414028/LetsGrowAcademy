@@ -11,15 +11,8 @@ class SalesOrder extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'order_no',
-        'sales_user_id',
-        'customer_id',
-        'key_in_at',
-        'is_recurring',
-        'ccp_status',
-        'install_date',
-        'payment_method',
-        'status'
+    'order_no','sales_user_id','customer_id','key_in_at','install_date',
+    'is_recurring','payment_method','status','ccp_status'
     ];
 
     protected $casts = [
@@ -51,4 +44,10 @@ class SalesOrder extends Model
     {
         return $this->belongsTo(Product::class, 'product_id');
     }
+
+    public function items()
+    {
+        return $this->hasMany(\App\Models\SalesOrderItem::class);
+    }
+
 }

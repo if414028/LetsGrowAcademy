@@ -54,7 +54,28 @@
                         </svg>
                         Users
                     </a>
+
+                    <a href="{{ route('products.index') }}"
+                    class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+                            {{ request()->routeIs('products.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M20 13V7a2 2 0 00-2-2h-3m5 8h-5m5 0v6a2 2 0 01-2 2h-3m0-18H9a2 2 0 00-2 2v3m8-5v18m0 0H9m6 0h3M4 13h5m-5 0v6a2 2 0 002 2h3"/>
+                        </svg>
+                        Products
+                    </a>
+
+                    <a href="{{ route('sales-orders.index') }}"
+                    class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+                            {{ request()->routeIs('sales-orders.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12h6m-6 4h6M7 6h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z"/>
+                        </svg>
+                        Sales Orders
+                    </a>
                 @endrole
+
             </nav>
         </aside>
 

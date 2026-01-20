@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -34,6 +37,22 @@ Route::middleware(['auth', 'verified', 'role:Admin'])->group(function () {
     //Edit
     Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+});
+
+Route::middleware(['auth'])->group(function () {
+    Route::resource('products', ProductController::class)
+        ->only(['index', 'create', 'store', 'show', 'edit', 'update']);
+});
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/sales-orders', [SalesOrderController::class, 'index'])->name('sales-orders.index');
+    Route::get('/sales-orders/create', [SalesOrderController::class, 'create'])->name('sales-orders.create');
+    Route::post('/sales-orders', [SalesOrderController::class, 'store'])->name('sales-orders.store');
+    Route::get('/sales-orders/{salesOrder}', [SalesOrderController::class, 'show'])
+    ->name('sales-orders.show');
+
+    //autocomplete customer
+    Route::get('/customers/search', [CustomerController::class, 'search'])->name('customers.search');
 });
 
 require __DIR__.'/auth.php';

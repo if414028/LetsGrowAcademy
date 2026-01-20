@@ -7,6 +7,25 @@ use Illuminate\Http\Request;
 
 class CustomerController extends Controller
 {
+
+    public function search(Request $request)
+    {
+        $q = trim((string) $request->query('q', ''));
+
+        if (mb_strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        $customers = Customer::query()
+            ->where('full_name', 'like', "%{$q}%")
+            ->orWhere('phone_number', 'like', "%{$q}%")
+            ->orderBy('full_name')
+            ->limit(10)
+            ->get(['id', 'full_name', 'phone_number', 'address']);
+
+        return response()->json($customers);
+    }
+
     /**
      * Display a listing of the resource.
      */

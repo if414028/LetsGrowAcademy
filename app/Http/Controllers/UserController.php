@@ -171,27 +171,58 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
+            // basic
             'name' => ['required', 'string', 'max:255'],
+            'full_name' => ['nullable', 'string', 'max:255'],
             'email' => [
                 'required', 'email', 'max:255',
                 Rule::unique('users', 'email')->ignore($user->id),
             ],
+            'phone_number' => ['nullable', 'string', 'max:30'],
+
+            // profile/employment
+            'status' => ['nullable', 'in:Active,Inactive'],
+            'dst_code' => ['nullable', 'string', 'max:50'],
+            'city_of_domicile' => ['nullable', 'string', 'max:255'],
+            'date_of_birth' => ['nullable', 'date'],
+            'join_date' => ['nullable', 'date'],
+
+            // role
             'role' => ['required', 'string', 'exists:roles,name'],
+
+            // uploads
+            'photo' => ['nullable', 'image', 'max:2048'],
+            'id_card' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
+
+            // password
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
-        $user->update([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-        ]);
-
-        // update password kalau diisi
-        if (!empty($validated['password'])) {
-            $user->update(['password' => \Illuminate\Support\Facades\Hash::make($validated['password'])]);
+        // Handle uploads (kalau ada file baru)
+        if ($request->hasFile('photo')) {
+            $validated['photo'] = $request->file('photo')->store('users/photos', 'public');
         }
 
-        // set role (single role)
-        $user->syncRoles([$validated['role']]);
+        if ($request->hasFile('id_card')) {
+            $validated['id_card'] = $request->file('id_card')->store('users/id-cards', 'public');
+        }
+
+        // Role bukan kolom users
+        $role = $validated['role'];
+        unset($validated['role']);
+
+        // Password: kalau kosong, jangan ikut update
+        if (empty($validated['password'])) {
+            unset($validated['password']);
+        } else {
+            $validated['password'] = \Illuminate\Support\Facades\Hash::make($validated['password']);
+        }
+
+        // Update semua field yang tervalidasi
+        $user->update($validated);
+
+        // Update role (single role)
+        $user->syncRoles([$role]);
 
         return redirect()->route('users.index')->with('success', 'User updated successfully.');
     }
