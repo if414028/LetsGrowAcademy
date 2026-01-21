@@ -37,6 +37,9 @@ Route::middleware(['auth', 'verified', 'role:Admin'])->group(function () {
     //Edit
     Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+
+    Route::get('/users/referrers/search', [UserController::class, 'searchReferrers'])
+    ->name('users.referrers.search');
 });
 
 Route::middleware(['auth'])->group(function () {
@@ -53,6 +56,9 @@ Route::middleware(['auth'])->group(function () {
 
     //autocomplete customer
     Route::get('/customers/search', [CustomerController::class, 'search'])->name('customers.search');
+
+    Route::get('/sales-orders/sales-users/search', [SalesOrderController::class, 'searchSalesUsers'])
+    ->name('sales-orders.sales-users.search');
 });
 
 require __DIR__.'/auth.php';

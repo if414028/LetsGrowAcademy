@@ -38,25 +38,57 @@
                     <div class="rounded-2xl border bg-white p-5">
                         <h2 class="text-sm font-semibold text-gray-900">Order Info</h2>
 
-                        @if(auth()->user()->hasRole('Admin'))
-                                <div>
-                                    <label class="text-xs font-medium text-gray-600">Sales User</label>
-                                    <select name="sales_user_id"
-                                            class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                                        <option value="">(Default: saya)</option>
-                                        @foreach($salesUsers as $u)
-                                            <option value="{{ $u->id }}" @selected(old('sales_user_id')==$u->id)>{{ $u->name }}</option>
-                                        @endforeach
-                                    </select>
+                
+                            <div x-data="salesUserPicker()" x-init="init()">
+                                <label class="text-xs font-medium text-gray-600">Sales User</label>
+
+                                {{-- hidden yang dikirim ke backend --}}
+                                <input type="hidden" name="sales_user_id" :value="selectedId">
+
+                                <div class="relative mt-1">
+                                    <input
+                                        type="text"
+                                        x-model="query"
+                                        @input.debounce.250ms="search()"
+                                        @focus="open = true"
+                                        @keydown.escape="open = false"
+                                        placeholder="Ketik nama sales..."
+                                        class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                    />
+
+                                    {{-- dropdown --}}
+                                    <div x-show="open && items.length > 0" x-transition
+                                        class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                                        <template x-for="u in items" :key="u.id">
+                                            <button type="button"
+                                                    class="w-full text-left px-4 py-3 hover:bg-gray-50"
+                                                    @click="choose(u)">
+                                                <div class="text-sm font-semibold text-gray-900" x-text="u.label"></div>
+                                            </button>
+                                        </template>
+                                    </div>
                                 </div>
-                            @endif
+
+                                <div class="mt-1 text-xs"
+                                    :class="selectedId ? 'text-green-700' : 'text-gray-400'">
+                                    <span x-show="selectedId">Sales user terpilih.</span>
+                                    <span x-show="!selectedId">Wajib pilih sales dari dropdown.</span>
+                                </div>
+                            </div>
 
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
                                 <label class="text-xs font-medium text-gray-600">Order No</label>
-                                <input name="order_no" value="{{ old('order_no') }}"
-                                       class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                                       placeholder="SO-0001" />
+                                <input
+                                    id="order_no"
+                                    name="order_no"
+                                    value="{{ old('order_no') }}"
+                                    class="mt-1 w-full rounded-xl border-gray-200 bg-gray-50 focus:border-blue-500 focus:ring-blue-500"
+                                    placeholder="Auto generated"
+                                    readonly
+                                />
+                                <div class="mt-1 text-xs text-gray-400">Otomatis terisi setelah memilih Sales.</div>
+
                             </div>
 
                             <div>
@@ -161,6 +193,10 @@
                             Minimal 1 item. Qty harus &ge; 1.
                         </div>
                     </div>
+                </div>
+
+                {{-- Right --}}
+                <div class="lg:col-span-4 space-y-6">
 
                     {{-- Customer --}}
                     <div class="rounded-2xl border bg-white p-5"
@@ -225,10 +261,7 @@
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {{-- Right --}}
-                <div class="lg:col-span-4 space-y-6">
                     <div class="rounded-2xl border bg-white p-5">
                         <h2 class="text-sm font-semibold text-gray-900">Status</h2>
 
@@ -333,5 +366,81 @@
                 },
             }
         }
+
+        function salesUserPicker() {
+        const orderNoEl = () => document.getElementById('order_no');
+
+        function pad2(n) { return String(n).padStart(2, '0'); }
+
+        function formatTs(d) {
+            // ddMMyyyyHHmmss (local time)
+            const dd = pad2(d.getDate());
+            const MM = pad2(d.getMonth() + 1);
+            const yyyy = d.getFullYear();
+            const HH = pad2(d.getHours());
+            const mm = pad2(d.getMinutes());
+            const ss = pad2(d.getSeconds());
+            return `${dd}${MM}${yyyy}${HH}${mm}${ss}`;
+        }
+
+        function sanitizeDst(dst) {
+            // DST code aman: uppercase, buang spasi
+            return (dst || '').toString().trim().toUpperCase().replace(/\s+/g, '');
+        }
+
+        return {
+            query: @json($oldSalesUser ? ($oldSalesUser->name . ($oldSalesUser->email ? " ({$oldSalesUser->email})" : "")) : ''),
+            open: false,
+            items: [],
+            selectedId: @json(old('sales_user_id', $oldSalesUser?->id)),
+            lastFetch: '',
+
+            init() {
+                // optional: kalau sudah ada old('order_no'), biarkan
+            },
+
+            async search() {
+                // user mengetik => reset pilihan + reset order no
+                this.selectedId = null;
+                const el = orderNoEl();
+                if (el) el.value = '';
+
+                const q = (this.query || '').trim();
+                if (q.length < 2) {
+                    this.items = [];
+                    return;
+                }
+
+                if (this.lastFetch === q) return;
+                this.lastFetch = q;
+
+                const res = await fetch(`{{ route('sales-orders.sales-users.search') }}?q=${encodeURIComponent(q)}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!res.ok) return;
+
+                const data = await res.json();
+                this.items = Array.isArray(data) ? data : [];
+                this.open = true;
+            },
+
+            choose(u) {
+                this.selectedId = u.id;
+                this.query = u.label;
+                this.open = false;
+                this.items = [];
+
+                const dst = sanitizeDst(u.dst_code);
+                const ts = formatTs(new Date());
+
+                // kalau dst kosong, tetap generate tapi pake 'DST' fallback
+                const code = dst || 'DST';
+                const orderNo = `SO-${code}-${ts}`;
+
+                const el = orderNoEl();
+                if (el) el.value = orderNo;
+            }
+        }
+    }
     </script>
 </x-dashboard-layout>

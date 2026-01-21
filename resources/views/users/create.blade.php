@@ -101,29 +101,32 @@
 
             {{-- Hierarchy + Role --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {{-- Referrer (searchable) --}}
                 <div>
                     <label class="text-sm font-medium text-gray-700">Referrer (Atasan)</label>
-                    <select id="referrer_user_id" name="referrer_user_id"
-                            class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                            required>
-                        <option value="" disabled selected>Select referrer</option>
 
-                        @foreach(($referrers ?? collect()) as $ref)
-                            @php
-                                $refRole = $ref->getRoleNames()->first();
-                                $refRank = $roleRanks[$refRole] ?? 999;
-                            @endphp
+                    {{-- Hidden yang dikirim ke backend --}}
+                    <input type="hidden" name="referrer_user_id" id="referrer_user_id"
+                        value="{{ old('referrer_user_id') }}">
 
-                            <option
-                                value="{{ $ref->id }}"
-                                data-role="{{ $refRole }}"
-                                data-rank="{{ $refRank }}"
-                                @selected(old('referrer_user_id') == $ref->id)
-                            >
-                                {{ $ref->name }} ({{ $ref->email }}) - {{ $refRole ?? '-' }}
-                            </option>
-                        @endforeach
-                    </select>
+                    {{-- Input search --}}
+                    <div class="relative mt-1">
+                        <input
+                            type="text"
+                            id="referrer_search"
+                            autocomplete="off"
+                            class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                            placeholder="Ketik nama referrer..."
+                            value="{{ $oldReferrer ? ($oldReferrer->name.' ('.$oldReferrer->email.') - '.$oldReferrer->getRoleNames()->first()) : '' }}"
+                        >
+
+                        {{-- Dropdown result --}}
+                        <div id="referrer_dropdown"
+                            class="absolute z-20 mt-2 hidden w-full overflow-hidden rounded-xl border bg-white shadow-lg">
+                            <ul id="referrer_results" class="max-h-72 overflow-auto"></ul>
+                        </div>
+                    </div>
+
                     <p class="mt-2 text-xs text-gray-500">
                         User baru akan menjadi bawahan langsung dari referrer.
                     </p>
@@ -158,14 +161,14 @@
             {{-- Uploads --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="text-sm font-medium text-gray-700">Photo</label>
+                    <label class="text-sm font-medium text-gray-700">Foto</label>
                     <input type="file" name="photo" accept="image/*"
                            class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                     <p class="mt-2 text-xs text-gray-500">JPG/PNG, max 2MB</p>
                 </div>
 
                 <div>
-                    <label class="text-sm font-medium text-gray-700">ID Card</label>
+                    <label class="text-sm font-medium text-gray-700">Foto KTP</label>
                     <input type="file" name="id_card" accept=".jpg,.jpeg,.png,.pdf"
                            class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                     <p class="mt-2 text-xs text-gray-500">JPG/PNG/PDF, max 4MB</p>
@@ -249,5 +252,144 @@
 
         referrerSelect.addEventListener('change', filterRolesByReferrer);
         window.addEventListener('DOMContentLoaded', filterRolesByReferrer);
+    })();
+
+    (function () {
+        const searchInput = document.getElementById('referrer_search');
+        const hiddenId = document.getElementById('referrer_user_id');
+
+        const dropdown = document.getElementById('referrer_dropdown');
+        const resultsEl = document.getElementById('referrer_results');
+
+        const roleSelect = document.getElementById('role');
+
+        let refRank = null; // rank referrer yg dipilih
+        let debounceTimer = null;
+
+        function closeDropdown() {
+            dropdown.classList.add('hidden');
+            resultsEl.innerHTML = '';
+        }
+
+        function openDropdown() {
+            dropdown.classList.remove('hidden');
+        }
+
+        function setSelectedReferrer(item) {
+            hiddenId.value = item.id;
+            searchInput.value = item.label;
+
+            refRank = parseInt(item.rank ?? 999, 10);
+
+            closeDropdown();
+            filterRolesByReferrerRank();
+        }
+
+        function filterRolesByReferrerRank() {
+            if (!refRank || isNaN(refRank)) {
+                roleSelect.disabled = true;
+                roleSelect.value = "";
+                return;
+            }
+
+            roleSelect.disabled = false;
+
+            const options = Array.from(roleSelect.options);
+            let firstAllowedValue = null;
+
+            options.forEach((opt, idx) => {
+                if (idx === 0) return; // placeholder
+                const roleRank = parseInt(opt.dataset.rank || "999", 10);
+
+                // allowed: setara atau di bawah referrer (rank lebih besar = lebih bawah)
+                const allowed = roleRank >= refRank;
+
+                opt.hidden = !allowed;
+                opt.disabled = !allowed;
+
+                if (allowed && !firstAllowedValue) firstAllowedValue = opt.value;
+            });
+
+            const current = roleSelect.value;
+            const currentOpt = options.find(o => o.value === current);
+            const currentAllowed = currentOpt && !currentOpt.disabled && !currentOpt.hidden;
+
+            if (!currentAllowed) roleSelect.value = firstAllowedValue ?? "";
+        }
+
+        async function searchReferrers(q) {
+            const url = "{{ route('users.referrers.search') }}" + "?q=" + encodeURIComponent(q);
+            const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            if (!res.ok) return [];
+            return await res.json();
+        }
+
+        function renderResults(items) {
+            resultsEl.innerHTML = '';
+
+            if (!items.length) {
+                resultsEl.innerHTML = `<li class="px-4 py-3 text-sm text-gray-500">Tidak ada hasil</li>`;
+                openDropdown();
+                return;
+            }
+
+            items.forEach((item) => {
+                const li = document.createElement('li');
+                li.className = "px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer";
+                li.textContent = item.label;
+
+                li.addEventListener('click', () => setSelectedReferrer(item));
+                resultsEl.appendChild(li);
+            });
+
+            openDropdown();
+        }
+
+        // Reset selection kalau user mengetik lagi (biar wajib pilih dari list)
+        function clearSelectedIfTyping() {
+            hiddenId.value = "";
+            refRank = null;
+            roleSelect.disabled = true;
+            roleSelect.value = "";
+        }
+
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.trim();
+
+            clearSelectedIfTyping();
+
+            if (debounceTimer) clearTimeout(debounceTimer);
+
+            if (q.length < 2) {
+                closeDropdown();
+                return;
+            }
+
+            debounceTimer = setTimeout(async () => {
+                const items = await searchReferrers(q);
+                renderResults(items);
+            }, 250);
+        });
+
+        // click outside -> close
+        document.addEventListener('click', (e) => {
+            if (!dropdown.contains(e.target) && e.target !== searchInput) closeDropdown();
+        });
+
+        // ESC -> close
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeDropdown();
+        });
+
+        // Kalau oldReferrer ada, coba set refRank awal (supaya role auto filter saat reload)
+        @if($oldReferrer)
+            (function(){
+                const role = @json($oldReferrer->getRoleNames()->first());
+                const map = @json($roleRanks);
+                refRank = role ? (map[role] ?? 999) : 999;
+                filterRolesByReferrerRank();
+            })();
+        @endif
+
     })();
 </script>

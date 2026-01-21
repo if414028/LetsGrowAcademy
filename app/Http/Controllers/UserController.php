@@ -56,14 +56,14 @@ class UserController extends Controller
     {
         $roles = \Spatie\Permission\Models\Role::query()->orderBy('name')->get();
 
-        $referrers = \App\Models\User::query()
-            ->with('roles')
-            ->orderBy('name')
-            ->get();
+        $roleRanks = config('roles.rank');
 
-        $roleRanks = config('roles.rank'); // ['Admin'=>1, ... ]
+        $oldReferrer = null;
+        if (old('referrer_user_id')) {
+            $oldReferrer = \App\Models\User::with('roles')->find(old('referrer_user_id'));
+        }
 
-        return view('users.create', compact('roles', 'referrers', 'roleRanks'));
+        return view('users.create', compact('roles', 'roleRanks', 'oldReferrer'));
     }
 
     public function store(Request $request)
@@ -225,5 +225,39 @@ class UserController extends Controller
         $user->syncRoles([$role]);
 
         return redirect()->route('users.index')->with('success', 'User updated successfully.');
+    }
+
+    public function searchReferrers(Request $request)
+    {
+        $q = trim((string) $request->get('q', ''));
+
+        if (mb_strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        $roleRanks = config('roles.rank');
+
+        $users = User::query()
+            ->with('roles')
+            ->where(function ($w) use ($q) {
+                $w->where('name', 'like', "%{$q}%")
+                ->orWhere('email', 'like', "%{$q}%");
+            })
+            ->orderBy('name')
+            ->limit(12)
+            ->get()
+            ->map(function ($u) use ($roleRanks) {
+                $role = $u->getRoleNames()->first();
+                return [
+                    'id'   => $u->id,
+                    'name' => $u->name,
+                    'email'=> $u->email,
+                    'role' => $role,
+                    'rank' => $role ? ($roleRanks[$role] ?? 999) : 999,
+                    'label'=> "{$u->name} ({$u->email}) - ".($role ?? '-'),
+                ];
+            });
+
+        return response()->json($users);
     }
 }

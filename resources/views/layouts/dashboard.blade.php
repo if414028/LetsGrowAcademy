@@ -12,7 +12,7 @@
         {{-- Sidebar --}}
         <aside class="w-64 hidden md:flex flex-col border-r bg-white h-full overflow-y-auto">
             <div class="h-16 flex items-center px-6 border-b shrink-0">
-                <span class="text-xl font-semibold text-blue-600">Let's Groww Academy</span>
+                <span class="text-xl font-semibold text-blue-600">Let's Grow Academy</span>
             </div>
 
             <nav class="p-4 space-y-1">

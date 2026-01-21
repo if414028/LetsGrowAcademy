@@ -58,26 +58,23 @@ class SalesOrderController extends Controller
         $statuses = ['draft', 'submitted', 'installed', 'cancelled'];
         $ccpStatuses = ['pending', 'approved', 'rejected'];
 
-        // untuk dropdown pilih sales (khusus Admin)
-        $salesUsers = collect();
-        if (auth()->check() && auth()->user()->hasRole('Admin')) {
-            $salesUsers = User::query()
-                ->orderBy('name')
-                ->get(['id', 'name']);
-        }
-
-        // products untuk sales order items
         $products = Product::query()
             ->where('is_active', true)
             ->orderBy('product_name')
             ->get(['id', 'sku', 'product_name']);
 
+        // untuk maintain value saat validation error (Admin)
+        $oldSalesUser = null;
+        if (old('sales_user_id')) {
+            $oldSalesUser = User::find(old('sales_user_id'), ['id','name','email']);
+        }
+
         return view('sales-orders.create', compact(
             'paymentMethods',
             'statuses',
             'ccpStatuses',
-            'salesUsers',
-            'products'
+            'products',
+            'oldSalesUser'
         ));
     }
 
@@ -87,9 +84,14 @@ class SalesOrderController extends Controller
         $statuses = ['draft', 'submitted', 'installed', 'cancelled'];
         $ccpStatuses = ['pending', 'approved', 'rejected'];
 
+        /** @var \App\Models\User $authUser */
+        $authUser = Auth::user();
+
         $validated = $request->validate([
             'order_no' => ['required', 'string', 'max:50', 'unique:sales_orders,order_no'],
-            'sales_user_id' => ['nullable', 'exists:users,id'],
+
+            // Admin wajib pilih; non-admin boleh nullable (akan dipaksa jadi auth user)
+            'sales_user_id' => [$authUser->hasRole('Admin') ? 'required' : 'nullable', 'exists:users,id'],
 
             // customer input
             'customer_id' => ['nullable', 'exists:customers,id'],
@@ -105,20 +107,18 @@ class SalesOrderController extends Controller
             'status' => ['required', Rule::in($statuses)],
             'ccp_status' => ['required', Rule::in($ccpStatuses)],
 
-            // items (products)
+            // items
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
         ]);
 
-        return DB::transaction(function () use ($validated) {
-            /** @var \App\Models\User $authUser */
-            $authUser = Auth::user();
+        return DB::transaction(function () use ($validated, $authUser) {
 
-            // sales_user_id: kalau bukan admin, pakai user login
-            $salesUserId = $authUser->hasRole('Admin')
-                ? ($validated['sales_user_id'] ?? $authUser->id)
-                : $authUser->id;
+        // sales_user_id: admin harus pakai pilihan; non-admin selalu auth user
+        $salesUserId = $authUser->hasRole('Admin')
+            ? (int) $validated['sales_user_id']
+            : (int) $authUser->id;
 
             /**
              * CUSTOMER
@@ -183,5 +183,30 @@ class SalesOrderController extends Controller
                 ->route('sales-orders.index')
                 ->with('success', 'Sales order berhasil dibuat.');
         });
+    }
+
+    public function searchSalesUsers(Request $request)
+    {
+        abort_unless(auth()->check() && auth()->user()->hasRole('Admin'), 403);
+
+        $q = trim((string) $request->get('q', ''));
+        if (mb_strlen($q) < 2) return response()->json([]);
+
+        $users = User::query()
+            ->where(function ($w) use ($q) {
+                $w->where('name', 'like', "%{$q}%")
+                ->orWhere('full_name', 'like', "%{$q}%")
+                ->orWhere('email', 'like', "%{$q}%");
+            })
+            ->orderBy('name')
+            ->limit(12)
+            ->get(['id','name','full_name','email','dst_code'])
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'label' => $u->name . ($u->email ? " ({$u->email})" : ''),
+                'dst_code' => $u->dst_code,
+            ]);
+
+        return response()->json($users);
     }
 }
