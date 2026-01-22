@@ -187,7 +187,7 @@ class SalesOrderController extends Controller
 
     public function searchSalesUsers(Request $request)
     {
-        abort_unless(auth()->check() && auth()->user()->hasRole('Admin'), 403);
+        abort_unless(Auth::check() && Auth::user()->hasRole('Admin'), 403);
 
         $q = trim((string) $request->get('q', ''));
         if (mb_strlen($q) < 2) return response()->json([]);
