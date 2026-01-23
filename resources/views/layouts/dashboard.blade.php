@@ -60,7 +60,9 @@
                             {{ request()->routeIs('products.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M20 13V7a2 2 0 00-2-2h-3m5 8h-5m5 0v6a2 2 0 01-2 2h-3m0-18H9a2 2 0 00-2 2v3m8-5v18m0 0H9m6 0h3M4 13h5m-5 0v6a2 2 0 002 2h3"/>
+                                d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3.27 6.96L12 12.01l8.73-5.05M12 22V12" />
                         </svg>
                         Products
                     </a>
@@ -111,6 +113,18 @@
                                 {{ auth()->user()->email }}
                             </div>
                         </div>
+
+                        <a href="{{ route('profile') }}"
+                        class="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                            {{-- icon user --}}
+                            <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            Profile
+                        </a>
+
+                        <div class="my-1 border-t"></div>
 
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf

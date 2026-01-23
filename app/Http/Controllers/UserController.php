@@ -23,6 +23,14 @@ class UserController extends Controller
 
     public function show(User $user)
     {
+        $authUser = request()->user();
+
+        // 🔒 Authorization rule
+        if (!$authUser->hasRole('Admin') && $authUser->id !== $user->id) {
+            abort(403);
+        }
+
+        // Roles
         $user->load('roles');
 
         // Parent (referrer)
@@ -40,7 +48,7 @@ class UserController extends Controller
 
         $directReports = $childHierarchies
             ->map(fn ($h) => $h->childUser)
-            ->filter(); // remove null just in case
+            ->filter();
 
         $childrenCount = $directReports->count();
 
@@ -162,6 +170,12 @@ class UserController extends Controller
 
     public function edit(User $user)
     {
+        $authUser = request()->user();
+
+        if (!$authUser->hasRole('Admin') && $authUser->id !== $user->id) {
+            abort(403);
+        }
+
         $user->load('roles');
         $roles = Role::query()->orderBy('name')->get();
 
@@ -170,6 +184,49 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
+        $authUser = request()->user();
+
+        // 🔒 Authorization: non-admin cuma boleh update dirinya sendiri
+        if (!$authUser->hasRole('Admin') && $authUser->id !== $user->id) {
+            abort(403);
+        }
+
+        // =========================
+        // NON-ADMIN (self update)
+        // =========================
+        if (!$authUser->hasRole('Admin')) {
+            $validated = $request->validate([
+                'photo' => ['nullable', 'image', 'max:2048'],
+                'id_card' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
+                'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            ]);
+
+            // uploads
+            if ($request->hasFile('photo')) {
+                $validated['photo'] = $request->file('photo')->store('users/photos', 'public');
+            }
+
+            if ($request->hasFile('id_card')) {
+                $validated['id_card'] = $request->file('id_card')->store('users/id-cards', 'public');
+            }
+
+            // password
+            if (empty($validated['password'] ?? null)) {
+                unset($validated['password']);
+            } else {
+                $validated['password'] = Hash::make($validated['password']);
+            }
+
+            $user->update($validated);
+
+            return redirect()
+                ->route('users.show', $user)
+                ->with('success', 'Profile berhasil diupdate.');
+        }
+
+        // =========================
+        // ADMIN (full update)
+        // =========================
         $validated = $request->validate([
             // basic
             'name' => ['required', 'string', 'max:255'],
@@ -198,33 +255,29 @@ class UserController extends Controller
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
-        // Handle uploads (kalau ada file baru)
+        // uploads
         if ($request->hasFile('photo')) {
             $validated['photo'] = $request->file('photo')->store('users/photos', 'public');
         }
-
         if ($request->hasFile('id_card')) {
             $validated['id_card'] = $request->file('id_card')->store('users/id-cards', 'public');
         }
 
-        // Role bukan kolom users
+        // role bukan kolom users
         $role = $validated['role'];
         unset($validated['role']);
 
-        // Password: kalau kosong, jangan ikut update
-        if (empty($validated['password'])) {
+        // password
+        if (empty($validated['password'] ?? null)) {
             unset($validated['password']);
         } else {
-            $validated['password'] = \Illuminate\Support\Facades\Hash::make($validated['password']);
+            $validated['password'] = Hash::make($validated['password']);
         }
 
-        // Update semua field yang tervalidasi
         $user->update($validated);
-
-        // Update role (single role)
         $user->syncRoles([$role]);
 
-        return redirect()->route('users.index')->with('success', 'User updated successfully.');
+        return redirect()->route('users.show', $user)->with('success', 'User updated successfully.');
     }
 
     public function searchReferrers(Request $request)

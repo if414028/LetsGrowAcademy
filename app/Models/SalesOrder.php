@@ -12,7 +12,7 @@ class SalesOrder extends Model
 
     protected $fillable = [
     'order_no','sales_user_id','customer_id','key_in_at','install_date',
-    'is_recurring','payment_method','status','ccp_status'
+    'is_recurring','payment_method','status','ccp_status', 'status_reason',
     ];
 
     protected $casts = [

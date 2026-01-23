@@ -77,14 +77,37 @@
                             </div>
                         </div>
 
+                        @php
+                            $status = $salesOrder->status;
+
+                            $statusClasses = match ($status) {
+                                'dibatalkan' => 'bg-red-100 text-red-700',
+                                'gagal penelponan' => 'bg-red-100 text-red-700',
+                                'ditunda' => 'bg-yellow-100 text-yellow-700',
+                                'selesai' => 'bg-green-100 text-green-700',
+                                'menunggu verifikasi', 'dijadwalkan' => 'bg-gray-100 text-gray-700',
+                                default => 'bg-gray-100 text-gray-700',
+                            };
+                        @endphp
+
                         <div>
                             <div class="text-xs text-gray-500">Order Status</div>
                             <div class="mt-1">
-                                <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">
-                                    {{ $salesOrder->status ?? '-' }}
+                                <span class="rounded-full px-2 py-1 text-xs font-semibold {{ $statusClasses }}">
+                                    {{ $status ?? '-' }}
                                 </span>
                             </div>
                         </div>
+
+                        @if(!empty($salesOrder->status_reason))
+                            <div class="md:col-span-2">
+                                <div class="text-xs text-gray-500">Alasan Status</div>
+                                <div class="mt-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900">
+                                    {{ $salesOrder->status_reason }}
+                                </div>
+                            </div>
+                        @endif
+
                     </div>
                 </div>
 

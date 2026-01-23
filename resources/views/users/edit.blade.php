@@ -1,4 +1,10 @@
 <x-dashboard-layout>
+    @php
+        /** @var \App\Models\User $authUser */
+        $authUser = auth()->user();
+        $isAdmin = $authUser && method_exists($authUser, 'hasRole') && $authUser->hasRole('Admin');
+    @endphp
+
     <div class="flex items-start justify-between gap-6">
         <div>
             <h1 class="text-3xl font-bold tracking-tight">Edit User</h1>
@@ -22,103 +28,117 @@
             </div>
         @endif
 
+        @if(!$isAdmin)
+            <div class="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                Kamu bukan Admin. Kamu hanya bisa mengubah <b>Photo</b>, <b>ID Card</b>, dan <b>Password</b>.
+            </div>
+        @endif
+
         {{-- enctype utk upload --}}
         <form method="POST" action="{{ route('users.update', $user) }}" enctype="multipart/form-data" class="space-y-6">
             @csrf
             @method('PUT')
 
-            {{-- Basic --}}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="text-sm font-medium text-gray-700">Name (Display)</label>
-                    <input type="text" name="name" value="{{ old('name', $user->name) }}"
-                           class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                           placeholder="Display name" required>
+            {{-- ===================== --}}
+            {{-- ADMIN ONLY FIELDS     --}}
+            {{-- ===================== --}}
+            @if($isAdmin)
+                {{-- Basic --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Name (Display)</label>
+                        <input type="text" name="name" value="{{ old('name', $user->name) }}"
+                               class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                               placeholder="Display name" required>
+                    </div>
+
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Full Name</label>
+                        <input type="text" name="full_name" value="{{ old('full_name', $user->full_name) }}"
+                               class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                               placeholder="Full legal name (KTP)">
+                    </div>
                 </div>
 
-                <div>
-                    <label class="text-sm font-medium text-gray-700">Full Name</label>
-                    <input type="text" name="full_name" value="{{ old('full_name', $user->full_name) }}"
-                           class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                           placeholder="Full legal name (KTP)">
-                </div>
-            </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Email</label>
+                        <input type="email" name="email" value="{{ old('email', $user->email) }}"
+                               class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                               placeholder="name@email.com" required>
+                    </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="text-sm font-medium text-gray-700">Email</label>
-                    <input type="email" name="email" value="{{ old('email', $user->email) }}"
-                           class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                           placeholder="name@email.com" required>
-                </div>
-
-                <div>
-                    <label class="text-sm font-medium text-gray-700">Phone Number</label>
-                    <input type="text" name="phone_number" value="{{ old('phone_number', $user->phone_number) }}"
-                           class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                           placeholder="08xxxxxxxxxx">
-                </div>
-            </div>
-
-            {{-- Employment/Profile --}}
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <label class="text-sm font-medium text-gray-700">Status</label>
-                    <select name="status"
-                            class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                        <option value="Active" @selected(old('status', $user->status ?? 'Active') === 'Active')>Active</option>
-                        <option value="Inactive" @selected(old('status', $user->status ?? 'Active') === 'Inactive')>Inactive</option>
-                    </select>
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Phone Number</label>
+                        <input type="text" name="phone_number" value="{{ old('phone_number', $user->phone_number) }}"
+                               class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                               placeholder="08xxxxxxxxxx">
+                    </div>
                 </div>
 
-                <div>
-                    <label class="text-sm font-medium text-gray-700">DST Code</label>
-                    <input type="text" name="dst_code" value="{{ old('dst_code', $user->dst_code) }}"
-                           class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                           placeholder="DST-xxxx">
+                {{-- Employment/Profile --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Status</label>
+                        <select name="status"
+                                class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                            <option value="Active" @selected(old('status', $user->status ?? 'Active') === 'Active')>Active</option>
+                            <option value="Inactive" @selected(old('status', $user->status ?? 'Active') === 'Inactive')>Inactive</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">DST Code</label>
+                        <input type="text" name="dst_code" value="{{ old('dst_code', $user->dst_code) }}"
+                               class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                               placeholder="DST-xxxx">
+                    </div>
+
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">City of Domicile</label>
+                        <input type="text" name="city_of_domicile" value="{{ old('city_of_domicile', $user->city_of_domicile) }}"
+                               class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                               placeholder="Jakarta">
+                    </div>
                 </div>
 
-                <div>
-                    <label class="text-sm font-medium text-gray-700">City of Domicile</label>
-                    <input type="text" name="city_of_domicile" value="{{ old('city_of_domicile', $user->city_of_domicile) }}"
-                           class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                           placeholder="Jakarta">
-                </div>
-            </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Date of Birth</label>
+                        <input type="date" name="date_of_birth" value="{{ old('date_of_birth', optional($user->date_of_birth)->format('Y-m-d')) }}"
+                               class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                    </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="text-sm font-medium text-gray-700">Date of Birth</label>
-                    <input type="date" name="date_of_birth" value="{{ old('date_of_birth', optional($user->date_of_birth)->format('Y-m-d')) }}"
-                           class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Join Date</label>
+                        <input type="date" name="join_date" value="{{ old('join_date', optional($user->join_date)->format('Y-m-d')) }}"
+                               class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                    </div>
                 </div>
 
-                <div>
-                    <label class="text-sm font-medium text-gray-700">Join Date</label>
-                    <input type="date" name="join_date" value="{{ old('join_date', optional($user->join_date)->format('Y-m-d')) }}"
-                           class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                {{-- Role --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-700">Role</label>
+                        @php($currentRole = $user->getRoleNames()->first())
+                        <select name="role"
+                                class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" required>
+                            @foreach(($roles ?? collect()) as $role)
+                                <option value="{{ $role->name }}" @selected(old('role', $currentRole) === $role->name)>
+                                    {{ $role->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <p class="mt-2 text-xs text-gray-500">Role user ini akan di-update sesuai pilihan.</p>
+                    </div>
                 </div>
-            </div>
+            @endif
+            {{-- ===================== --}}
+            {{-- END ADMIN ONLY        --}}
+            {{-- ===================== --}}
 
-            {{-- Role --}}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label class="text-sm font-medium text-gray-700">Role</label>
-                    @php($currentRole = $user->getRoleNames()->first())
-                    <select name="role"
-                            class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" required>
-                        @foreach(($roles ?? collect()) as $role)
-                            <option value="{{ $role->name }}" @selected(old('role', $currentRole) === $role->name)>
-                                {{ $role->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                    <p class="mt-2 text-xs text-gray-500">Role user ini akan di-update sesuai pilihan.</p>
-                </div>
-            </div>
-
-            {{-- Uploads --}}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {{-- Uploads (ALL ROLES) --}}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 @if(!$isAdmin) pt-2 @endif @if($isAdmin) pt-2 border-t @endif">
                 <div>
                     <label class="text-sm font-medium text-gray-700">Photo</label>
                     <input type="file" name="photo" accept="image/*"
@@ -148,7 +168,7 @@
                 </div>
             </div>
 
-            {{-- Password --}}
+            {{-- Password (ALL ROLES) --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
                 <div>
                     <label class="text-sm font-medium text-gray-700">New Password (optional)</label>

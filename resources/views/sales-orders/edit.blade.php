@@ -2,11 +2,11 @@
     <div class="p-4 md:p-6">
         <div class="flex items-start justify-between gap-4">
             <div>
-                <h1 class="text-xl md:text-2xl font-semibold text-gray-900">Create Sales Order</h1>
-                <p class="text-sm text-gray-500">Input sales order baru.</p>
+                <h1 class="text-xl md:text-2xl font-semibold text-gray-900">Edit Sales Order</h1>
+                <p class="text-sm text-gray-500">Ubah data sales order.</p>
             </div>
 
-            <a href="{{ route('sales-orders.index') }}" class="text-sm text-blue-600 hover:underline">
+            <a href="{{ route('sales-orders.show', $salesOrder) }}" class="text-sm text-blue-600 hover:underline">
                 ← Back
             </a>
         </div>
@@ -28,8 +28,9 @@
             </div>
         @endif
 
-        <form method="POST" action="{{ route('sales-orders.store') }}" class="mt-6">
+        <form method="POST" action="{{ route('sales-orders.update', $salesOrder) }}" class="mt-6">
             @csrf
+            @method('PUT')
 
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
                 {{-- Left --}}
@@ -38,11 +39,15 @@
                     <div class="rounded-2xl border bg-white p-5">
                         <h2 class="text-sm font-semibold text-gray-900">Order Info</h2>
 
-                
-                            <div x-data="salesUserPicker()" x-init="init()">
+                        @php
+                            /** @var \App\Models\User $authUser */
+                            $authUser = auth()->user();
+                        @endphp
+
+                        @if($authUser->hasRole('Admin'))
+                            <div x-data="salesUserPickerEdit()" x-init="init()">
                                 <label class="text-xs font-medium text-gray-600">Sales User</label>
 
-                                {{-- hidden yang dikirim ke backend --}}
                                 <input type="hidden" name="sales_user_id" :value="selectedId">
 
                                 <div class="relative mt-1">
@@ -56,9 +61,8 @@
                                         class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                     />
 
-                                    {{-- dropdown --}}
                                     <div x-show="open && items.length > 0" x-transition
-                                        class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                                         class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
                                         <template x-for="u in items" :key="u.id">
                                             <button type="button"
                                                     class="w-full text-left px-4 py-3 hover:bg-gray-50"
@@ -70,11 +74,18 @@
                                 </div>
 
                                 <div class="mt-1 text-xs"
-                                    :class="selectedId ? 'text-green-700' : 'text-gray-400'">
+                                     :class="selectedId ? 'text-green-700' : 'text-gray-400'">
                                     <span x-show="selectedId">Sales user terpilih.</span>
                                     <span x-show="!selectedId">Wajib pilih sales dari dropdown.</span>
                                 </div>
                             </div>
+                        @else
+                            {{-- Non-admin: sales user dipaksa auth user --}}
+                            <input type="hidden" name="sales_user_id" value="{{ $authUser->id }}">
+                            <div class="mt-2 text-xs text-gray-500">
+                                Sales User: <span class="font-semibold text-gray-900">{{ $authUser->name }}</span>
+                            </div>
+                        @endif
 
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
@@ -82,27 +93,20 @@
                                 <input
                                     id="order_no"
                                     name="order_no"
-                                    value="{{ old('order_no') }}"
+                                    value="{{ old('order_no', $salesOrder->order_no) }}"
                                     class="mt-1 w-full rounded-xl border-gray-200 bg-gray-50 focus:border-blue-500 focus:ring-blue-500"
-                                    placeholder="Auto generated"
                                     readonly
                                 />
-                                <div class="mt-1 text-xs text-gray-400">Otomatis terisi setelah memilih Sales.</div>
-
+                                <div class="mt-1 text-xs text-gray-400">Order No tidak diubah saat edit.</div>
                             </div>
 
                             <div>
                                 <label class="text-xs font-medium text-gray-600">Key In At</label>
-                                <input type="datetime-local" name="key_in_at" value="{{ old('key_in_at') }}"
+                                <input type="datetime-local"
+                                       name="key_in_at"
+                                       value="{{ old('key_in_at', optional($salesOrder->key_in_at)->format('Y-m-d\TH:i')) }}"
                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
-                                <div class="mt-1 text-xs text-gray-400">Kosongkan untuk otomatis: sekarang.</div>
                             </div>
-
-                            {{-- <div>
-                                <label class="text-xs font-medium text-gray-600">Install Date</label>
-                                <input type="date" name="install_date" value="{{ old('install_date') }}"
-                                       class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
-                            </div> --}}
 
                             <div>
                                 <label class="text-xs font-medium text-gray-600">Payment Method</label>
@@ -110,22 +114,35 @@
                                         class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     <option value="">-</option>
                                     @foreach($paymentMethods as $m)
-                                        <option value="{{ $m }}" @selected(old('payment_method')===$m)>{{ strtoupper($m) }}</option>
+                                        <option value="{{ $m }}" @selected(old('payment_method', $salesOrder->payment_method)===$m)>{{ strtoupper($m) }}</option>
                                     @endforeach
                                 </select>
                             </div>
 
                             <div class="flex items-center gap-2 pt-2">
                                 <input id="is_recurring" type="checkbox" name="is_recurring" value="1"
-                                       @checked(old('is_recurring')) class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                       @checked(old('is_recurring', $salesOrder->is_recurring))
+                                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                 <label for="is_recurring" class="text-sm text-gray-700">Recurring</label>
                             </div>
                         </div>
                     </div>
 
                     {{-- Items / Products --}}
+                    @php
+                        $initialItems = old('items');
+                        if (!$initialItems) {
+                            $initialItems = $salesOrder->items->map(fn($it) => [
+                                'product_id' => $it->product_id,
+                                'qty' => $it->qty,
+                            ])->values()->all();
+
+                            if (empty($initialItems)) $initialItems = [['product_id' => '', 'qty' => 1]];
+                        }
+                    @endphp
+
                     <div class="rounded-2xl border bg-white p-5"
-                        x-data="salesOrderItems(@js($products), @js(old('items', [['product_id' => '', 'qty' => 1]])))">
+                         x-data="salesOrderItems(@js($products), @js($initialItems))">
                         <div class="flex items-center justify-between">
                             <h2 class="text-sm font-semibold text-gray-900">Products</h2>
 
@@ -147,18 +164,19 @@
                                 </thead>
 
                                 <tbody class="divide-y">
-                                    <template x-for="(row, idx) in rows" :key="idx">
+                                    <template x-for="(row, idx) in rows" :key="row._key">
                                         <tr>
                                             <td class="px-4 py-3">
                                                 <select
                                                     class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                                     :name="`items[${idx}][product_id]`"
                                                     x-model="row.product_id"
+                                                    x-init="$nextTick(() => { $el.value = row.product_id })"
                                                     required
                                                 >
                                                     <option value="">-- Select Product --</option>
                                                     <template x-for="p in products" :key="p.id">
-                                                        <option :value="p.id" x-text="`${p.product_name} (${p.sku})`"></option>
+                                                        <option :value="String(p.id)" x-text="`${p.product_name} (${p.sku})`"></option>
                                                     </template>
                                                 </select>
                                             </td>
@@ -197,10 +215,9 @@
 
                 {{-- Right --}}
                 <div class="lg:col-span-4 space-y-6">
-
                     {{-- Customer --}}
                     <div class="rounded-2xl border bg-white p-5"
-                         x-data="customerPicker()"
+                         x-data="customerPickerEdit()"
                          x-init="init()">
                         <h2 class="text-sm font-semibold text-gray-900">Customer</h2>
 
@@ -211,7 +228,7 @@
                                 <label class="text-xs font-medium text-gray-600">Customer Name</label>
                                 <input
                                     name="customer_name"
-                                    value="{{ old('customer_name') }}"
+                                    value="{{ old('customer_name', $salesOrder->customer?->full_name) }}"
                                     x-model="query"
                                     @input.debounce.250ms="search()"
                                     @focus="open = true"
@@ -220,7 +237,6 @@
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                 />
 
-                                {{-- dropdown --}}
                                 <div x-show="open && items.length > 0" x-transition
                                      class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
                                     <template x-for="c in items" :key="c.id">
@@ -239,14 +255,15 @@
 
                                 <div class="mt-2 text-xs"
                                      :class="selectedId ? 'text-green-700' : 'text-gray-400'">
-                                    <span x-show="selectedId">Selected existing customer.</span>
+                                    <span x-show="selectedId">Selected customer.</span>
                                     <span x-show="!selectedId">Jika tidak ada di dropdown, customer akan dibuat otomatis saat submit.</span>
                                 </div>
                             </div>
 
                             <div>
                                 <label class="text-xs font-medium text-gray-600">Phone Number</label>
-                                <input name="customer_phone" value="{{ old('customer_phone') }}"
+                                <input name="customer_phone"
+                                       value="{{ old('customer_phone', $salesOrder->customer?->phone_number) }}"
                                        x-model="phone"
                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                        placeholder="08xxxx" />
@@ -254,7 +271,8 @@
 
                             <div>
                                 <label class="text-xs font-medium text-gray-600">Address</label>
-                                <input name="customer_address" value="{{ old('customer_address') }}"
+                                <input name="customer_address"
+                                       value="{{ old('customer_address', $salesOrder->customer?->address) }}"
                                        x-model="address"
                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                        placeholder="Alamat (optional)" />
@@ -262,7 +280,9 @@
                         </div>
                     </div>
 
-                    <div class="rounded-2xl border bg-white p-5">
+                    <div class="rounded-2xl border bg-white p-5"
+                        x-data="statusInstallFormEdit()"
+                        x-init="init(); bindWatchers()">
                         <h2 class="text-sm font-semibold text-gray-900">Status</h2>
 
                         <div class="mt-4 space-y-4">
@@ -271,7 +291,7 @@
                                 <select name="ccp_status"
                                         class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     @foreach($ccpStatuses as $s)
-                                        <option value="{{ $s }}" @selected(old('ccp_status','pending')===$s)>{{ ucfirst($s) }}</option>
+                                        <option value="{{ $s }}" @selected(old('ccp_status', $salesOrder->ccp_status)===$s)>{{ ucfirst($s) }}</option>
                                     @endforeach
                                 </select>
                             </div>
@@ -279,17 +299,54 @@
                             <div>
                                 <label class="text-xs font-medium text-gray-600">Status Instalasi</label>
                                 <select name="status"
-                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                                    x-model="status"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     @foreach($statuses as $s)
-                                        <option value="{{ $s }}" @selected(old('status','draft')===$s)>{{ ucfirst($s) }}</option>
+                                        <option value="{{ $s }}" @selected(old('status', $salesOrder->status)===$s)>{{ ucfirst($s) }}</option>
                                     @endforeach
                                 </select>
+
+                                {{-- Installation Date (muncul kalau status = dijadwalkan) --}}
+                                <div class="mt-4" x-show="showInstallDate" x-transition>
+                                    <label class="text-xs font-medium text-gray-600">Installation Date</label>
+                                    <input type="date"
+                                        name="install_date"
+                                        x-model="installDate"
+                                        :required="requiredInstallDate"
+                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
+
+                                    <div class="mt-1 text-xs text-gray-400" x-show="requiredInstallDate">
+                                        Wajib diisi jika status instalasi "dijadwalkan".
+                                    </div>
+
+                                    <div class="mt-1 text-xs text-gray-400" x-show="!requiredInstallDate">
+                                        Optional (tidak wajib) untuk status ini.
+                                    </div>
+                                </div>
                             </div>
+
+                            {{-- Status Reason (muncul kalau status dibatalkan/ditunda/gagal penelponan) --}}
+                            <div class="mt-4" x-show="showReason" x-transition>
+                                <label class="text-xs font-medium text-gray-600">Alasan</label>
+                                <textarea
+                                    name="status_reason"
+                                    rows="3"
+                                    x-model="reason"
+                                    :required="requiredReason"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                    placeholder="Masukkan alasan..."
+                                ></textarea>
+
+                                <div class="mt-1 text-xs text-gray-400" x-show="requiredReason">
+                                    Wajib diisi untuk status: dibatalkan / ditunda / gagal penelponan.
+                                </div>
+                            </div>
+
                         </div>
 
                         <button type="submit"
                                 class="mt-6 w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                            Save Sales Order
+                            Update Sales Order
                         </button>
                     </div>
                 </div>
@@ -298,23 +355,20 @@
     </div>
 
     <script>
-        function customerPicker() {
+        function customerPickerEdit() {
             return {
-                query: @json(old('customer_name', '')),
-                phone: @json(old('customer_phone', '')),
-                address: @json(old('customer_address', '')),
+                query: @json(old('customer_name', $salesOrder->customer?->full_name ?? '')),
+                phone: @json(old('customer_phone', $salesOrder->customer?->phone_number ?? '')),
+                address: @json(old('customer_address', $salesOrder->customer?->address ?? '')),
                 open: false,
                 items: [],
-                selectedId: @json(old('customer_id', null)),
+                selectedId: @json(old('customer_id', $salesOrder->customer_id)),
                 lastFetch: '',
 
-                init() {
-                    // kalau sebelumnya ada customer_id, biarkan (user sudah select)
-                    // kalau user edit nama lagi, kita reset selection
-                },
+                init() {},
 
                 async search() {
-                    // kalau user mengubah input, reset selected customer
+                    // user mengubah input => reset selection
                     this.selectedId = null;
 
                     const q = (this.query || '').trim();
@@ -323,7 +377,6 @@
                         return;
                     }
 
-                    // avoid duplicate request
                     if (this.lastFetch === q) return;
                     this.lastFetch = q;
 
@@ -350,14 +403,20 @@
         }
 
         function salesOrderItems(products, initialRows) {
+            const normalize = (r, i) => ({
+                _key: `${Date.now()}-${i}-${Math.random().toString(16).slice(2)}`,
+                product_id: (r?.product_id === null || r?.product_id === undefined) ? '' : String(r.product_id),
+                qty: r?.qty ?? 1,
+            });
+
             return {
                 products: products || [],
                 rows: Array.isArray(initialRows) && initialRows.length
-                    ? initialRows.map(r => ({ product_id: r.product_id ?? '', qty: r.qty ?? 1 }))
-                    : [{ product_id: '', qty: 1 }],
+                    ? initialRows.map((r, i) => normalize(r, i))
+                    : [normalize({ product_id: '', qty: 1 }, 0)],
 
                 addRow() {
-                    this.rows.push({ product_id: '', qty: 1 });
+                    this.rows.push(normalize({ product_id: '', qty: 1 }, this.rows.length));
                 },
 
                 removeRow(i) {
@@ -367,80 +426,99 @@
             }
         }
 
-        function salesUserPicker() {
-        const orderNoEl = () => document.getElementById('order_no');
+        // Versi edit: tidak generate order_no
+        function salesUserPickerEdit() {
+            return {
+                query: @json($oldSalesUser ? ($oldSalesUser->name . ($oldSalesUser->email ? " ({$oldSalesUser->email})" : "")) : ''),
+                open: false,
+                items: [],
+                selectedId: @json(old('sales_user_id', $oldSalesUser?->id)),
+                lastFetch: '',
 
-        function pad2(n) { return String(n).padStart(2, '0'); }
+                init() {},
 
-        function formatTs(d) {
-            // ddMMyyyyHHmmss (local time)
-            const dd = pad2(d.getDate());
-            const MM = pad2(d.getMonth() + 1);
-            const yyyy = d.getFullYear();
-            const HH = pad2(d.getHours());
-            const mm = pad2(d.getMinutes());
-            const ss = pad2(d.getSeconds());
-            return `${dd}${MM}${yyyy}${HH}${mm}${ss}`;
-        }
+                async search() {
+                    this.selectedId = null;
 
-        function sanitizeDst(dst) {
-            // DST code aman: uppercase, buang spasi
-            return (dst || '').toString().trim().toUpperCase().replace(/\s+/g, '');
-        }
+                    const q = (this.query || '').trim();
+                    if (q.length < 2) {
+                        this.items = [];
+                        return;
+                    }
 
-        return {
-            query: @json($oldSalesUser ? ($oldSalesUser->name . ($oldSalesUser->email ? " ({$oldSalesUser->email})" : "")) : ''),
-            open: false,
-            items: [],
-            selectedId: @json(old('sales_user_id', $oldSalesUser?->id)),
-            lastFetch: '',
+                    if (this.lastFetch === q) return;
+                    this.lastFetch = q;
 
-            init() {
-                // optional: kalau sudah ada old('order_no'), biarkan
-            },
+                    const res = await fetch(`{{ route('sales-orders.sales-users.search') }}?q=${encodeURIComponent(q)}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!res.ok) return;
 
-            async search() {
-                // user mengetik => reset pilihan + reset order no
-                this.selectedId = null;
-                const el = orderNoEl();
-                if (el) el.value = '';
+                    const data = await res.json();
+                    this.items = Array.isArray(data) ? data : [];
+                    this.open = true;
+                },
 
-                const q = (this.query || '').trim();
-                if (q.length < 2) {
+                choose(u) {
+                    this.selectedId = u.id;
+                    this.query = u.label;
+                    this.open = false;
                     this.items = [];
-                    return;
                 }
-
-                if (this.lastFetch === q) return;
-                this.lastFetch = q;
-
-                const res = await fetch(`{{ route('sales-orders.sales-users.search') }}?q=${encodeURIComponent(q)}`, {
-                    headers: { 'Accept': 'application/json' }
-                });
-                if (!res.ok) return;
-
-                const data = await res.json();
-                this.items = Array.isArray(data) ? data : [];
-                this.open = true;
-            },
-
-            choose(u) {
-                this.selectedId = u.id;
-                this.query = u.label;
-                this.open = false;
-                this.items = [];
-
-                const dst = sanitizeDst(u.dst_code);
-                const ts = formatTs(new Date());
-
-                // kalau dst kosong, tetap generate tapi pake 'DST' fallback
-                const code = dst || 'DST';
-                const orderNo = `SO-${code}-${ts}`;
-
-                const el = orderNoEl();
-                if (el) el.value = orderNo;
             }
         }
-    }
+
+        function statusInstallFormEdit() {
+            return {
+                status: @json(old('status', $salesOrder->status)),
+                installDate: @json(old('install_date', $salesOrder->install_date ? \Carbon\Carbon::parse($salesOrder->install_date)->format('Y-m-d') : '')),
+                reason: @json(old('status_reason', $salesOrder->status_reason ?? '')),
+
+                normalizeStatus(v) {
+                    return (v || '').toString().trim().toLowerCase();
+                },
+
+                get showInstallDate() {
+                    // hide hanya untuk "menunggu verifikasi"
+                    return this.normalizeStatus(this.status) !== 'menunggu verifikasi';
+                },
+
+                get requiredInstallDate() {
+                    return this.normalizeStatus(this.status) === 'dijadwalkan';
+                },
+
+                get showReason() {
+                    const st = this.normalizeStatus(this.status);
+                    return ['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st);
+                },
+
+                get requiredReason() {
+                    return this.showReason;
+                },
+
+                init() {
+                    // kalau status menunggu verifikasi, pastikan input kosong
+                    if (!this.showInstallDate) this.installDate = '';
+                    // alasan hanya wajib untuk 3 status, tapi kalau status awal bukan 3 itu, biarkan reason tetap tampil kosong
+                },
+
+                bindWatchers() {
+                    this.$watch('status', (val) => {
+                        const st = this.normalizeStatus(val);
+
+                        // kalau balik ke menunggu verifikasi => hapus install date
+                        if (st === 'menunggu verifikasi') {
+                            this.installDate = '';
+                        }
+
+                        // kalau status bukan yg butuh alasan => hapus reason
+                        if (!['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st)) {
+                            this.reason = '';
+                        }
+                    });
+                }
+            }
+        }
+
     </script>
 </x-dashboard-layout>

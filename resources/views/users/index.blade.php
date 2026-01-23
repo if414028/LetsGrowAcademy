@@ -76,29 +76,35 @@
                                 <div class="flex items-center gap-2">
                                     {{-- Show --}}
                                     <a href="{{ route('users.show', $user) }}"
-                                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg border bg-white text-gray-600 hover:bg-gray-50"
-                                    title="View detail">
-                                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none"
-                                            viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    class="inline-flex items-center justify-center h-9 w-9 rounded-lg border
+                                            text-gray-600 hover:bg-blue-50 hover:text-blue-600"
+                                    title="Detail">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4"
+                                            fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M2.25 12S5.25 5.25 12 5.25 21.75 12 21.75 12 18.75 18.75 12 18.75 2.25 12 2.25 12Z"/>
+                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                             <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+                                                d="M2.458 12C3.732 7.943 7.523 5 12 5
+                                                    c4.478 0 8.268 2.943 9.542 7
+                                                    -1.274 4.057-5.064 7-9.542 7
+                                                    -4.477 0-8.268-2.943-9.542-7z"/>
                                         </svg>
                                     </a>
 
                                     {{-- Edit --}}
                                     <a href="{{ route('users.edit', $user) }}"
-                                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg border bg-white text-gray-600 hover:bg-gray-50"
-                                    title="Edit user">
-                                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none"
-                                            viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.93Z"/>
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M19.5 7.125 16.875 4.5"/>
-                                        </svg>
-                                    </a>
+                                    class="inline-flex items-center justify-center h-9 w-9 rounded-lg border
+                                            text-gray-600 hover:bg-yellow-50 hover:text-yellow-600"
+                                        title="Edit">
+                                            {{-- icon pencil --}}
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4"
+                                                fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5"/>
+                                                <path stroke-linecap="round" stroke-linejoin="round"
+                                                    d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                            </svg>
+                                        </a>
                                 </div>
                             </td>
 
