@@ -36,11 +36,12 @@
             <div class="flex items-center justify-between gap-4 p-5 flex-wrap">
                 <h2 class="text-lg font-semibold text-gray-900">Team Performance</h2>
 
-                <form method="GET" class="flex items-center gap-2">
+                <form method="GET" class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                     <input name="q" value="{{ $q }}" placeholder="Search member..."
-                        class="w-64 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                        class="w-full sm:w-64 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none
+               focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
                     <button type="submit"
-                        class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        class="w-full sm:w-auto rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
                         Search
                     </button>
                 </form>
