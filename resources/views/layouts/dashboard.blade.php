@@ -8,8 +8,8 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="bg-gray-50 text-gray-900 h-screen overflow-hidden" x-data="{ sidebarOpen: false }">
-    <div class="flex h-full">
+<body class="bg-gray-50 text-gray-900" x-data="{ sidebarOpen: false }">
+  <div class="flex min-h-screen md:h-screen">
 
         {{-- Sidebar (Desktop) --}}
         <aside class="w-64 hidden md:flex flex-col border-r bg-white h-full overflow-y-auto">
@@ -176,7 +176,7 @@
         </div>
 
         {{-- Main --}}
-        <div class="flex-1 min-w-0 flex flex-col h-full">
+        <div class="flex-1 min-w-0 flex flex-col md:h-screen">
             <header
                 class="h-16 bg-white border-b flex items-center justify-between px-4 md:px-8 gap-4 shrink-0 sticky top-0 z-40">
                 {{-- Hamburger (Mobile) --}}
