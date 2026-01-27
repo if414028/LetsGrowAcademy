@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\UserController;
@@ -60,6 +61,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/customers/search', [CustomerController::class, 'search'])->name('customers.search');
     Route::get('/sales-orders/sales-users/search', [SalesOrderController::class, 'searchSalesUsers'])
         ->name('sales-orders.sales-users.search');
+
+    // Performances
+    Route::middleware(['auth'])->group(function () {
+        Route::get('/performance', [PerformanceController::class, 'index'])->name('performances.index');
+    });
+
+    Route::get('/performance/team/{user}', [PerformanceController::class, 'teamDetail']);
+
 });
 
 require __DIR__.'/auth.php';
