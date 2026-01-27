@@ -11,10 +11,11 @@
             <p class="mt-2 text-gray-500">Update user information, files, and role</p>
         </div>
 
-        <a href="{{ route('users.index') }}"
-           class="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
+        <a href="{{ url()->previous() }}"
+        class="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
             Back
         </a>
+
     </div>
 
     <div class="mt-6 max-w-3xl rounded-2xl bg-white shadow-sm border p-6">

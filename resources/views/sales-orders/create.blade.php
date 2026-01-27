@@ -2,12 +2,13 @@
     <div class="p-4 md:p-6">
         <div class="flex items-start justify-between gap-4">
             <div>
-                <h1 class="text-xl md:text-2xl font-semibold text-gray-900">Create Sales Order</h1>
+                <h1 class="text-xl md:text-2xl font-semibold text-gray-900">Buat Sales Order</h1>
                 <p class="text-sm text-gray-500">Input sales order baru.</p>
             </div>
 
-            <a href="{{ route('sales-orders.index') }}" class="text-sm text-blue-600 hover:underline">
-                ← Back
+            <a href="{{ url()->previous() }}"
+            class="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
+                Back
             </a>
         </div>
 

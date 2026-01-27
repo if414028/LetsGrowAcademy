@@ -1,8 +1,8 @@
 <x-dashboard-layout>
     <div class="flex items-start justify-between gap-6">
         <div>
-            <h1 class="text-3xl font-bold tracking-tight">Users</h1>
-            <p class="mt-2 text-gray-500">Manage registered users and their roles</p>
+            <h1 class="text-2xl font-semibold text-gray-900">Users</h1>
+            <p class="text-sm text-gray-500">Kelola user dan role.</p>
         </div>
     </div>
 
@@ -25,7 +25,7 @@
                         viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
                     </svg>
-                    Add User
+                    Tambah User
                 </a>
             @endrole
         </div>

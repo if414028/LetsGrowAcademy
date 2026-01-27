@@ -6,10 +6,6 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <a href="{{ route('products.index') }}"
-               class="rounded-xl border px-4 py-2 text-sm font-medium hover:bg-gray-50">
-                Kembali
-            </a>
             <a href="{{ route('products.edit', $product->id) }}"
                class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
                 Edit

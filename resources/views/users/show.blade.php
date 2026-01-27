@@ -11,16 +11,6 @@
                 Edit
             </a>
 
-            @php
-                $authUser = \Illuminate\Support\Facades\Auth::user();
-                $fallback = ($authUser && $authUser->hasRole('Admin')) ? route('users.index') : route('dashboard');
-                $backUrl = url()->previous() !== url()->current() ? url()->previous() : $fallback;
-            @endphp
-
-            <a href="{{ $backUrl }}"
-            class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                Back
-            </a>
         </div>
     </div>
 

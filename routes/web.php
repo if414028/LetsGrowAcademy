@@ -27,20 +27,22 @@ Route::middleware('auth')->group(function () {
         return redirect()->route('users.show', $request->user()->id);
     })->name('profile');
 
-    // Show user (semua role, tapi batasin di controller: non-admin hanya diri sendiri)
-    Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
-
-    // Non-admin boleh edit/update profil sendiri (batasi di controller/policy)
-    Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
-    Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
 
     // Admin-only: manajemen user (kecuali show karena sudah di atas)
     Route::middleware('role:Admin')->group(function () {
-        Route::resource('users', UserController::class)->except(['show','edit','update']);
+        Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
+        Route::post('/users', [UserController::class, 'store'])->name('users.store');
+
+        Route::resource('users', UserController::class)
+            ->except(['show', 'edit', 'update', 'create', 'store']);
 
         Route::get('/users/referrers/search', [UserController::class, 'searchReferrers'])
             ->name('users.referrers.search');
     });
+
+    Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
+    Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
+    Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
 
     // Products
     Route::resource('products', ProductController::class)
