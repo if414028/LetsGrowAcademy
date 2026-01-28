@@ -3,7 +3,7 @@
         <div class="flex items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-semibold text-gray-900">My Performance</h1>
-                <p class="text-sm text-gray-500">Monitor performa tim.</p>
+                <p class="text-sm text-gray-500">Pantau kinerja tim penjualan.</p>
             </div>
         </div>
 

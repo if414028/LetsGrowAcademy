@@ -3,6 +3,7 @@
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Auth;
@@ -68,6 +69,13 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::get('/performance/team/{user}', [PerformanceController::class, 'teamDetail']);
+
+    // Reports
+    Route::middleware(['auth'])->group(function () {
+        Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])
+            ->name('reports.index');
+    });
+
 
 });
 
