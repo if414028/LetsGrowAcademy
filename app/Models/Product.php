@@ -30,4 +30,16 @@ class Product extends Model
     {
         return $this->hasMany(SalesOrder::class, 'product_id');
     }
+
+    public function prices()
+    {
+        return $this->hasMany(ProductPrice::class);
+    }
+
+    public function primaryPrice()
+    {
+        return $this->hasOne(ProductPrice::class)
+            ->where('billing_type', 'one_time')
+            ->orderBy('sort_order');
+    }
 }

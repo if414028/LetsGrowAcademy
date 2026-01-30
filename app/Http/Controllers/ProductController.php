@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
@@ -13,9 +14,10 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $q = $request->string('q')->toString();
+       $q = $request->string('q')->toString();
 
         $products = \App\Models\Product::query()
+            ->with(['primaryPrice']) // <-- TAMBAH DI SINI
             ->when($q, fn($query) => $query->where(function ($qq) use ($q) {
                 $qq->where('sku', 'like', "%{$q}%")
                 ->orWhere('product_name', 'like', "%{$q}%");
@@ -41,22 +43,54 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'sku' => ['required', 'string', 'max:50', 'unique:products,sku'],
-            'product_name' => ['required', 'string', 'max:150'],
-            'model' => ['required', 'string', 'max:100'],
-            'price' => ['required', 'numeric', 'min:0'],
-            'product_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
-            'is_active' => ['nullable', 'boolean'],
+        'sku' => ['required', 'string', 'max:50', 'unique:products,sku'],
+        'product_name' => ['required', 'string', 'max:150'],
+        'model' => ['required', 'string', 'max:100'],
+        'product_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        'is_active' => ['nullable', 'boolean'],
+
+        // harga
+        'prices' => ['required', 'array', 'min:1'],
+        'prices.*.label' => ['required', 'string', 'max:100'],
+        'prices.*.billing_type' => ['required', 'in:one_time,monthly'],
+        'prices.*.duration_months' => ['nullable', 'integer', 'min:1', 'max:120'],
+        'prices.*.amount' => ['required', 'numeric', 'min:0'],
+        'prices.*.is_active' => ['nullable', 'boolean'],
         ]);
 
-        if ($request->hasFile('product_image')) {
-            $validated['product_image'] = $request->file('product_image')
-                ->store('products', 'public');
-        }
+        DB::transaction(function () use ($validated, $request) {
 
-        $validated['is_active'] = $request->boolean('is_active');
+            // 1️⃣ Simpan product (tanpa prices)
+            $productData = collect($validated)->except('prices')->all();
+            $productData['is_active'] = $request->boolean('is_active');
 
-        Product::create($validated);
+            if ($request->hasFile('product_image')) {
+                $productData['product_image'] = $request->file('product_image')
+                    ->store('products', 'public');
+            }
+
+            $product = \App\Models\Product::create($productData);
+
+            // 2️⃣ Simpan harga-harga
+            $rows = collect($validated['prices'])
+                ->values()
+                ->map(function ($p, $i) {
+                    return [
+                        'label' => $p['label'],
+                        'billing_type' => $p['billing_type'],
+                        'duration_months' =>
+                            $p['billing_type'] === 'monthly'
+                                ? (int) $p['duration_months']
+                                : null,
+                        'amount' => $p['amount'],
+                        'is_active' => (bool) ($p['is_active'] ?? true),
+                        'sort_order' => $i,
+                    ];
+                })
+                ->all();
+
+            $product->prices()->createMany($rows);
+        });
 
         return redirect()
             ->route('products.index')
@@ -68,6 +102,7 @@ class ProductController extends Controller
      */
     public function show(Product $product)
     {
+        $product->load('prices');
         return view('products.show', compact('product'));
     }
 
@@ -76,7 +111,21 @@ class ProductController extends Controller
      */
     public function edit(Product $product)
     {
-        return view('products.edit', compact('product'));
+        $product->load('prices');
+
+        $existingPrices = $product->prices->map(function ($p) {
+            return [
+                'id' => $p->id,
+                'label' => $p->label,
+                'billing_type' => $p->billing_type,
+                'duration_months' => $p->duration_months,
+                'amount' => (string) $p->amount,
+                'is_active' => (bool) $p->is_active,
+                'sort_order' => $p->sort_order,
+            ];
+        })->values();
+
+        return view('products.edit', compact('product', 'existingPrices'));
     }
 
     /**
@@ -88,32 +137,86 @@ class ProductController extends Controller
             'sku' => ['required', 'string', 'max:50', 'unique:products,sku,' . $product->id],
             'product_name' => ['required', 'string', 'max:150'],
             'model' => ['required', 'string', 'max:100'],
-            'price' => ['required', 'numeric', 'min:0'],
             'product_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'is_active' => ['nullable', 'boolean'],
+
+            // prices array
+            'prices' => ['required', 'array', 'min:1'],
+            'prices.*.id' => ['nullable', 'integer'],
+            'prices.*.label' => ['required', 'string', 'max:100'],
+            'prices.*.billing_type' => ['required', 'in:one_time,monthly'],
+            'prices.*.duration_months' => ['nullable', 'integer', 'min:1', 'max:120'],
+            'prices.*.amount' => ['required', 'numeric', 'min:0'],
+            'prices.*.is_active' => ['nullable', 'boolean'],
         ]);
 
-        $validated['is_active'] = $request->boolean('is_active');
-
-        // Replace image jika upload baru
-        if ($request->hasFile('product_image')) {
-            // hapus image lama (kalau ada)
-            if ($product->product_image && Storage::disk('public')->exists($product->product_image)) {
-                Storage::disk('public')->delete($product->product_image);
+        // extra rule: monthly wajib duration_months
+        foreach ($validated['prices'] as $i => $p) {
+            if (($p['billing_type'] ?? null) === 'monthly' && empty($p['duration_months'])) {
+                return back()
+                    ->withErrors(["prices.$i.duration_months" => "Durasi wajib diisi untuk tipe Monthly."])
+                    ->withInput();
             }
-
-            $validated['product_image'] = $request->file('product_image')->store('products', 'public');
-        } else {
-            // jangan overwrite kalau tidak upload baru
-            unset($validated['product_image']);
         }
 
-        $product->update($validated);
+        DB::transaction(function () use ($request, $product, $validated) {
+            // 1) update data product
+            $productData = collect($validated)->except('prices')->all();
+            $productData['is_active'] = $request->boolean('is_active');
+
+            // Replace image jika upload baru
+            if ($request->hasFile('product_image')) {
+                if ($product->product_image && Storage::disk('public')->exists($product->product_image)) {
+                    Storage::disk('public')->delete($product->product_image);
+                }
+                $productData['product_image'] = $request->file('product_image')->store('products', 'public');
+            } else {
+                unset($productData['product_image']);
+            }
+
+            $product->update($productData);
+
+            // 2) sync prices
+            $product->load('prices');
+            $existingIds = $product->prices->pluck('id')->all();
+
+            $incoming = collect($validated['prices'])->values()->map(function ($p, $i) {
+                return [
+                    'id' => $p['id'] ?? null,
+                    'label' => $p['label'],
+                    'billing_type' => $p['billing_type'],
+                    'duration_months' => $p['billing_type'] === 'monthly' ? (int) $p['duration_months'] : null,
+                    'amount' => $p['amount'],
+                    'is_active' => (bool) ($p['is_active'] ?? true),
+                    'sort_order' => $i,
+                ];
+            });
+
+            $incomingIds = $incoming->pluck('id')->filter()->map(fn($v) => (int) $v)->all();
+
+            // 2a) delete yang tidak ada di payload
+            $idsToDelete = array_values(array_diff($existingIds, $incomingIds));
+            if (!empty($idsToDelete)) {
+                $product->prices()->whereIn('id', $idsToDelete)->delete();
+            }
+
+            // 2b) update existing + create new
+            foreach ($incoming as $row) {
+                $id = $row['id'];
+                unset($row['id']);
+
+                if ($id) {
+                    // keamanan: pastikan milik product ini
+                    $product->prices()->where('id', $id)->update($row);
+                } else {
+                    $product->prices()->create($row);
+                }
+            }
+        });
 
         return redirect()
             ->route('products.index')
             ->with('success', 'Product berhasil diupdate.');
-
     }
 
     /**
