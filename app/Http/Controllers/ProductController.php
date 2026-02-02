@@ -14,10 +14,16 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-       $q = $request->string('q')->toString();
+        $q = $request->string('q')->toString();
+        $type = $request->string('type')->toString() ?: 'regular'; // default tab
 
-        $products = \App\Models\Product::query()
-            ->with(['primaryPrice']) // <-- TAMBAH DI SINI
+        if (!in_array($type, ['regular', 'bundle'], true)) {
+            $type = 'regular';
+        }
+
+        $products = Product::query()
+            ->with(['displayPrice'])
+            ->where('type', $type)
             ->when($q, fn($query) => $query->where(function ($qq) use ($q) {
                 $qq->where('sku', 'like', "%{$q}%")
                 ->orWhere('product_name', 'like', "%{$q}%");
@@ -26,8 +32,13 @@ class ProductController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        return view('products.index', compact('products', 'q'));
+        // counts untuk label tab
+        $countRegular = Product::where('type', 'regular')->count();
+        $countBundle  = Product::where('type', 'bundle')->count();
+
+        return view('products.index', compact('products', 'q', 'type', 'countRegular', 'countBundle'));
     }
+
 
     /**
      * Show the form for creating a new resource.

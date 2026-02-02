@@ -11,7 +11,7 @@
         </a>
     </div>
 
-    <div class="mt-6 rounded-2xl border bg-white p-6 max-w-3xl">
+    <div class="mt-6 rounded-2xl border bg-white p-6 shadow-sm ring-1 ring-black/5">
         <form method="POST"
               action="{{ route('products.store') }}"
               enctype="multipart/form-data"

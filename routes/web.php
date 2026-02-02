@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BundleController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\ProductController;
@@ -75,6 +76,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])
             ->name('reports.index');
     });
+
+    // Bundles Product
+    Route::get('/bundles', [BundleController::class, 'index'])->name('bundles.index');
+    Route::get('/bundles/create', [BundleController::class, 'create'])->name('bundles.create');
+    Route::post('/bundles', [BundleController::class, 'store'])->name('bundles.store');
+
+    Route::get('/bundles/{bundle}', [BundleController::class, 'show'])->name('bundles.show');
+    Route::get('/bundles/{bundle}/edit', [BundleController::class, 'edit'])->name('bundles.edit');
+    Route::put('/bundles/{bundle}', [BundleController::class, 'update'])->name('bundles.update');
+
 
 
 });
