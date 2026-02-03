@@ -20,8 +20,25 @@ class SalesOrderController extends Controller
 
     public function index(Request $request)
     {
+        $user = $request->user();
+
         $q = SalesOrder::query()->with(['customer', 'salesUser']);
 
+        // ✅ Role-based scope
+        if ($user->hasAnyRole(['Sales Manager', 'Health Manager'])) {
+            // ambil semua bawahan (children) dari user ini
+            $childIds = $user->childrenUsers()->pluck('users.id');
+
+            // kalau tidak punya bawahan, hasilnya kosong
+            $q->whereIn('sales_user_id', $childIds);
+        } elseif (!$user->hasRole('Admin')) {
+            // opsional: kalau selain Admin / Manager tidak boleh lihat sama sekali
+            abort(403);
+            // atau kalau mau tampil kosong aja:
+            // $q->whereRaw('1=0');
+        }
+
+        // 🔎 search
         if ($request->filled('search')) {
             $search = $request->search;
 
@@ -32,10 +49,12 @@ class SalesOrderController extends Controller
             });
         }
 
+        // status
         if ($request->filled('status') && in_array($request->status, $this->statuses, true)) {
             $q->where('status', $request->status);
         }
 
+        // ccp_status
         if ($request->filled('ccp_status') && in_array($request->ccp_status, $this->ccpStatuses, true)) {
             $q->where('ccp_status', $request->ccp_status);
         }
@@ -74,8 +93,11 @@ class SalesOrderController extends Controller
         // maintain value saat validation error (Admin)
         $oldSalesUser = null;
         if (old('sales_user_id')) {
-            $oldSalesUser = User::find(old('sales_user_id'), ['id', 'name', 'email', 'dst_code']);
+            $oldSalesUser = User::role('Health Planner')
+                ->whereKey(old('sales_user_id'))
+                ->first(['id', 'name', 'email', 'dst_code']);
         }
+
 
         return view('sales-orders.create', compact(
             'paymentMethods',
@@ -129,6 +151,18 @@ class SalesOrderController extends Controller
                 'max:500',
             ],
         ]);
+
+        if ($authUser->hasRole('Admin')) {
+            $isHealthPlanner = User::role('Health Planner')
+                ->whereKey($validated['sales_user_id'])
+                ->exists();
+
+            if (!$isHealthPlanner) {
+                return back()
+                    ->withErrors(['sales_user_id' => 'Sales User harus memiliki role Health Planner.'])
+                    ->withInput();
+            }
+        }
 
         foreach ($request->input('items', []) as $i => $row) {
             $pid = $row['product_id'] ?? null;
@@ -207,10 +241,11 @@ class SalesOrderController extends Controller
         if (mb_strlen($q) < 2) return response()->json([]);
 
         $users = User::query()
+            ->role('Health Planner')
             ->where(function ($w) use ($q) {
                 $w->where('name', 'like', "%{$q}%")
-                    ->orWhere('full_name', 'like', "%{$q}%")
-                    ->orWhere('email', 'like', "%{$q}%");
+                ->orWhere('full_name', 'like', "%{$q}%")
+                ->orWhere('email', 'like', "%{$q}%");
             })
             ->orderBy('name')
             ->limit(12)

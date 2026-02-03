@@ -41,6 +41,12 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/users/referrers/search', [UserController::class, 'searchReferrers'])
             ->name('users.referrers.search');
+
+        // Sales Order
+        Route::get('/sales-orders/create', [SalesOrderController::class, 'create'])->name('sales-orders.create');
+        Route::post('/sales-orders', [SalesOrderController::class, 'store'])->name('sales-orders.store');
+        Route::get('/sales-orders/{salesOrder}/edit', [SalesOrderController::class, 'edit'])->name('sales-orders.edit');
+        Route::put('/sales-orders/{salesOrder}', [SalesOrderController::class, 'update'])->name('sales-orders.update');
     });
 
     Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
@@ -53,11 +59,7 @@ Route::middleware('auth')->group(function () {
 
     // Sales Orders
     Route::get('/sales-orders', [SalesOrderController::class, 'index'])->name('sales-orders.index');
-    Route::get('/sales-orders/create', [SalesOrderController::class, 'create'])->name('sales-orders.create');
-    Route::post('/sales-orders', [SalesOrderController::class, 'store'])->name('sales-orders.store');
     Route::get('/sales-orders/{salesOrder}', [SalesOrderController::class, 'show'])->name('sales-orders.show');
-    Route::get('/sales-orders/{salesOrder}/edit', [SalesOrderController::class, 'edit'])->name('sales-orders.edit');
-    Route::put('/sales-orders/{salesOrder}', [SalesOrderController::class, 'update'])->name('sales-orders.update');
 
     // Autocomplete / Search
     Route::get('/customers/search', [CustomerController::class, 'search'])->name('customers.search');
