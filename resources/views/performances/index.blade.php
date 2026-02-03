@@ -36,14 +36,40 @@
             <div class="flex items-center justify-between gap-4 p-5 flex-wrap">
                 <h2 class="text-lg font-semibold text-gray-900">Team Performance</h2>
 
-                <form method="GET" class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                    <input name="q" value="{{ $q }}" placeholder="Search member..."
-                        class="w-full sm:w-64 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none
-               focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                <form method="GET" class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end sm:gap-3">
+                    {{-- Date From --}}
+                    <div class="w-full sm:w-auto">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">From</label>
+                        <input type="date" name="from" value="{{ $from }}"
+                            class="w-full sm:w-40 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none
+                    focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                    </div>
+
+                    {{-- Date To --}}
+                    <div class="w-full sm:w-auto">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">To</label>
+                        <input type="date" name="to" value="{{ $to }}"
+                            class="w-full sm:w-40 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none
+                    focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                    </div>
+
+                    {{-- Search Member --}}
+                    <div class="w-full sm:w-auto">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Member</label>
+                        <input name="q" value="{{ $q }}" placeholder="Search member..."
+                            class="w-full sm:w-64 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none
+                    focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                    </div>
+
                     <button type="submit"
                         class="w-full sm:w-auto rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                        Search
+                        Apply
                     </button>
+
+                    <a href="{{ url('/performance') }}"
+                        class="w-full sm:w-auto text-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Reset
+                    </a>
                 </form>
             </div>
 
@@ -163,42 +189,49 @@
 @push('scripts')
     <script>
         document.addEventListener('alpine:init', () => {
-            Alpine.data('teamSheet', () => ({
-                sheetOpen: false,
-                loading: false,
-                detail: {},
+        Alpine.data('teamSheet', () => ({
+                    sheetOpen: false,
+                    loading: false,
+                    detail: {},
 
-                async openSheet(userId) {
-                    this.sheetOpen = true;
-                    this.loading = true;
-                    this.detail = {};
+                    async openSheet(userId) {
+                        this.sheetOpen = true;
+                        this.loading = true;
+                        this.detail = {};
 
-                    try {
-                        const res = await fetch(`{{ url('/performance/team') }}/${userId}`, {
+                        try {
+                            const params = new URLSearchParams(window.location.search);
+                            const res = await fetch(
+                                `{{ url('/performance/team') }}/${userId}?${params.toString()}`, {
+                                    headers: {
+                                        'Accept': 'application/json'
+                                    }
+                                });
                             headers: {
                                 'Accept': 'application/json'
                             }
                         });
 
-                        if (!res.ok) throw new Error('Failed to load');
-                        this.detail = await res.json();
-                    } catch (e) {
-                        this.detail = {
-                            name: 'Error',
-                            total_units: 0,
-                            orders: []
-                        };
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                closeSheet() {
-                    this.sheetOpen = false;
+                    if (!res.ok) throw new Error('Failed to load');
+                    this.detail = await res.json();
+                }
+                catch (e) {
+                    this.detail = {
+                        name: 'Error',
+                        total_units: 0,
+                        orders: []
+                    };
+                } finally {
                     this.loading = false;
-                    this.detail = {};
-                },
-            }))
+                }
+            },
+
+            closeSheet() {
+                this.sheetOpen = false;
+                this.loading = false;
+                this.detail = {};
+            },
+        }))
         })
     </script>
 @endpush

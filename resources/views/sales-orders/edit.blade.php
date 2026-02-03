@@ -614,7 +614,8 @@
                 },
 
                 get requiredInstallDate() {
-                    return this.normalizeStatus(this.status) === 'dijadwalkan';
+                    const st = this.normalizeStatus(this.status);
+                    return ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'].includes(st);
                 },
 
                 get showReason() {

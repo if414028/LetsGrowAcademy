@@ -128,7 +128,7 @@ class SalesOrderController extends Controller
             // order fields
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
-                Rule::requiredIf(fn () => ($request->input('status') === 'dijadwalkan')),
+                Rule::requiredIf(fn () => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)),
                 Rule::prohibitedIf(fn () => ($request->input('status') === 'menunggu verifikasi')),
                 'nullable',
                 'date',
@@ -198,8 +198,8 @@ class SalesOrderController extends Controller
 
             // install_date: simplify by status
             $installDate = null;
-            if (($validated['status'] ?? null) === 'dijadwalkan') {
-                $installDate = $validated['install_date']; // required
+            if (in_array($validated['status'] ?? null, ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)) {
+                $installDate = $validated['install_date'] ?? null;
             }
 
             $so = SalesOrder::create([
@@ -315,7 +315,7 @@ class SalesOrderController extends Controller
 
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
-                Rule::requiredIf(fn () => ($request->input('status') === 'dijadwalkan')),
+                Rule::requiredIf(fn () => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)),
                 Rule::prohibitedIf(fn () => ($request->input('status') === 'menunggu verifikasi')),
                 'nullable',
                 'date',
@@ -369,8 +369,8 @@ class SalesOrderController extends Controller
 
             // install_date: simple by status
             $installDate = null;
-            if (($validated['status'] ?? null) === 'dijadwalkan') {
-                $installDate = $validated['install_date']; // required
+            if (in_array($validated['status'] ?? null, ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)) {
+                $installDate = $validated['install_date'] ?? null;
             }
 
             $salesOrder->update([
