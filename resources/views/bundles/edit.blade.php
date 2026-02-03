@@ -6,14 +6,15 @@
         </div>
 
         <a href="{{ route('products.index', ['type' => 'bundle']) }}"
-           class="inline-flex items-center rounded-xl border px-4 py-2 text-sm bg-white hover:bg-gray-50">
+            class="inline-flex items-center rounded-xl border px-4 py-2 text-sm bg-white hover:bg-gray-50">
             Kembali
         </a>
     </div>
 
     {{-- Main Card --}}
     <div class="mt-6 rounded-2xl border bg-white p-6 shadow-sm ring-1 ring-black/5">
-        <form method="POST" action="{{ route('bundles.update', $bundle) }}" enctype="multipart/form-data" class="space-y-8">
+        <form method="POST" action="{{ route('bundles.update', $bundle) }}" enctype="multipart/form-data"
+            class="space-y-8">
             @csrf
             @method('PUT')
 
@@ -141,73 +142,133 @@
         $seedItems = old('items') ?? ($existingItems ?? [['product_id' => '', 'qty' => 1]]);
 
         // seed prices: old() > existing
-        $seedPrices = old('prices') ?? ($existingPrices ?? [[
-            'id' => '',
-            'label' => 'Bundling Price',
-            'billing_type' => 'one_time',
-            'duration_months' => '',
-            'amount' => '',
-            'is_active' => true,
-        ]]);
+        $seedPrices =
+            old('prices') ??
+            ($existingPrices ?? [
+                [
+                    'id' => '',
+                    'label' => 'Bundling Price',
+                    'billing_type' => 'one_time',
+                    'duration_months' => '',
+                    'amount' => '',
+                    'is_active' => true,
+                ],
+            ]);
     @endphp
-
-    {{-- datalist untuk auto-suggest --}}
-    <datalist id="bundle-products-list">
-        @foreach ($products as $p)
-            <option value="{{ $p->sku }} — {{ $p->product_name }}{{ $p->model ? ' (' . $p->model . ')' : '' }}"></option>
-        @endforeach
-    </datalist>
 
     <script>
         (function() {
             const products = @json(
                 $products->map(fn($p) => [
-                    'id' => $p->id,
-                    'label' => "{$p->sku} — {$p->product_name}" . ($p->model ? " ({$p->model})" : ''),
-                ])->values()
-            );
+                            'id' => $p->id,
+                            'label' => "{$p->sku} — {$p->product_name}" . ($p->model ? " ({$p->model})" : ''),
+                        ])->values());
 
-            const seedItems  = @json($seedItems);
+            const seedItems = @json($seedItems);
             const seedPrices = @json($seedPrices);
 
-            const itemsWrap  = document.getElementById('items-wrap');
+            const itemsWrap = document.getElementById('items-wrap');
             const pricesWrap = document.getElementById('prices-wrap');
+
+            // ---------- helpers ----------
+            function escapeHtml(str) {
+                return String(str ?? '')
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
+            }
+
+            function norm(s) {
+                return String(s ?? '').toLowerCase().trim();
+            }
 
             function labelById(productId) {
                 const found = products.find(p => String(p.id) === String(productId));
                 return found ? found.label : '';
             }
 
-            function idByLabel(label) {
-                const found = products.find(p => p.label === label);
-                return found ? found.id : '';
+            function filterProducts(q) {
+                const qq = norm(q);
+                if (!qq) return [];
+                return products
+                    .filter(p => norm(p.label).includes(qq))
+                    .slice(0, 10);
             }
 
+            function openSuggest(box) {
+                box.classList.remove('hidden');
+            }
+
+            function closeSuggest(box) {
+                if (!box) return;
+                box.classList.add('hidden');
+                const list = box.querySelector('[data-suggest-list]');
+                if (list) list.innerHTML = '';
+            }
+
+            function renderSuggest(inputEl, items) {
+                const card = inputEl.closest('[data-item-card]');
+                const box = card.querySelector('[data-suggest]');
+                const list = card.querySelector('[data-suggest-list]');
+                if (!box || !list) return;
+
+                if (!items.length) {
+                    list.innerHTML = `<div class="px-4 py-2 text-sm text-gray-500">Tidak ada hasil.</div>`;
+                    openSuggest(box);
+                    return;
+                }
+
+                list.innerHTML = items.map(p => `
+                    <button type="button"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-50"
+                            data-pick-product
+                            data-id="${p.id}"
+                            data-label="${escapeHtml(p.label)}">
+                        ${escapeHtml(p.label)}
+                    </button>
+                `).join('');
+
+                openSuggest(box);
+            }
+
+            // ---------- rows ----------
             function itemRow(i, val) {
-                const currentLabel = val.product_id ? labelById(val.product_id) : '';
+                // kalau seedItems dari DB, biasanya product_id sudah ada -> tampilkan label
+                const currentLabel = val.product_id ? labelById(val.product_id) : (val.product_label ?? '');
 
                 return `
-                <div class="rounded-2xl border border-gray-200 p-4">
+                <div class="rounded-2xl border border-gray-200 p-4" data-item-card>
                     <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
                         <div class="md:col-span-8">
                             <label class="text-xs font-medium text-gray-600">Product</label>
-                            <input
-                                type="text"
-                                list="bundle-products-list"
-                                data-product-search
-                                value="${currentLabel}"
-                                placeholder="Ketik SKU / nama product..."
-                                class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 leading-none
-                                       focus:border-blue-500 focus:ring-blue-500"
-                            />
+
+                            <div class="relative mt-1">
+                                <input
+                                    type="text"
+                                    data-product-search
+                                    value="${escapeHtml(currentLabel)}"
+                                    placeholder="Ketik SKU / nama product..."
+                                    autocomplete="off"
+                                    class="w-full h-11 rounded-xl border-gray-200 px-4 leading-none
+                                        focus:border-blue-500 focus:ring-blue-500"
+                                />
+
+                                <div data-suggest
+                                    class="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg hidden">
+                                    <div data-suggest-list class="max-h-64 overflow-auto py-1"></div>
+                                </div>
+                            </div>
+
                             <input type="hidden" name="items[${i}][product_id]" data-product-id value="${val.product_id ?? ''}">
                         </div>
 
                         <div class="md:col-span-3">
                             <label class="text-xs font-medium text-gray-600">Qty</label>
                             <input type="number" min="1" name="items[${i}][qty]" value="${val.qty ?? 1}"
-                                   class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 leading-none
-                                          focus:border-blue-500 focus:ring-blue-500" />
+                                class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 leading-none
+                                        focus:border-blue-500 focus:ring-blue-500" />
                         </div>
 
                         <div class="md:col-span-1 flex items-end justify-end">
@@ -226,10 +287,11 @@
 
             function priceRow(i, val) {
                 const isMonthly = (val.billing_type === 'monthly');
-                const isActive  = (val.is_active === true || val.is_active === 1 || val.is_active === '1' || val.is_active === 'on');
+                const isActive = (val.is_active === true || val.is_active === 1 || val.is_active === '1' || val
+                    .is_active === 'on');
 
                 return `
-                <div class="rounded-2xl border border-gray-200 p-4">
+                <div class="rounded-2xl border border-gray-200 p-4" data-price-card>
                     <div class="text-sm font-semibold text-gray-900 mb-3">Harga #${i + 1}</div>
 
                     <input type="hidden" name="prices[${i}][id]" value="${val.id ?? ''}">
@@ -238,7 +300,7 @@
                         <div class="md:col-span-4">
                             <label class="text-xs font-medium text-gray-600">Label</label>
                             <input name="prices[${i}][label]" value="${val.label ?? ''}"
-                                   class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 focus:border-blue-500 focus:ring-blue-500" />
+                                class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 focus:border-blue-500 focus:ring-blue-500" />
                         </div>
 
                         <div class="md:col-span-3">
@@ -253,23 +315,23 @@
                         <div class="md:col-span-2">
                             <label class="text-xs font-medium text-gray-600">Durasi (bulan)</label>
                             <input name="prices[${i}][duration_months]" data-duration
-                                   value="${val.duration_months ?? ''}"
-                                   ${isMonthly ? '' : 'disabled'}
-                                   class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 focus:border-blue-500 focus:ring-blue-500"
-                                   placeholder="-" />
+                                value="${val.duration_months ?? ''}"
+                                ${isMonthly ? '' : 'disabled'}
+                                class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 focus:border-blue-500 focus:ring-blue-500"
+                                placeholder="${isMonthly ? 'Contoh: 36' : '-'}" />
                         </div>
 
                         <div class="md:col-span-2">
                             <label class="text-xs font-medium text-gray-600">Nominal</label>
                             <input name="prices[${i}][amount]" value="${val.amount ?? ''}"
-                                   class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 focus:border-blue-500 focus:ring-blue-500"
-                                   placeholder="Contoh: 1250000" />
+                                class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 focus:border-blue-500 focus:ring-blue-500"
+                                placeholder="Contoh: 1250000" />
                         </div>
 
                         <div class="md:col-span-1 flex items-center gap-2">
                             <label class="text-xs text-gray-600">Active</label>
                             <input type="checkbox" name="prices[${i}][is_active]" value="1" ${isActive ? 'checked' : ''}
-                                   class="rounded border-gray-300" />
+                                class="rounded border-gray-300" />
                         </div>
 
                         <div class="md:col-span-12 flex justify-end">
@@ -283,7 +345,10 @@
             }
 
             function renderItems(values) {
-                const safe = (values && values.length) ? values : [{product_id:'', qty:1}];
+                const safe = (values && values.length) ? values : [{
+                    product_id: '',
+                    qty: 1
+                }];
                 itemsWrap.innerHTML = safe.map((v, i) => itemRow(i, v)).join('');
             }
 
@@ -302,34 +367,83 @@
             renderItems(seedItems);
             renderPrices(seedPrices);
 
-            // Add item
+            // ---------- item actions ----------
             document.getElementById('add-item').addEventListener('click', () => {
                 const current = itemsWrap.querySelectorAll('input[data-product-id]').length;
-                itemsWrap.insertAdjacentHTML('beforeend', itemRow(current, { product_id: '', qty: 1 }));
+                itemsWrap.insertAdjacentHTML('beforeend', itemRow(current, {
+                    product_id: '',
+                    qty: 1
+                }));
             });
 
-            // Select suggestion -> set hidden product_id
+            // typing -> suggest
             itemsWrap.addEventListener('input', (e) => {
                 if (!e.target.matches('input[data-product-search]')) return;
 
-                const card = e.target.closest('.rounded-2xl');
+                const card = e.target.closest('[data-item-card]');
                 const hidden = card.querySelector('input[data-product-id]');
-                hidden.value = idByLabel(e.target.value) || '';
+                const box = card.querySelector('[data-suggest]');
+
+                // kalau user mengetik, reset product_id (biar wajib pilih suggestion)
+                hidden.value = '';
+
+                const results = filterProducts(e.target.value);
+                renderSuggest(e.target, results);
+
+                // kalau input kosong, tutup dropdown
+                if (!norm(e.target.value)) closeSuggest(box);
             });
 
-            // Remove item + reindex
+            // focus -> buka suggest kalau ada value
+            itemsWrap.addEventListener('focusin', (e) => {
+                if (!e.target.matches('input[data-product-search]')) return;
+
+                const results = filterProducts(e.target.value);
+                if (results.length) renderSuggest(e.target, results);
+            });
+
+            // click suggestion -> set value + hidden
+            itemsWrap.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-pick-product]');
+                if (!btn) return;
+
+                const card = btn.closest('[data-item-card]');
+                const input = card.querySelector('input[data-product-search]');
+                const hidden = card.querySelector('input[data-product-id]');
+                const box = card.querySelector('[data-suggest]');
+
+                input.value = btn.getAttribute('data-label');
+                hidden.value = btn.getAttribute('data-id');
+
+                closeSuggest(box);
+            });
+
+            // remove item + reindex names
             itemsWrap.addEventListener('click', (e) => {
                 if (!e.target.classList.contains('remove-item')) return;
 
-                e.target.closest('.rounded-2xl').remove();
+                e.target.closest('[data-item-card]').remove();
 
-                [...itemsWrap.children].forEach((card, i) => {
+                [...itemsWrap.querySelectorAll('[data-item-card]')].forEach((card, i) => {
                     card.querySelector('input[data-product-id]').name = `items[${i}][product_id]`;
                     card.querySelector('input[type="number"]').name = `items[${i}][qty]`;
                 });
             });
 
-            // Add price
+            // close dropdown when click outside
+            document.addEventListener('click', (e) => {
+                const inside = e.target.closest('[data-product-search]') || e.target.closest('[data-suggest]');
+                if (inside) return;
+                itemsWrap.querySelectorAll('[data-suggest]').forEach(closeSuggest);
+            });
+
+            // esc -> close
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                itemsWrap.querySelectorAll('[data-suggest]').forEach(closeSuggest);
+            });
+
+            // ---------- price actions ----------
             document.getElementById('add-price').addEventListener('click', () => {
                 const current = pricesWrap.querySelectorAll('input[name^="prices["][name$="[label]"]').length;
                 pricesWrap.insertAdjacentHTML('beforeend', priceRow(current, {
@@ -342,42 +456,29 @@
                 }));
             });
 
-            // Remove price + reindex + refresh judul Harga #n
             pricesWrap.addEventListener('click', (e) => {
                 if (!e.target.classList.contains('remove-price')) return;
 
-                e.target.closest('.rounded-2xl').remove();
+                e.target.closest('[data-price-card]').remove();
 
-                const values = [...pricesWrap.children].map((card) => {
-                    return {
-                        id: card.querySelector('input[type="hidden"]')?.value ?? '',
-                        label: card.querySelector('input[name$="[label]"]')?.value ?? '',
-                        billing_type: card.querySelector('select[data-billing-type]')?.value ?? 'one_time',
-                        duration_months: card.querySelector('input[data-duration]')?.value ?? '',
-                        amount: card.querySelector('input[name$="[amount]"]')?.value ?? '',
-                        is_active: card.querySelector('input[type="checkbox"]')?.checked ?? true,
-                    };
-                });
+                // re-render supaya Harga #n rapi + names ikut rapih
+                const values = [...pricesWrap.querySelectorAll('[data-price-card]')].map((card) => ({
+                    id: card.querySelector('input[type="hidden"]')?.value ?? '',
+                    label: card.querySelector('input[name$="[label]"]')?.value ?? '',
+                    billing_type: card.querySelector('select[data-billing-type]')?.value ??
+                        'one_time',
+                    duration_months: card.querySelector('input[data-duration]')?.value ?? '',
+                    amount: card.querySelector('input[name$="[amount]"]')?.value ?? '',
+                    is_active: card.querySelector('input[type="checkbox"]')?.checked ?? true,
+                }));
 
-                // re-render supaya Harga #n rapih lagi + name reindex otomatis
                 renderPrices(values);
-
-                // reindex name attributes setelah render
-                [...pricesWrap.children].forEach((card, i) => {
-                    card.querySelector('input[type="hidden"]').name = `prices[${i}][id]`;
-                    card.querySelector('input[name$="[label]"]').name = `prices[${i}][label]`;
-                    card.querySelector('select[data-billing-type]').name = `prices[${i}][billing_type]`;
-                    card.querySelector('input[data-duration]').name = `prices[${i}][duration_months]`;
-                    card.querySelector('input[name$="[amount]"]').name = `prices[${i}][amount]`;
-                    card.querySelector('input[type="checkbox"]').name = `prices[${i}][is_active]`;
-                });
             });
 
-            // toggle duration enable/disable
             pricesWrap.addEventListener('change', (e) => {
                 if (!e.target.matches('select[data-billing-type]')) return;
 
-                const card = e.target.closest('.rounded-2xl');
+                const card = e.target.closest('[data-price-card]');
                 const duration = card.querySelector('input[data-duration]');
 
                 if (e.target.value === 'monthly') {

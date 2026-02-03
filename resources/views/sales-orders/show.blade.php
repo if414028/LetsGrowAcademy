@@ -81,8 +81,7 @@
                             $status = $salesOrder->status;
 
                             $statusClasses = match ($status) {
-                                'dibatalkan' => 'bg-red-100 text-red-700',
-                                'gagal penelponan' => 'bg-red-100 text-red-700',
+                                'dibatalkan', 'gagal penelponan' => 'bg-red-100 text-red-700',
                                 'ditunda' => 'bg-yellow-100 text-yellow-700',
                                 'selesai' => 'bg-green-100 text-green-700',
                                 'menunggu verifikasi', 'dijadwalkan' => 'bg-gray-100 text-gray-700',
@@ -107,7 +106,6 @@
                                 </div>
                             </div>
                         @endif
-
                     </div>
                 </div>
 
@@ -127,21 +125,51 @@
                                     <th class="px-4 py-3 text-left w-20">Image</th>
                                     <th class="px-4 py-3 text-left">SKU</th>
                                     <th class="px-4 py-3 text-left">Product</th>
-                                    <th class="px-4 py-3 text-right w-40">Price</th>
+                                    <th class="px-4 py-3 text-left w-56">Selected Price</th>
                                     <th class="px-4 py-3 text-right w-24">Qty</th>
-                                    <th class="px-4 py-3 text-right w-44">Total Price</th>
+                                    <th class="px-4 py-3 text-right w-44">Total</th>
                                 </tr>
                             </thead>
 
                             <tbody class="divide-y">
+                                @php
+                                    $oneTimeTotal = 0;
+                                    $monthlyTotal = 0;
+                                @endphp
+
                                 @forelse($salesOrder->items as $item)
                                     @php
-                                        $price = (int) ($item->product?->price ?? 0);   // ✅ sesuaikan kalau kolomnya beda
-                                        $qty = (int) $item->qty;
-                                        $total = $price * $qty;
+                                        $pp = $item->productPrice;
 
-                                        // ✅ sesuaikan kalau kolom image beda (misal: image_url / photo)
+                                        $billingType = $pp->billing_type ?? null; // monthly | one_time
+                                        $isMonthly = ($billingType === 'monthly');
+
+                                        $priceAmount = (int) ($pp?->amount ?? ($item->product?->price ?? 0)); // fallback data lama
+                                        $qty = (int) $item->qty;
+                                        $total = $priceAmount * $qty;
+
+                                        if ($isMonthly) {
+                                            $monthlyTotal += $total;
+                                        } else {
+                                            $oneTimeTotal += $total;
+                                        }
+
                                         $img = $item->product?->product_image ?? null;
+
+                                        $priceLabel = '-';
+                                        if ($pp) {
+                                            $dur = $pp->duration_months ?? null;
+
+                                            if ($isMonthly) {
+                                                $suffix = $dur ? " • Monthly ({$dur} bln)" : " • Monthly";
+                                            } else {
+                                                $suffix = " • One Time";
+                                            }
+
+                                            $priceLabel = ($pp->label ?? 'Price') . $suffix;
+                                        } elseif ($priceAmount > 0) {
+                                            $priceLabel = 'Default Price';
+                                        }
                                     @endphp
 
                                     <tr>
@@ -166,11 +194,26 @@
                                         </td>
 
                                         <td class="px-4 py-3">
-                                            {{ $item->product?->product_name ?? '-' }}
+                                            <div class="font-medium text-gray-900">
+                                                {{ $item->product?->product_name ?? '-' }}
+                                            </div>
+                                            @if($item->product?->model)
+                                                <div class="text-xs text-gray-500">
+                                                    {{ $item->product->model }}
+                                                </div>
+                                            @endif
                                         </td>
 
-                                        <td class="px-4 py-3 text-right">
-                                            {{ $price ? 'Rp '.number_format($price, 0, ',', '.') : '-' }}
+                                        <td class="px-4 py-3">
+                                            <div class="text-sm font-medium text-gray-900">
+                                                {{ $priceLabel }}
+                                            </div>
+                                            <div class="text-xs text-gray-500">
+                                                {{ $priceAmount ? 'Rp '.number_format($priceAmount, 0, ',', '.') : '-' }}
+                                                @if($isMonthly)
+                                                    <span class="text-gray-400">/bln</span>
+                                                @endif
+                                            </div>
                                         </td>
 
                                         <td class="px-4 py-3 text-right">
@@ -179,6 +222,9 @@
 
                                         <td class="px-4 py-3 text-right font-semibold text-gray-900">
                                             {{ $total ? 'Rp '.number_format($total, 0, ',', '.') : '-' }}
+                                            @if($isMonthly)
+                                                <span class="text-gray-400">/bln</span>
+                                            @endif
                                         </td>
                                     </tr>
                                 @empty
@@ -193,11 +239,39 @@
                     </div>
 
                     @if($salesOrder->items->count())
-                        <div class="mt-4 text-sm text-gray-600">
-                            Total Qty:
-                            <span class="font-semibold text-gray-900">
-                                {{ $salesOrder->items->sum('qty') }}
-                            </span>
+                        @php
+                            $grandTotalAll = $oneTimeTotal + $monthlyTotal;
+                        @endphp
+
+                        <div class="mt-4 flex flex-col gap-2 text-sm text-gray-600">
+                            <div>
+                                Total Qty:
+                                <span class="font-semibold text-gray-900">
+                                    {{ $salesOrder->items->sum('qty') }}
+                                </span>
+                            </div>
+
+                            <div>
+                                One Time Total:
+                                <span class="font-semibold text-gray-900">
+                                    {{ 'Rp '.number_format($oneTimeTotal, 0, ',', '.') }}
+                                </span>
+                            </div>
+
+                            <div>
+                                Monthly Total:
+                                <span class="font-semibold text-gray-900">
+                                    {{ 'Rp '.number_format($monthlyTotal, 0, ',', '.') }}
+                                </span>
+                                <span class="text-gray-400">/bln</span>
+                            </div>
+
+                            <div class="pt-1">
+                                Grand Total (All):
+                                <span class="font-semibold text-gray-900">
+                                    {{ 'Rp '.number_format($grandTotalAll, 0, ',', '.') }}
+                                </span>
+                            </div>
                         </div>
                     @endif
                 </div>

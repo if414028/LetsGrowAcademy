@@ -12,6 +12,7 @@ class SalesOrderItem extends Model
     protected $fillable = [
         'sales_order_id',
         'product_id',
+        'product_price_id',
         'qty'
     ];  
 
@@ -34,4 +35,10 @@ class SalesOrderItem extends Model
     {
         return $this->belongsTo(Product::class, 'product_id');
     }
+
+    public function productPrice()
+    {
+        return $this->belongsTo(\App\Models\ProductPrice::class, 'product_price_id');
+    }
+
 }

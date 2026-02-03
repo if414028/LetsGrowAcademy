@@ -147,15 +147,6 @@
         ];
     @endphp
 
-    {{-- datalist untuk auto-suggest --}}
-    <datalist id="bundle-products-list">
-        @foreach ($products as $p)
-            <option
-                value="{{ $p->sku }} — {{ $p->product_name }}{{ $p->model ? ' (' . $p->model . ')' : '' }}">
-            </option>
-        @endforeach
-    </datalist>
-
     <script>
         (function() {
             const products = @json(
@@ -182,46 +173,53 @@
 
             // ✅ item row (layout mirip create product & sejajar)
             function itemRow(i, val) {
-                const currentLabel = val.product_id ? labelById(val.product_id) : '';
+                const currentLabel = val.product_id ? labelById(val.product_id) : (val.product_label ?? '');
 
                 return `
-                <div class="rounded-2xl border border-gray-200 p-4">
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
-                        <div class="md:col-span-8">
-                            <label class="text-xs font-medium text-gray-600">Product</label>
+            <div class="rounded-2xl border border-gray-200 p-4">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+                    <div class="md:col-span-8">
+                        <label class="text-xs font-medium text-gray-600">Product</label>
 
+                        <div class="relative mt-1">
                             <input
                                 type="text"
-                                list="bundle-products-list"
                                 data-product-search
-                                value="${currentLabel}"
+                                value="${escapeHtml(currentLabel)}"
                                 placeholder="Ketik SKU / nama product..."
-                                class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 leading-none
-                                       focus:border-blue-500 focus:ring-blue-500"
+                                autocomplete="off"
+                                class="w-full h-11 rounded-xl border-gray-200 px-4 leading-none
+                                    focus:border-blue-500 focus:ring-blue-500"
                             />
 
-                            <input type="hidden" name="items[${i}][product_id]" data-product-id value="${val.product_id ?? ''}">
+                            <div data-suggest
+                                class="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg hidden">
+                                <div data-suggest-list class="max-h-64 overflow-auto py-1"></div>
+                            </div>
                         </div>
 
-                        <div class="md:col-span-3">
-                            <label class="text-xs font-medium text-gray-600">Qty</label>
-                            <input type="number" min="1" name="items[${i}][qty]" value="${val.qty ?? 1}"
-                                   class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 leading-none
-                                          focus:border-blue-500 focus:ring-blue-500" />
-                        </div>
-
-                        <div class="md:col-span-1 flex items-end justify-end">
-                            <button type="button"
-                                    class="remove-item inline-flex h-11 items-center rounded-xl border px-3 text-sm bg-white hover:bg-gray-50">
-                                Hapus
-                            </button>
-                        </div>
-
-                        <div class="md:col-span-12">
-                            <p class="text-xs text-gray-400">Pilih dari suggestion agar tersimpan.</p>
-                        </div>
+                        <input type="hidden" name="items[${i}][product_id]" data-product-id value="${val.product_id ?? ''}">
                     </div>
-                </div>`;
+
+                    <div class="md:col-span-3">
+                        <label class="text-xs font-medium text-gray-600">Qty</label>
+                        <input type="number" min="1" name="items[${i}][qty]" value="${val.qty ?? 1}"
+                            class="mt-1 w-full h-11 rounded-xl border-gray-200 px-4 leading-none
+                                    focus:border-blue-500 focus:ring-blue-500" />
+                    </div>
+
+                    <div class="md:col-span-1 flex items-end justify-end">
+                        <button type="button"
+                                class="remove-item inline-flex h-11 items-center rounded-xl border px-3 text-sm bg-white hover:bg-gray-50">
+                            Hapus
+                        </button>
+                    </div>
+
+                    <div class="md:col-span-12">
+                        <p class="text-xs text-gray-400">Pilih dari suggestion agar tersimpan.</p>
+                    </div>
+                </div>
+            </div>`;
             }
 
             // ✅ price row (ada judul Harga #n seperti create product)
@@ -302,13 +300,41 @@
                 }));
             });
 
-            // Select suggestion -> set hidden product_id
+            // ketik -> tampilkan suggestion
             itemsWrap.addEventListener('input', (e) => {
                 if (!e.target.matches('input[data-product-search]')) return;
 
                 const card = e.target.closest('.rounded-2xl');
                 const hidden = card.querySelector('input[data-product-id]');
-                hidden.value = idByLabel(e.target.value) || '';
+
+                // reset dulu product_id kalau user ngetik manual
+                hidden.value = '';
+
+                const results = filterProducts(e.target.value);
+                renderSuggest(e.target, results);
+            });
+
+            // focus -> kalau ada teks, munculkan lagi
+            itemsWrap.addEventListener('focusin', (e) => {
+                if (!e.target.matches('input[data-product-search]')) return;
+                const results = filterProducts(e.target.value);
+                renderSuggest(e.target, results);
+            });
+
+            // klik item suggestion -> set value + hidden id
+            itemsWrap.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-pick-product]');
+                if (!btn) return;
+
+                const card = btn.closest('.rounded-2xl');
+                const input = card.querySelector('input[data-product-search]');
+                const hidden = card.querySelector('input[data-product-id]');
+                const box = card.querySelector('[data-suggest]');
+
+                input.value = btn.getAttribute('data-label'); // label
+                hidden.value = btn.getAttribute('data-id'); // product_id
+
+                closeSuggest(box);
             });
 
             // Remove item + reindex
@@ -385,6 +411,81 @@
                     duration.placeholder = '-';
                 }
             });
+
+            function escapeHtml(str) {
+                return String(str ?? '')
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
+            }
+
+            function norm(s) {
+                return String(s ?? '').toLowerCase().trim();
+            }
+
+            function filterProducts(q) {
+                const qq = norm(q);
+                if (!qq) return [];
+                // cari di label (SKU + name + model)
+                return products
+                    .filter(p => norm(p.label).includes(qq))
+                    .slice(0, 10); // batasi biar rapi
+            }
+
+            function openSuggest(box) {
+                box.classList.remove('hidden');
+            }
+
+            function closeSuggest(box) {
+                box.classList.add('hidden');
+                const list = box.querySelector('[data-suggest-list]');
+                if (list) list.innerHTML = '';
+            }
+
+            function renderSuggest(inputEl, items) {
+                const card = inputEl.closest('.rounded-2xl');
+                const box = card.querySelector('[data-suggest]');
+                const list = card.querySelector('[data-suggest-list]');
+                if (!box || !list) return;
+
+                if (!items.length) {
+                    list.innerHTML = `
+                    <div class="px-4 py-2 text-sm text-gray-500">
+                        Tidak ada hasil.
+                    </div>`;
+                    openSuggest(box);
+                    return;
+                }
+
+                list.innerHTML = items.map(p => `
+                    <button type="button"
+                            class="w-full text-left px-4 py-2 text-sm hover:bg-gray-50"
+                            data-pick-product
+                            data-id="${p.id}"
+                            data-label="${escapeHtml(p.label)}">
+                        ${escapeHtml(p.label)}
+                    </button>
+                `).join('');
+
+                openSuggest(box);
+            }
+
+            document.addEventListener('click', (e) => {
+                // kalau klik di dalam area input/suggest, jangan tutup
+                const inside = e.target.closest('[data-product-search]') || e.target.closest('[data-suggest]');
+                if (inside) return;
+
+                // tutup semua dropdown suggestion
+                itemsWrap.querySelectorAll('[data-suggest]').forEach(closeSuggest);
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                itemsWrap.querySelectorAll('[data-suggest]').forEach(closeSuggest);
+            });
+
         })();
     </script>
 </x-dashboard-layout>
