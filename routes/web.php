@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BundleController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReportController;
@@ -16,9 +17,10 @@ Route::get('/', function () {
         : redirect()->route('login');
 });
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 /**
  * Authenticated routes
