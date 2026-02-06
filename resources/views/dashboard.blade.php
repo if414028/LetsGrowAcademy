@@ -118,7 +118,6 @@
                     </div>
                 </div>
 
-
                 @if ($isManager)
                     <p class="mt-3 text-xs text-orange-900/70">
                         *List ini hanya menampilkan bawahan Anda.
@@ -137,40 +136,14 @@
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">Units Sold</p>
-                    <p class="mt-2 text-3xl font-bold">0</p>
-                    <p class="mt-1 text-xs text-gray-500">Total units in period</p>
+                    <p class="text-sm text-gray-500">Total Unit Terjual</p>
+                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalUnitsSold ?? 0) }}</p>
+                    <p class="mt-1 text-xs text-gray-500">Total units terjual (Anda + bawahan)</p>
                 </div>
                 <span class="text-blue-600">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12l4 4L19 6" />
-                    </svg>
-                </span>
-            </div>
-        </div>
-
-        <div class="rounded-2xl bg-white p-6 shadow-sm border">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm text-gray-500">Revenue</p>
-                    <p class="mt-2 text-3xl font-bold">Rp 0</p>
-                    <p class="mt-1 text-xs text-gray-500">Total revenue</p>
-                </div>
-                <span class="text-green-600 font-bold">$</span>
-            </div>
-        </div>
-
-        <div class="rounded-2xl bg-white p-6 shadow-sm border">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-sm text-gray-500">Conversion Rate</p>
-                    <p class="mt-2 text-3xl font-bold">75.5%</p>
-                    <p class="mt-1 text-xs text-gray-500">Success rate</p>
-                </div>
-                <span class="text-orange-500">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M11 11V5a1 1 0 112 0v6a1 1 0 01-2 0zm1 10a9 9 0 100-18 9 9 0 000 18z" />
+                            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" />
                     </svg>
                 </span>
             </div>
@@ -179,70 +152,158 @@
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">Rank</p>
-                    <p class="mt-2 text-3xl font-bold">#-</p>
-                    <p class="mt-1 text-xs text-gray-500">Company ranking</p>
+                    <p class="text-sm text-gray-500">Total Produk Reguler</p>
+                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalRegularProducts ?? 0) }} Unit</p>
+                    <p class="mt-1 text-xs text-gray-500">Total produk reguler yang aktif.</p>
+                </div>
+                <span class="text-green-600">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 5h6M9 9h6M9 13h6M5 5h.01M5 9h.01M5 13h.01M5 17h.01M9 17h6" />
+                    </svg>
+                </span>
+            </div>
+        </div>
+
+        <div class="rounded-2xl bg-white p-6 shadow-sm border">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm text-gray-500">Total Bundling</p>
+                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalBundlings ?? 0) }} Bundling</p>
+                    <p class="mt-1 text-xs text-gray-500">Total bundling yang aktif.</p>
                 </div>
                 <span class="text-purple-600">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
                 </span>
             </div>
         </div>
-    </div>
 
-    {{-- Top Sales Leaderboard --}}
-    <div class="mt-8 rounded-2xl bg-white shadow-sm border">
-        <div class="px-6 py-5 border-b">
-            <h2 class="text-xl font-bold">Top Sales Leaderboard</h2>
-        </div>
+        <div class="rounded-2xl bg-white p-6 shadow-sm border">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm text-gray-500">Total Downline</p>
+                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalActiveDownline ?? 0) }} Orang</p>
+                    <p class="mt-1 text-xs text-gray-500">Total downline yang aktif.</p>
+                </div>
+                <div class="text-indigo-600">
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <!-- leader -->
+                        <circle cx="12" cy="7" r="3" />
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M5 20v-1a5 5 0 015-5h4a5 5 0 015 5v1" />
 
-        <div class="p-6">
-            <div class="overflow-x-auto">
-                <table class="min-w-full text-sm">
-                    <thead class="text-gray-500">
-                        <tr class="border-b">
-                            <th class="text-left font-semibold py-3">Rank</th>
-                            <th class="text-left font-semibold py-3">Salesperson</th>
-                            <th class="text-left font-semibold py-3">Units</th>
-                            <th class="text-left font-semibold py-3">Revenue</th>
-                            <th class="text-left font-semibold py-3">Avg Deal</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="5" class="py-10 text-center text-gray-500">
-                                No data for this range
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                        <!-- left downline -->
+                        <circle cx="4" cy="9" r="2" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2 20v-1a4 4 0 014-4" />
+
+                        <!-- right downline -->
+                        <circle cx="20" cy="9" r="2" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M22 20v-1a4 4 0 00-4-4" />
+                    </svg>
+                </div>
             </div>
         </div>
     </div>
 
     {{-- Bottom cards --}}
-    <div class="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
+    <div class="mt-8 rounded-2xl bg-white shadow-sm border">
+        {{-- Sales Trend --}}
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
             <div class="flex items-center justify-between">
                 <h2 class="text-xl font-bold">Sales Trend</h2>
-                <button class="rounded-lg border bg-white px-3 py-2 text-sm text-gray-700 shadow-sm hover:bg-gray-50">
-                    Weekly
-                    <span class="inline-block align-middle ml-1">▾</span>
-                </button>
-            </div>
-            <div class="mt-6 h-56 rounded-xl bg-gray-50 border flex items-center justify-center text-gray-400">
-                Chart placeholder
-            </div>
-        </div>
 
-        <div class="rounded-2xl bg-white p-6 shadow-sm border">
-            <h2 class="text-xl font-bold">Product Mix</h2>
-            <div class="mt-6 h-56 rounded-xl bg-gray-50 border flex items-center justify-center text-gray-400">
-                Chart placeholder
+                <form method="GET" class="relative">
+                    @foreach (request()->except('trend') as $k => $v)
+                        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
+                    @endforeach
+
+                    <select name="trend" onchange="this.form.submit()"
+                        class="appearance-none rounded-lg border bg-white pl-3 pr-9 py-2 text-sm text-gray-700 shadow-sm hover:bg-gray-50">
+                        <option value="weekly" {{ ($trend ?? 'weekly') === 'weekly' ? 'selected' : '' }}>Weekly
+                        </option>
+                        <option value="monthly" {{ ($trend ?? 'weekly') === 'monthly' ? 'selected' : '' }}>Monthly
+                        </option>
+                    </select>
+
+                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </span>
+                </form>
+            </div>
+
+            <div class="mt-6 h-56 rounded-xl bg-gray-50 border p-3">
+                <canvas id="salesTrendChart" class="w-full h-full"></canvas>
             </div>
         </div>
     </div>
+
+    @push('scripts')
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+        <script>
+            (function() {
+                const el = document.getElementById('salesTrendChart');
+                if (!el) return;
+
+                const labels = @json($salesTrendLabels ?? []);
+                const dataUnits = @json($salesTrendUnits ?? []);
+
+                // destroy previous instance (jika ada hot reload / livewire)
+                if (window.__salesTrendChart) {
+                    window.__salesTrendChart.destroy();
+                }
+
+                window.__salesTrendChart = new Chart(el, {
+                    type: 'line',
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: 'Units',
+                            data: dataUnits,
+                            tension: 0.35,
+                            pointRadius: 3,
+                            borderWidth: 2,
+                            fill: false,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        },
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
+                                }
+                            }
+                        }
+                    }
+                });
+            })();
+        </script>
+    @endpush
 </x-dashboard-layout>
