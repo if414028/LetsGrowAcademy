@@ -4,22 +4,6 @@
             <h1 class="text-4xl font-bold tracking-tight">Overview</h1>
             <p class="mt-2 text-gray-500">Your sales performance at a glance</p>
         </div>
-
-        <div class="flex items-center gap-2">
-            <div class="relative">
-                <button
-                    class="inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm text-gray-700 shadow-sm hover:bg-gray-50">
-                    <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    This Week
-                    <svg class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                </button>
-            </div>
-        </div>
     </div>
 
     {{-- Deactivation warning (Month-5) --}}

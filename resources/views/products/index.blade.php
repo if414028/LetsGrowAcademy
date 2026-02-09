@@ -52,7 +52,7 @@
             </div>
 
             {{-- Search + Total --}}
-            <div class="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3`">
                 <form method="GET" class="w-full sm:max-w-md">
                     {{-- keep tab --}}
                     <input type="hidden" name="type" value="{{ $activeType }}">

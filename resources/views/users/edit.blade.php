@@ -2,7 +2,7 @@
     @php
         /** @var \App\Models\User $authUser */
         $authUser = auth()->user();
-        $isAdmin = $authUser && method_exists($authUser, 'hasRole') && $authUser->hasRole('Admin');
+        $isAdmin = $authUser && method_exists($authUser, 'hasRole') && $authUser->hasRole('Admin|Head Admin');
     @endphp
 
     <div class="flex items-start justify-between gap-6">

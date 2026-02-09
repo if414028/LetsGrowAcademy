@@ -19,13 +19,13 @@ Route::get('/', function () {
 
 
 Route::get('/dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth', 'verified'])
+    ->middleware(['auth', 'verified', 'active'])
     ->name('dashboard');
 
 /**
  * Authenticated routes
  */
-Route::middleware('auth')->group(function () {
+Route::middleware('auth', 'active')->group(function () {
 
     // Profile (semua role): redirect ke halaman detail user yang login
     Route::get('/profile', function (\Illuminate\Http\Request $request) {
@@ -34,7 +34,7 @@ Route::middleware('auth')->group(function () {
 
 
     // Admin-only: manajemen user (kecuali show karena sudah di atas)
-    Route::middleware('role:Admin')->group(function () {
+    Route::middleware('role:Admin|Head Admin')->group(function () {
         Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
         Route::post('/users', [UserController::class, 'store'])->name('users.store');
 
@@ -89,9 +89,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/bundles/{bundle}', [BundleController::class, 'show'])->name('bundles.show');
     Route::get('/bundles/{bundle}/edit', [BundleController::class, 'edit'])->name('bundles.edit');
     Route::put('/bundles/{bundle}', [BundleController::class, 'update'])->name('bundles.update');
-
-
-
 });
 
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

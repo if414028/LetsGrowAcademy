@@ -11,24 +11,47 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    public function index()
+    private function isAdminLevel(User $user): bool
     {
+        return $user->hasAnyRole(['Admin', 'Head Admin']);
+    }
+
+    private function denyIfTargetIsHeadAdmin(User $target, User $actor): void
+    {
+        // Admin tidak boleh edit/lihat Head Admin
+        if ($target->hasRole('Head Admin') && !$actor->hasRole('Head Admin')) {
+            abort(403, 'Kamu tidak punya akses untuk mengubah akun Head Admin.');
+        }
+    }
+
+
+    public function index(Request $request)
+    {
+        $q = trim((string) $request->get('q', ''));
+
         $users = User::query()
             ->with('roles')
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where('name', 'like', "%{$q}%");
+            })
             ->latest()
-            ->paginate(10);
+            ->paginate(10)
+            ->appends(['q' => $q]);
 
-        return view('users.index', compact('users'));
+        return view('users.index', compact('users', 'q'));
     }
 
     public function show(User $user)
     {
         $authUser = request()->user();
 
-        // 🔒 Authorization rule
-        if (!$authUser->hasRole('Admin') && $authUser->id !== $user->id) {
+        // admin-level boleh lihat user siapa pun, user biasa hanya diri sendiri
+        if (!$this->isAdminLevel($authUser) && $authUser->id !== $user->id) {
             abort(403);
         }
+
+        // Admin tidak boleh lihat Head Admin
+        $this->denyIfTargetIsHeadAdmin($user, $authUser);
 
         // Roles
         $user->load('roles');
@@ -47,7 +70,7 @@ class UserController extends Controller
             ->get();
 
         $directReports = $childHierarchies
-            ->map(fn ($h) => $h->childUser)
+            ->map(fn($h) => $h->childUser)
             ->filter();
 
         $childrenCount = $directReports->count();
@@ -77,27 +100,27 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-        // basic account
-        'name' => ['required', 'string', 'max:255'],
-        'full_name' => ['nullable', 'string', 'max:255'],
-        'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-        'password' => ['required', 'string', 'min:8', 'confirmed'],
+            // basic account
+            'name' => ['required', 'string', 'max:255'],
+            'full_name' => ['nullable', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
 
-        // hierarchy & role
-        'role' => ['required', 'string', 'exists:roles,name'],
-        'referrer_user_id' => ['required', 'exists:users,id'],
+            // hierarchy & role
+            'role' => ['required', 'string', 'exists:roles,name'],
+            'referrer_user_id' => ['required', 'exists:users,id'],
 
-        // ERD fields
-        'status' => ['nullable', 'string', 'max:50'],
-        'dst_code' => ['nullable', 'string', 'max:50'],
-        'date_of_birth' => ['nullable', 'date'],
-        'phone_number' => ['nullable', 'string', 'max:30'],
-        'join_date' => ['nullable', 'date'],
-        'city_of_domicile' => ['nullable', 'string', 'max:255'],
+            // ERD fields
+            'status' => ['nullable', 'string', 'max:50'],
+            'dst_code' => ['nullable', 'string', 'max:50'],
+            'date_of_birth' => ['nullable', 'date'],
+            'phone_number' => ['nullable', 'string', 'max:30'],
+            'join_date' => ['nullable', 'date'],
+            'city_of_domicile' => ['nullable', 'string', 'max:255'],
 
-        // uploads
-        'photo' => ['nullable', 'image', 'max:2048'], // 2MB
-        'id_card' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'], // 4MB
+            // uploads
+            'photo' => ['nullable', 'image', 'max:2048'], // 2MB
+            'id_card' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'], // 4MB
         ]);
 
         // ambil referrer + role
@@ -106,6 +129,14 @@ class UserController extends Controller
         $rankMap = config('roles.rank');
         $refRole = $referrer->getRoleNames()->first();
         $newRole = $validated['role'];
+
+        $authUser = $request->user();
+
+        if ($newRole === 'Head Admin' && !$authUser->hasRole('Head Admin')) {
+            return back()
+                ->withErrors(['role' => 'Kamu tidak punya akses untuk membuat user Head Admin.'])
+                ->withInput();
+        }
 
         // referrer harus punya role valid
         if (!$refRole || !isset($rankMap[$refRole])) {
@@ -172,9 +203,12 @@ class UserController extends Controller
     {
         $authUser = request()->user();
 
-        if (!$authUser->hasRole('Admin') && $authUser->id !== $user->id) {
+        if (!$this->isAdminLevel($authUser) && $authUser->id !== $user->id) {
             abort(403);
         }
+
+        // Admin tidak boleh edit Head Admin
+        $this->denyIfTargetIsHeadAdmin($user, $authUser);
 
         $user->load('roles');
         $roles = Role::query()->orderBy('name')->get();
@@ -186,15 +220,18 @@ class UserController extends Controller
     {
         $authUser = request()->user();
 
-        // 🔒 Authorization: non-admin cuma boleh update dirinya sendiri
-        if (!$authUser->hasRole('Admin') && $authUser->id !== $user->id) {
+        if (!$this->isAdminLevel($authUser) && $authUser->id !== $user->id) {
             abort(403);
         }
+
+        // Admin tidak boleh update Head Admin
+        $this->denyIfTargetIsHeadAdmin($user, $authUser);
+
 
         // =========================
         // NON-ADMIN (self update)
         // =========================
-        if (!$authUser->hasRole('Admin')) {
+        if (!$this->isAdminLevel($authUser)) {
             $validated = $request->validate([
                 'photo' => ['nullable', 'image', 'max:2048'],
                 'id_card' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
@@ -232,7 +269,9 @@ class UserController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'full_name' => ['nullable', 'string', 'max:255'],
             'email' => [
-                'required', 'email', 'max:255',
+                'required',
+                'email',
+                'max:255',
                 Rule::unique('users', 'email')->ignore($user->id),
             ],
             'phone_number' => ['nullable', 'string', 'max:30'],
@@ -267,6 +306,13 @@ class UserController extends Controller
         $role = $validated['role'];
         unset($validated['role']);
 
+        if ($role === 'Head Admin' && !$authUser->hasRole('Head Admin')) {
+            return back()
+                ->withErrors(['role' => 'Kamu tidak punya akses untuk assign role Head Admin.'])
+                ->withInput();
+        }
+
+
         // password
         if (empty($validated['password'] ?? null)) {
             unset($validated['password']);
@@ -294,7 +340,7 @@ class UserController extends Controller
             ->with('roles')
             ->where(function ($w) use ($q) {
                 $w->where('name', 'like', "%{$q}%")
-                ->orWhere('email', 'like', "%{$q}%");
+                    ->orWhere('email', 'like', "%{$q}%");
             })
             ->orderBy('name')
             ->limit(12)
@@ -304,10 +350,10 @@ class UserController extends Controller
                 return [
                     'id'   => $u->id,
                     'name' => $u->name,
-                    'email'=> $u->email,
+                    'email' => $u->email,
                     'role' => $role,
                     'rank' => $role ? ($roleRanks[$role] ?? 999) : 999,
-                    'label'=> "{$u->name} ({$u->email}) - ".($role ?? '-'),
+                    'label' => "{$u->name} ({$u->email}) - " . ($role ?? '-'),
                 ];
             });
 

@@ -96,19 +96,42 @@ class RolePermissionSeeder extends Seeder
         }
 
         //Roles
-        $admin = Role::firstOrCreate(['name' => 'Admin']);
-        $sm    = Role::firstOrCreate(['name' => 'Sales Manager']);
-        $hm    = Role::firstOrCreate(['name' => 'Health Manager']);
-        $hp    = Role::firstOrCreate(['name' => 'Health Planner']);
+        $headAdmin = Role::firstOrCreate(['name' => 'Head Admin']);
+        $admin     = Role::firstOrCreate(['name' => 'Admin']);
+        $sm        = Role::firstOrCreate(['name' => 'Sales Manager']);
+        $hm        = Role::firstOrCreate(['name' => 'Health Manager']);
+        $hp        = Role::firstOrCreate(['name' => 'Health Planner']);
 
         //Assign permissions role
-        //Admin: all
-        $admin->syncPermissions(Permission::all());
+        //Head Admin: all (superuser)
+        $headAdmin->syncPermissions(Permission::all());
+
+        //Admin: limited
+        $admin->syncPermissions([
+            // Create new user
+            'create users',
+
+            // Edit all user
+            'edit users',
+
+            // Management Produk
+            'view products',
+            'create products',
+            'edit products',
+            'deactivate products',
+
+            // Management Sales Order
+            'view sales orders',
+            'create sales orders',
+            'edit sales orders',
+            'cancel sales orders',
+        ]);
 
         // SM
         $sm->syncPermissions([
             'view dashboard',
-            'view reports', 'export reports',
+            'view reports',
+            'export reports',
 
             'view users',
             'view user hierarchy',
@@ -119,8 +142,11 @@ class RolePermissionSeeder extends Seeder
             'view products',
             'view sales kpi',
 
-            'view contest', 'create contest', 'edit contest',
-            'publish contest', 'close contest',
+            'view contest',
+            'create contest',
+            'edit contest',
+            'publish contest',
+            'close contest',
             'view contest progress',
             'view contest winner',
         ]);
@@ -139,7 +165,8 @@ class RolePermissionSeeder extends Seeder
             'view sales kpi',
 
             'view installation status',
-            'approve ccp', 'reject ccp',
+            'approve ccp',
+            'reject ccp',
 
             'view contest',
             'join contest',
@@ -151,8 +178,10 @@ class RolePermissionSeeder extends Seeder
         $hp->syncPermissions([
             'view dashboard',
 
-            'view sales orders', 'create sales orders',
-            'view customers', 'create customers',
+            'view sales orders',
+            'create sales orders',
+            'view customers',
+            'create customers',
             'view products',
 
             'mark installation complete',
@@ -163,12 +192,27 @@ class RolePermissionSeeder extends Seeder
             'view contest progress',
         ]);
 
-        //Create Super Admin User
-        $user = User::create([
-            'name' => 'Lets Grow Academy Admin',
-            'email' => 'letsgrowacademydev@gmail.com',
-            'password' => bcrypt('letsgrowacademy2025')
-        ]);
-        $user->assignRole($admin);
+        // ===== Admin user =====
+        $adminUser = User::updateOrCreate(
+            ['email' => 'letsgrowacademydev@gmail.com'],
+            [
+                'name' => 'Lets Grow Academy Admin',
+                'password' => bcrypt('letsgrowacademy2025'),
+            ]
+        );
+
+        $adminUser->syncRoles(['Admin']);
+
+
+        // ===== Head Admin user =====
+        $headAdminUser = User::updateOrCreate(
+            ['email' => 'letsgrowacademy.head@letsgrowacademy.id'], 
+            [
+                'name' => 'Lets Grow Academy Head Admin',
+                'password' => bcrypt('letsgrowacademy.head'),
+            ]
+        );
+
+        $headAdminUser->syncRoles(['Head Admin']);
     }
 }

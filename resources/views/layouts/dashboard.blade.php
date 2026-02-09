@@ -49,7 +49,7 @@
                     Reports
                 </a>
 
-                @role('Admin')
+                @role('Admin|Head Admin')
                     <a href="{{ route('users.index') }}"
                         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                               {{ request()->routeIs('users.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
@@ -73,7 +73,7 @@
                     </a>
                 @endrole
 
-                @hasanyrole('Admin|Sales Manager|Health Manager')
+                @hasanyrole('Admin|Head Admin|Sales Manager|Health Manager')
                     <a href="{{ route('sales-orders.index') }}"
                         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                               {{ request()->routeIs('sales-orders.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
@@ -143,7 +143,7 @@
                         Reports
                     </a>
 
-                    @role('Admin')
+                    @role('Admin|Head Admin')
                         <a href="{{ route('users.index') }}" @click="sidebarOpen=false"
                             class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                                   {{ request()->routeIs('users.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
@@ -167,7 +167,7 @@
                         </a>
                     @endrole
 
-                    @hasanyrole('Admin|Sales Manager|Health Manager')
+                    @hasanyrole('Admin|Head Admin|Sales Manager|Health Manager')
                         <a href="{{ route('sales-orders.index') }}" @click="sidebarOpen=false"
                             class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                                     {{ request()->routeIs('sales-orders.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">

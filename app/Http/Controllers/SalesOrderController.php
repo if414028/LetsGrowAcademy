@@ -31,7 +31,7 @@ class SalesOrderController extends Controller
 
             // kalau tidak punya bawahan, hasilnya kosong
             $q->whereIn('sales_user_id', $childIds);
-        } elseif (!$user->hasRole('Admin')) {
+        } elseif (!$user->hasRole(['Admin', 'Head Admin'])) {
             // opsional: kalau selain Admin / Manager tidak boleh lihat sama sekali
             abort(403);
             // atau kalau mau tampil kosong aja:

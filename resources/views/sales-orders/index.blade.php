@@ -5,7 +5,7 @@
             <p class="text-sm text-gray-500">Kelola daftar sales order.</p>
         </div>
 
-        @role('Admin')
+        @role('Admin|Head Admin')
             <a href="{{ route('sales-orders.create') }}"
                 class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
                 <span>+ Buat Sales Order</span>
@@ -154,7 +154,7 @@
                                     </a>
 
                                     {{-- Edit --}}
-                                    @role('Admin')
+                                    @role('Admin|Head Admin')
                                         <a href="{{ route('sales-orders.edit', $so) }}"
                                             class="inline-flex items-center justify-center h-9 w-9 rounded-lg border
                                             text-gray-600 hover:bg-yellow-50 hover:text-yellow-600"
