@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Permission\Models\Role;
+use App\Models\User;
 
 class Contest extends Model
 {
@@ -32,7 +33,7 @@ class Contest extends Model
     /**
      * Contest dibuat oleh user siapa
      */
-    public function createdByUser()
+    public function creator()
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
     }
@@ -40,7 +41,7 @@ class Contest extends Model
     /**
      * Contest dibuat oleh role apa (SM/HM/Admin, dll)
      */
-    public function createdByRole()
+    public function creatorRole()
     {
         return $this->belongsTo(Role::class, 'created_by_role_id');
     }

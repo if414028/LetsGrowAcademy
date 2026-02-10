@@ -84,6 +84,25 @@
                         Sales Orders
                     </a>
                 @endhasanyrole
+
+                <a href="{{ route('contests.index') }}"
+                    class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+              {{ request()->routeIs('contests.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <!-- Trophy -->
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5 6H3a3 3 0 003 3M19 6h2a3 3 0 01-3 3" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14v3m-4 3h8" />
+
+                        <!-- Star -->
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 7.8l.95 1.93 2.13.31-1.54 1.5.36 2.12L12 12.8l-1.9 1 .36-2.12-1.54-1.5 2.13-.31L12 7.8z" />
+                    </svg>
+
+                    Kontes
+                </a>
             </nav>
         </aside>
 
@@ -178,6 +197,26 @@
                             Sales Orders
                         </a>
                     @endhasanyrole
+
+                    <a href="{{ route('contests.index') }}" @click="sidebarOpen=false"
+                        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+              {{ request()->routeIs('contests.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <!-- Trophy -->
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M7 4h10v3a5 5 0 01-5 5 5 5 0 01-5-5V4z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M5 6H3a3 3 0 003 3M19 6h2a3 3 0 01-3 3" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 14v3m-4 3h8" />
+
+                            <!-- Star -->
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 7.8l.95 1.93 2.13.31-1.54 1.5.36 2.12L12 12.8l-1.9 1 .36-2.12-1.54-1.5 2.13-.31L12 7.8z" />
+                        </svg>
+
+                        Kontes
+                    </a>
                 </nav>
             </aside>
         </div>

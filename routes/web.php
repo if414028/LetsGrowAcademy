@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BundleController;
+use App\Http\Controllers\ContestController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PerformanceController;
@@ -80,6 +81,32 @@ Route::middleware('auth', 'active')->group(function () {
         Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])
             ->name('reports.index');
     });
+
+    // LIST
+    Route::middleware('can:viewAny,App\Models\Contest')->group(function () {
+        Route::get('/contests', [ContestController::class, 'index'])->name('contests.index');
+    });
+
+    // CREATE (harus sebelum {contest})
+    Route::middleware('can:create,App\Models\Contest')->group(function () {
+        Route::get('/contests/create', [ContestController::class, 'create'])->name('contests.create');
+        Route::post('/contests', [ContestController::class, 'store'])->name('contests.store');
+    });
+
+    // SHOW (taruh setelah create)
+    Route::middleware('can:viewAny,App\Models\Contest')->group(function () {
+        Route::get('/contests/{contest}', [ContestController::class, 'show'])->name('contests.show');
+    });
+
+    // EDIT/UPDATE/DELETE (setelah show juga aman)
+    Route::middleware('can:update,contest')->group(function () {
+        Route::get('/contests/{contest}/edit', [ContestController::class, 'edit'])->name('contests.edit');
+        Route::put('/contests/{contest}', [ContestController::class, 'update'])->name('contests.update');
+        Route::delete('/contests/{contest}', [ContestController::class, 'destroy'])->name('contests.destroy');
+    });
+
+    Route::post('/contests/{contest}/publish', [ContestController::class, 'publish'])
+        ->name('contests.publish');
 
     // Bundles Product
     Route::get('/bundles', [BundleController::class, 'index'])->name('bundles.index');
