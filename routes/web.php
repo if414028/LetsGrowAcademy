@@ -52,9 +52,25 @@ Route::middleware('auth', 'active')->group(function () {
         Route::put('/sales-orders/{salesOrder}', [SalesOrderController::class, 'update'])->name('sales-orders.update');
     });
 
+    Route::middleware('role:Admin|Head Admin')->group(function () {
+        Route::get('/users/bulk-upload', [UserController::class, 'bulkUploadForm'])->name('users.bulk.form');
+        Route::get('/users/bulk-upload/template', [UserController::class, 'bulkUploadTemplate'])->name('users.bulk.template');
+        Route::post('/users/bulk-upload', [UserController::class, 'bulkUploadStore'])->name('users.bulk.store');
+    });
+
     Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
     Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+
+    // Bulk-upload Produk
+    Route::middleware(['auth', 'active', 'role:Admin|Head Admin'])->group(function () {
+        Route::get('/products/bulk-upload', [\App\Http\Controllers\ProductController::class, 'bulkUploadForm'])
+            ->name('products.bulk.form');
+        Route::get('/products/bulk-upload/template', [\App\Http\Controllers\ProductController::class, 'bulkUploadTemplate'])
+            ->name('products.bulk.template');
+        Route::post('/products/bulk-upload', [\App\Http\Controllers\ProductController::class, 'bulkUploadStore'])
+            ->name('products.bulk.store');
+    });
 
     // Products
     Route::resource('products', ProductController::class)

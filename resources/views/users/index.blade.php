@@ -45,16 +45,35 @@
             </div>
 
             {{-- Tambah User --}}
+            {{-- Action Buttons --}}
             @role('Admin|Head Admin')
-                <a href="{{ route('users.create') }}"
-                    class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                        stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                    Tambah User
-                </a>
+                <div class="flex items-center gap-2">
+                    {{-- Bulk Upload --}}
+                    <a href="{{ route('users.bulk.form') }}"
+                        class="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm
+                   hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                            stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5V6a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 6v10.5M3 16.5
+                           L7.5 12m0 0L12 16.5m-4.5-4.5V21m13.5-4.5
+                           L16.5 12m0 0L12 16.5m4.5-4.5V21" />
+                        </svg>
+                        Bulk Upload
+                    </a>
+
+                    {{-- Tambah User --}}
+                    <a href="{{ route('users.create') }}"
+                        class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm
+                   hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                            stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                        </svg>
+                        Tambah User
+                    </a>
+                </div>
             @endrole
+
         </div>
 
 

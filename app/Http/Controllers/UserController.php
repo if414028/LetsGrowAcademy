@@ -8,6 +8,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Validator;
 
 class UserController extends Controller
 {
@@ -358,5 +361,291 @@ class UserController extends Controller
             });
 
         return response()->json($users);
+    }
+
+    public function bulkUploadForm()
+    {
+        $authUser = request()->user();
+
+        if (!$this->isAdminLevel($authUser)) {
+            abort(403);
+        }
+
+        return view('users.bulk-upload');
+    }
+
+    public function bulkUploadTemplate()
+    {
+        $authUser = request()->user();
+
+        if (!$this->isAdminLevel($authUser)) {
+            abort(403);
+        }
+
+        // CSV header + contoh 1 baris
+        $lines = [
+            "name,full_name,email,password,role,referrer_email,status,dst_code,date_of_birth,phone_number,join_date,city_of_domicile",
+            "Lala,Lala Herlina,lala@example.com,Password123!,Health Planner,hm@example.com,Active,DST001,1996-08-20,08123456789,2026-02-01,Jakarta",
+        ];
+
+        $csv = implode("\n", $lines) . "\n";
+
+        return response($csv, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="users-bulk-template.csv"',
+        ]);
+    }
+
+    /**
+     * Proses bulk upload CSV
+     */
+    public function bulkUploadStore(Request $request)
+    {
+        $authUser = $request->user();
+
+        if (!$this->isAdminLevel($authUser)) {
+            abort(403);
+        }
+
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'], // max 5MB
+        ]);
+
+        $path = $request->file('file')->getRealPath();
+        $handle = fopen($path, 'r');
+
+        if ($handle === false) {
+            return back()->withErrors(['file' => 'File tidak bisa dibaca.']);
+        }
+
+        // baca header
+        $header = fgetcsv($handle);
+        if (!$header) {
+            fclose($handle);
+            return back()->withErrors(['file' => 'CSV kosong / header tidak ditemukan.']);
+        }
+
+        // rapihin header jadi lowercase
+        $header = array_map(fn($h) => trim(mb_strtolower((string) $h)), $header);
+
+        $requiredHeaders = [
+            'name',
+            'email',
+            'role',
+            'referrer_email',
+        ];
+
+        foreach ($requiredHeaders as $rh) {
+            if (!in_array($rh, $header, true)) {
+                fclose($handle);
+                return back()->withErrors(['file' => "Header wajib tidak ada: {$rh}"]);
+            }
+        }
+
+        $rows = [];
+        $rowNumber = 1; // header = 1
+        while (($data = fgetcsv($handle)) !== false) {
+            $rowNumber++;
+
+            // skip baris kosong
+            if (count(array_filter($data, fn($v) => trim((string) $v) !== '')) === 0) {
+                continue;
+            }
+
+            $row = [];
+            foreach ($header as $i => $key) {
+                $row[$key] = isset($data[$i]) ? trim((string) $data[$i]) : null;
+            }
+            $row['_row'] = $rowNumber;
+
+            $rows[] = $row;
+        }
+
+        fclose($handle);
+
+        if (count($rows) === 0) {
+            return back()->withErrors(['file' => 'Tidak ada data user yang bisa diproses (selain header).']);
+        }
+
+        $success = [];
+        $failed  = [];
+
+        // cache referrer by email biar hemat query
+        $referrerEmails = collect($rows)
+            ->pluck('referrer_email')
+            ->filter()
+            ->map(fn($e) => mb_strtolower($e))
+            ->unique()
+            ->values();
+
+        $referrersByEmail = User::query()
+            ->with('roles')
+            ->whereIn(DB::raw('LOWER(email)'), $referrerEmails->all())
+            ->get()
+            ->keyBy(fn($u) => mb_strtolower($u->email));
+
+        $rankMap = config('roles.rank');
+
+        foreach ($rows as $row) {
+            $rowIdx = $row['_row'];
+
+            // validasi per-row
+            $v = Validator::make($row, [
+                'name' => ['required', 'string', 'max:255'],
+                'full_name' => ['nullable', 'string', 'max:255'],
+                'email' => ['required', 'email', 'max:255'],
+                'password' => ['nullable', 'string', 'min:8'],
+                'role' => ['required', 'string', 'exists:roles,name'],
+                'referrer_email' => ['required', 'email'],
+
+                'status' => ['nullable', 'in:Active,Inactive'],
+                'dst_code' => ['nullable', 'string', 'max:50'],
+                'date_of_birth' => ['nullable', 'date'],
+                'phone_number' => ['nullable', 'string', 'max:30'],
+                'join_date' => ['nullable', 'date'],
+                'city_of_domicile' => ['nullable', 'string', 'max:255'],
+            ]);
+
+            if ($v->fails()) {
+                $failed[] = [
+                    'row' => $rowIdx,
+                    'email' => $row['email'] ?? null,
+                    'errors' => $v->errors()->all(),
+                ];
+                continue;
+            }
+
+            $emailLower = mb_strtolower($row['email']);
+            $refEmailLower = mb_strtolower($row['referrer_email']);
+
+            // cek email duplicate existing
+            if (User::query()->whereRaw('LOWER(email) = ?', [$emailLower])->exists()) {
+                $failed[] = [
+                    'row' => $rowIdx,
+                    'email' => $row['email'],
+                    'errors' => ['Email sudah terdaftar.'],
+                ];
+                continue;
+            }
+
+            // referrer lookup
+            $referrer = $referrersByEmail->get($refEmailLower);
+            if (!$referrer) {
+                $failed[] = [
+                    'row' => $rowIdx,
+                    'email' => $row['email'],
+                    'errors' => ["Referrer tidak ditemukan: {$row['referrer_email']}"],
+                ];
+                continue;
+            }
+
+            // enforce same rule kaya store()
+            $newRoleRequested = $row['role'];
+
+            $resolvedRoleOrError = $this->resolveRoleByReferrerRule(
+                referrer: $referrer,
+                requestedRole: $newRoleRequested,
+                actor: $authUser,
+                rankMap: $rankMap
+            );
+
+            if (is_string($resolvedRoleOrError) && str_starts_with($resolvedRoleOrError, 'ERROR:')) {
+                $failed[] = [
+                    'row' => $rowIdx,
+                    'email' => $row['email'],
+                    'errors' => [mb_substr($resolvedRoleOrError, 6)],
+                ];
+                continue;
+            }
+
+            $finalRole = $resolvedRoleOrError; // string role
+
+            // password: kalau kosong, generate
+            $plainPassword = $row['password'] ?: Str::random(12);
+
+            try {
+                DB::transaction(function () use ($row, $referrer, $finalRole, $plainPassword, &$success, $rowIdx) {
+                    $user = User::create([
+                        'name' => $row['name'],
+                        'full_name' => $row['full_name'] ?: null,
+                        'email' => $row['email'],
+                        'password' => Hash::make($plainPassword),
+
+                        'status' => $row['status'] ?: 'Active',
+                        'dst_code' => $row['dst_code'] ?: null,
+                        'date_of_birth' => $row['date_of_birth'] ?: null,
+                        'phone_number' => $row['phone_number'] ?: null,
+                        'join_date' => $row['join_date'] ?: null,
+                        'city_of_domicile' => $row['city_of_domicile'] ?: null,
+                    ]);
+
+                    $user->assignRole($finalRole);
+
+                    UserHierarchy::create([
+                        'parent_user_id' => $referrer->id,
+                        'child_user_id' => $user->id,
+                        'relation_type' => 'referral',
+                    ]);
+
+                    $success[] = [
+                        'row' => $rowIdx,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'role' => $finalRole,
+                        'referrer_email' => $referrer->email,
+                        'generated_password' => $row['password'] ? null : $plainPassword,
+                    ];
+                });
+            } catch (\Throwable $e) {
+                $failed[] = [
+                    'row' => $rowIdx,
+                    'email' => $row['email'],
+                    'errors' => ["Gagal simpan: " . $e->getMessage()],
+                ];
+            }
+        }
+
+        return back()->with([
+            'bulk_success' => $success,
+            'bulk_failed' => $failed,
+        ]);
+    }
+
+    /**
+     * Reuse rule dari store():
+     * - hanya Head Admin bisa create Head Admin
+     * - referrer harus punya role valid (rankMap)
+     * - role tidak boleh lebih tinggi dari referrer (rank kecil = lebih tinggi)
+     * - kalau referrer Health Planner, role baru dipaksa Health Planner
+     *
+     * Return:
+     * - string role final
+     * - atau "ERROR:...." jika invalid
+     */
+    private function resolveRoleByReferrerRule(User $referrer, string $requestedRole, User $actor, array $rankMap): string
+    {
+        if ($requestedRole === 'Head Admin' && !$actor->hasRole('Head Admin')) {
+            return 'ERROR:Kamu tidak punya akses untuk membuat user Head Admin.';
+        }
+
+        $refRole = $referrer->getRoleNames()->first();
+
+        if (!$refRole || !isset($rankMap[$refRole])) {
+            return 'ERROR:Referrer belum punya role yang valid.';
+        }
+
+        if (!isset($rankMap[$requestedRole])) {
+            return 'ERROR:Role tidak dikenali di config roles.rank';
+        }
+
+        if ($refRole === 'Health Planner') {
+            return 'Health Planner';
+        }
+
+        if ($rankMap[$requestedRole] < $rankMap[$refRole]) {
+            return "ERROR:Role user baru tidak boleh lebih tinggi dari referrer ({$refRole}).";
+        }
+
+        return $requestedRole;
     }
 }
