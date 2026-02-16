@@ -192,24 +192,12 @@ class RolePermissionSeeder extends Seeder
             'view contest progress',
         ]);
 
-        // ===== Admin user =====
-        $adminUser = User::updateOrCreate(
-            ['email' => 'letsgrowacademydev@gmail.com'],
-            [
-                'name' => 'Lets Grow Academy Admin',
-                'password' => bcrypt('letsgrowacademy2025'),
-            ]
-        );
-
-        $adminUser->syncRoles(['Admin']);
-
-
         // ===== Head Admin user =====
         $headAdminUser = User::updateOrCreate(
-            ['email' => 'letsgrowacademy.head@letsgrowacademy.id'], 
+            ['email' => 'lets.grow.academy.id@gmail.com'], 
             [
                 'name' => 'Lets Grow Academy Head Admin',
-                'password' => bcrypt('letsgrowacademy.head'),
+                'password' => bcrypt('letsgrowacademy2026'),
             ]
         );
 
