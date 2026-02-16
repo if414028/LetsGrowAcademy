@@ -202,5 +202,16 @@ class RolePermissionSeeder extends Seeder
         );
 
         $headAdminUser->syncRoles(['Head Admin']);
+
+        // ===== Sales Manager =====
+        $headAdminUser = User::updateOrCreate(
+            ['email' => 'margaretha.soetedja@dst.coway.id'], 
+            [
+                'name' => 'Margaretha Soetedja',
+                'password' => bcrypt('margaretha.soetedja'),
+            ]
+        );
+
+        $headAdminUser->syncRoles(['Sales Manager']);
     }
 }
