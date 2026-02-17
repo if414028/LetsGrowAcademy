@@ -48,10 +48,16 @@ class UserController extends Controller
     {
         $authUser = request()->user();
 
-        // admin-level boleh lihat user siapa pun, user biasa hanya diri sendiri
-        if (!$this->isAdminLevel($authUser) && $authUser->id !== $user->id) {
-            abort(403);
+        // Admin/Head Admin: bebas (dengan rule Head Admin tetap)
+        if (!$this->isAdminLevel($authUser)) {
+            // Non-admin boleh lihat diri sendiri atau downliner
+            $allowed = $this->isDownliner($authUser->id, $user->id);
+
+            if (!$allowed) {
+                abort(403, 'Kamu hanya bisa melihat profil diri sendiri atau downliner kamu.');
+            }
         }
+
 
         // Admin tidak boleh lihat Head Admin
         $this->denyIfTargetIsHeadAdmin($user, $authUser);
@@ -78,11 +84,14 @@ class UserController extends Controller
 
         $childrenCount = $directReports->count();
 
+        $downlineTree = $this->buildDownlineTree($user->id);
+
         return view('users.show', compact(
             'user',
             'parentUser',
             'childrenCount',
-            'directReports'
+            'directReports',
+            'downlineTree'
         ));
     }
 
@@ -647,5 +656,109 @@ class UserController extends Controller
         }
 
         return $requestedRole;
+    }
+
+    private function buildDownlineTree(int $rootUserId): array
+    {
+        // Ambil semua edge hierarchy untuk subtree rootUserId (MySQL 8+)
+        $rows = DB::select("
+        WITH RECURSIVE downline AS (
+            SELECT parent_user_id, child_user_id, 1 AS depth
+            FROM user_hierarchies
+            WHERE parent_user_id = ?
+
+            UNION ALL
+
+            SELECT uh.parent_user_id, uh.child_user_id, d.depth + 1
+            FROM user_hierarchies uh
+            INNER JOIN downline d ON uh.parent_user_id = d.child_user_id
+            WHERE d.depth < 20
+        )
+        SELECT parent_user_id, child_user_id, depth
+        FROM downline
+        ORDER BY depth, parent_user_id, child_user_id
+    ", [$rootUserId]);
+
+        // Kumpulkan semua user_id yang terlibat
+        $userIds = collect($rows)
+            ->flatMap(fn($r) => [$r->parent_user_id, $r->child_user_id])
+            ->push($rootUserId)
+            ->unique()
+            ->values()
+            ->all();
+
+        // Load user sekali saja
+        $users = User::query()
+            ->select(['id', 'name', 'phone_number', 'photo'])
+            ->whereIn('id', $userIds)
+            ->where('status', 'Active')
+            ->get()
+            ->keyBy('id');
+
+        // adjacency: parent -> [child...]
+        $childrenByParent = [];
+        foreach ($rows as $r) {
+            $childrenByParent[$r->parent_user_id][] = $r->child_user_id;
+        }
+
+        // builder node rekursif
+        $buildNode = function ($userId) use (&$buildNode, $users, $childrenByParent) {
+            $u = $users->get($userId);
+
+            // kalau user tidak active / tidak ada, node ini di-skip
+            if (!$u) {
+                return null;
+            }
+
+            $children = collect($childrenByParent[$userId] ?? [])
+                ->map(fn($cid) => $buildNode($cid))
+                ->filter() // buang null children
+                ->values()
+                ->all();
+
+            return [
+                'id' => $u->id,
+                'name' => $u->name ?? '-',
+                'phone_number' => $u->phone_number ?? '-',
+                'photo' => $u->photo,
+                'children' => $children,
+            ];
+        };
+
+        return $buildNode($rootUserId) ?? [
+            'id' => $rootUserId,
+            'name' => '-',
+            'phone_number' => '-',
+            'photo' => null,
+            'children' => [],
+        ];
+    }
+
+    private function isDownliner(int $rootUserId, int $targetUserId): bool
+    {
+        if ($rootUserId === $targetUserId) {
+            return true;
+        }
+
+        // cek apakah target ada di subtree root (user_hierarchies parent->child)
+        $exists = DB::selectOne("
+        WITH RECURSIVE downline AS (
+            SELECT child_user_id
+            FROM user_hierarchies
+            WHERE parent_user_id = ?
+
+            UNION ALL
+
+            SELECT uh.child_user_id
+            FROM user_hierarchies uh
+            INNER JOIN downline d ON uh.parent_user_id = d.child_user_id
+        )
+        SELECT 1 AS ok
+        FROM downline
+        WHERE child_user_id = ?
+        LIMIT 1
+    ", [$rootUserId, $targetUserId]);
+
+        return !is_null($exists);
     }
 }

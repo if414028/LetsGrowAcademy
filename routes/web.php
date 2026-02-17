@@ -50,6 +50,13 @@ Route::middleware('auth', 'active')->group(function () {
         Route::post('/sales-orders', [SalesOrderController::class, 'store'])->name('sales-orders.store');
         Route::get('/sales-orders/{salesOrder}/edit', [SalesOrderController::class, 'edit'])->name('sales-orders.edit');
         Route::put('/sales-orders/{salesOrder}', [SalesOrderController::class, 'update'])->name('sales-orders.update');
+        Route::get('/sales-orders/health-managers/search', [SalesOrderController::class, 'searchHealthManagers'])
+            ->name('sales-orders.health-managers.search');
+
+        Route::get('/sales-orders/health-planners/search', [SalesOrderController::class, 'searchHealthPlanners'])
+            ->name('sales-orders.health-planners.search');
+        Route::get('/sales-orders/health-planners/list', [SalesOrderController::class, 'listHealthPlanners'])
+            ->name('sales-orders.health-planners.list');
     });
 
     Route::middleware('role:Admin|Head Admin')->group(function () {

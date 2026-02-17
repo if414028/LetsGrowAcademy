@@ -44,8 +44,8 @@ class SalesOrderController extends Controller
 
             $q->where(function ($qq) use ($search) {
                 $qq->where('order_no', 'like', "%{$search}%")
-                    ->orWhereHas('customer', fn ($c) => $c->where('full_name', 'like', "%{$search}%"))
-                    ->orWhereHas('salesUser', fn ($u) => $u->where('full_name', 'like', "%{$search}%"));
+                    ->orWhereHas('customer', fn($c) => $c->where('full_name', 'like', "%{$search}%"))
+                    ->orWhereHas('salesUser', fn($u) => $u->where('full_name', 'like', "%{$search}%"));
             });
         }
 
@@ -69,7 +69,7 @@ class SalesOrderController extends Controller
 
     public function show(SalesOrder $salesOrder)
     {
-        $salesOrder->load(['customer','salesUser','items.product','items.productPrice']);
+        $salesOrder->load(['customer', 'salesUser', 'items.product', 'items.productPrice']);
         return view('sales-orders.show', compact('salesOrder'));
     }
 
@@ -81,14 +81,14 @@ class SalesOrderController extends Controller
 
         // ✅ include model karena label di UI pakai model
         $products = Product::query()
-        ->where('is_active', true)
-        ->with(['prices' => function ($q) {
-            $q->where('is_active', true)
-            ->orderBy('billing_type')
-            ->orderBy('duration_months');
-        }])
-        ->orderBy('product_name')
-        ->get(['id','sku','product_name','model']);
+            ->where('is_active', true)
+            ->with(['prices' => function ($q) {
+                $q->where('is_active', true)
+                    ->orderBy('billing_type')
+                    ->orderBy('duration_months');
+            }])
+            ->orderBy('product_name')
+            ->get(['id', 'sku', 'product_name', 'model']);
 
         // maintain value saat validation error (Admin)
         $oldSalesUser = null;
@@ -98,13 +98,22 @@ class SalesOrderController extends Controller
                 ->first(['id', 'name', 'email', 'dst_code']);
         }
 
+        // maintain old value
+        $oldHealthManager = null;
+        if (old('health_manager_id')) {
+            $oldHealthManager = User::role('Health Manager')
+                ->whereKey(old('health_manager_id'))
+                ->first(['id', 'name', 'email']);
+        }
+
 
         return view('sales-orders.create', compact(
             'paymentMethods',
             'statuses',
             'ccpStatuses',
             'products',
-            'oldSalesUser'
+            'oldSalesUser',
+            'oldHealthManager'
         ));
     }
 
@@ -117,7 +126,9 @@ class SalesOrderController extends Controller
             'order_no' => ['required', 'string', 'max:50', 'unique:sales_orders,order_no'],
 
             // Admin wajib pilih; non-admin nullable (dipaksa jadi auth user)
+            'health_manager_id' => [$authUser->hasRole('Admin') ? 'required' : 'nullable', 'exists:users,id'],
             'sales_user_id' => [$authUser->hasRole('Admin') ? 'required' : 'nullable', 'exists:users,id'],
+
 
             // customer input
             'customer_id' => ['nullable', 'exists:customers,id'],
@@ -128,8 +139,8 @@ class SalesOrderController extends Controller
             // order fields
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
-                Rule::requiredIf(fn () => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)),
-                Rule::prohibitedIf(fn () => ($request->input('status') === 'menunggu verifikasi')),
+                Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)),
+                Rule::prohibitedIf(fn() => ($request->input('status') === 'menunggu verifikasi')),
                 'nullable',
                 'date',
             ],
@@ -145,7 +156,7 @@ class SalesOrderController extends Controller
             'items.*.product_price_id' => ['required', 'exists:product_prices,id'],
 
             'status_reason' => [
-                Rule::requiredIf(fn () => in_array($request->input('status'), ['dibatalkan', 'ditunda', 'gagal penelponan'], true)),
+                Rule::requiredIf(fn() => in_array($request->input('status'), ['dibatalkan', 'ditunda', 'gagal penelponan'], true)),
                 'nullable',
                 'string',
                 'max:500',
@@ -159,7 +170,17 @@ class SalesOrderController extends Controller
 
             if (!$isHealthPlanner) {
                 return back()
-                    ->withErrors(['sales_user_id' => 'Sales User harus memiliki role Health Planner.'])
+                    ->withErrors(['sales_user_id' => 'Health Planner wajib dipilih.'])
+                    ->withInput();
+            }
+
+            $hm = User::find((int) $validated['health_manager_id']);
+            $downlineIds = $hm ? $hm->childrenUsers()->pluck('users.id') : collect();
+
+
+            if (!$downlineIds->contains((int) $validated['sales_user_id'])) {
+                return back()
+                    ->withErrors(['sales_user_id' => 'Health Planner yang dipilih bukan bawahan dari Health Manager tersebut.'])
                     ->withInput();
             }
         }
@@ -217,7 +238,7 @@ class SalesOrderController extends Controller
 
             // ITEMS: validated sudah aman
             $itemsPayload = collect($validated['items'])
-                ->map(fn ($row) => [
+                ->map(fn($row) => [
                     'product_id' => (int) $row['product_id'],
                     'product_price_id' => (int) $row['product_price_id'], // ✅ new
                     'qty' => (int) $row['qty'],
@@ -244,13 +265,13 @@ class SalesOrderController extends Controller
             ->role('Health Planner')
             ->where(function ($w) use ($q) {
                 $w->where('name', 'like', "%{$q}%")
-                ->orWhere('full_name', 'like', "%{$q}%")
-                ->orWhere('email', 'like', "%{$q}%");
+                    ->orWhere('full_name', 'like', "%{$q}%")
+                    ->orWhere('email', 'like', "%{$q}%");
             })
             ->orderBy('name')
             ->limit(12)
             ->get(['id', 'name', 'full_name', 'email', 'dst_code'])
-            ->map(fn ($u) => [
+            ->map(fn($u) => [
                 'id' => $u->id,
                 'label' => $u->name . ($u->email ? " ({$u->email})" : ''),
                 'dst_code' => $u->dst_code,
@@ -275,13 +296,13 @@ class SalesOrderController extends Controller
             ->with(['prices' => function ($q) use ($selectedPriceIds) {
                 $q->where(function ($qq) use ($selectedPriceIds) {
                     $qq->where('is_active', true)
-                    ->orWhereIn('id', $selectedPriceIds); // ✅ supaya selected price tetap muncul
+                        ->orWhereIn('id', $selectedPriceIds); // ✅ supaya selected price tetap muncul
                 })
-                ->orderBy('billing_type')
-                ->orderBy('duration_months');
+                    ->orderBy('billing_type')
+                    ->orderBy('duration_months');
             }])
             ->orderBy('product_name')
-            ->get(['id','sku','product_name','model']);
+            ->get(['id', 'sku', 'product_name', 'model']);
 
         $oldSalesUser = $salesOrder->salesUser;
         if (old('sales_user_id')) {
@@ -315,8 +336,8 @@ class SalesOrderController extends Controller
 
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
-                Rule::requiredIf(fn () => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)),
-                Rule::prohibitedIf(fn () => ($request->input('status') === 'menunggu verifikasi')),
+                Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)),
+                Rule::prohibitedIf(fn() => ($request->input('status') === 'menunggu verifikasi')),
                 'nullable',
                 'date',
             ],
@@ -331,7 +352,7 @@ class SalesOrderController extends Controller
             'items.*.product_price_id' => ['required', 'exists:product_prices,id'],
 
             'status_reason' => [
-                Rule::requiredIf(fn () => in_array($request->input('status'), ['dibatalkan', 'ditunda', 'gagal penelponan'], true)),
+                Rule::requiredIf(fn() => in_array($request->input('status'), ['dibatalkan', 'ditunda', 'gagal penelponan'], true)),
                 'nullable',
                 'string',
                 'max:500',
@@ -387,7 +408,7 @@ class SalesOrderController extends Controller
             ]);
 
             $itemsPayload = collect($validated['items'])
-                ->map(fn ($row) => [
+                ->map(fn($row) => [
                     'product_id' => (int) $row['product_id'],
                     'product_price_id' => (int) $row['product_price_id'], // ✅ new
                     'qty' => (int) $row['qty'],
@@ -429,7 +450,7 @@ class SalesOrderController extends Controller
 
         $existing = Customer::query()
             ->whereRaw('LOWER(full_name) = ?', [mb_strtolower($name)])
-            ->when($phone !== '', fn ($q) => $q->where('phone_number', $phone))
+            ->when($phone !== '', fn($q) => $q->where('phone_number', $phone))
             ->first();
 
         if ($existing) {
@@ -443,5 +464,127 @@ class SalesOrderController extends Controller
         ]);
 
         return (int) $customer->id;
+    }
+
+    public function searchHealthManagers(Request $request)
+    {
+        abort_unless(Auth::check() && Auth::user()->hasRole('Admin'), 403);
+
+        $q = trim((string) $request->get('q', ''));
+        if (mb_strlen($q) < 2) return response()->json([]);
+
+        $users = User::query()
+            ->role('Health Manager')
+            ->where(function ($w) use ($q) {
+                $w->where('name', 'like', "%{$q}%")
+                    ->orWhere('full_name', 'like', "%{$q}%")
+                    ->orWhere('email', 'like', "%{$q}%");
+            })
+            ->orderBy('name')
+            ->limit(12)
+            ->get(['id', 'name', 'full_name', 'email'])
+            ->map(fn($u) => [
+                'id' => $u->id,
+                'label' => $u->name . ($u->email ? " ({$u->email})" : ''),
+            ]);
+
+        return response()->json($users);
+    }
+
+    public function searchHealthPlanners(Request $request)
+    {
+        abort_unless(Auth::check() && Auth::user()->hasRole('Admin'), 403);
+
+        $managerId = (int) $request->get('health_manager_id');
+        if (!$managerId) return response()->json([]);
+
+        $q = trim((string) $request->get('q', ''));
+        if (mb_strlen($q) < 2) return response()->json([]);
+
+        $hm = User::find($managerId);
+        if (!$hm) return response()->json([]);
+
+        // ✅ gunakan relasi yang sudah terbukti dipakai di index()
+        $downlineIds = $hm->childrenUsers()->pluck('users.id'); // pastikan ini include semua downline
+        if ($downlineIds->isEmpty()) return response()->json([]);
+
+        $users = User::query()
+            ->role('Health Planner')
+            ->whereIn('id', $downlineIds)
+            ->where(function ($w) use ($q) {
+                $w->where('name', 'like', "%{$q}%")
+                    ->orWhere('full_name', 'like', "%{$q}%")
+                    ->orWhere('email', 'like', "%{$q}%");
+            })
+            ->orderBy('name')
+            ->limit(12)
+            ->get(['id', 'name', 'full_name', 'email', 'dst_code'])
+            ->map(fn($u) => [
+                'id' => $u->id,
+                'label' => $u->name . ($u->email ? " ({$u->email})" : ''),
+                'dst_code' => $u->dst_code,
+            ]);
+
+        return response()->json($users);
+    }
+
+
+    /**
+     * Ambil semua descendant user id dari 1 root user (BFS).
+     * Asumsi struktur hierarchy pakai parent_id di table users.
+     * Kalau nama kolom beda, ganti 'parent_id'.
+     */
+    private function descendantUserIds(int $rootId)
+    {
+        $visited = collect([$rootId]);
+        $queue = collect([$rootId]);
+
+        while ($queue->isNotEmpty()) {
+            $batch = $queue->splice(0)->all();
+
+            $children = User::query()
+                ->whereIn('parent_id', $batch)
+                ->pluck('id');
+
+            $children = $children->diff($visited);
+
+            if ($children->isEmpty()) break;
+
+            $visited = $visited->merge($children);
+            $queue = $queue->merge($children);
+        }
+
+        // kita return hanya downline (tanpa root) atau termasuk root, bebas:
+        // untuk filter HP, aman kalau root ikut juga, karena role HP tidak match.
+        return $visited->values();
+    }
+
+    public function listHealthPlanners(Request $request)
+    {
+        abort_unless(Auth::check() && Auth::user()->hasRole('Admin'), 403);
+
+        $managerId = (int) $request->get('health_manager_id');
+        if (!$managerId) return response()->json([]);
+
+        $hm = User::find($managerId);
+        if (!$hm) return response()->json([]);
+
+        // downline HM (yang kamu pakai di search)
+        $downlineIds = $hm->childrenUsers()->pluck('users.id');
+        if ($downlineIds->isEmpty()) return response()->json([]);
+
+        $users = User::query()
+            ->role('Health Planner')
+            ->whereIn('id', $downlineIds)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'dst_code'])
+            ->map(fn($u) => [
+                'id' => $u->id,
+                'label' => $u->name . ($u->email ? " ({$u->email})" : ''),
+                'dst_code' => $u->dst_code,
+            ])
+            ->values();
+
+        return response()->json($users);
     }
 }

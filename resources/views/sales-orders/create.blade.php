@@ -39,35 +39,65 @@
                     <div class="rounded-2xl border bg-white p-5">
                         <h2 class="text-sm font-semibold text-gray-900">Order Info</h2>
 
-                        <div class="mt-4" x-data="salesUserPicker()" x-init="init()">
-                            <label class="text-xs font-medium text-gray-600">Sales User</label>
+                        <div class="mt-4" x-data="hmHpPicker()" x-init="init()" data-hmhp-picker>
+                            <label class="text-xs font-medium text-gray-600">Health Manager</label>
 
-                            {{-- hidden yang dikirim ke backend --}}
-                            <input type="hidden" name="sales_user_id" :value="selectedId">
+                            <input type="hidden" name="health_manager_id" :value="selectedHmId">
 
                             <div class="relative mt-1">
-                                <input type="text" x-model="query" @input.debounce.250ms="search()"
-                                    @focus="open = true" @keydown.escape="open = false"
-                                    placeholder="Ketik nama sales..."
+                                <input type="text" x-model="hmQuery" @input.debounce.250ms="searchHm()"
+                                    @focus="hmOpen = true" @keydown.escape="hmOpen = false"
+                                    placeholder="Ketik nama Health Manager..."
                                     class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
 
-                                {{-- dropdown --}}
-                                <div x-show="open && items.length > 0" x-transition
+                                <div x-show="hmOpen && hmItems.length > 0" x-transition
                                     class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
-                                    <template x-for="u in items" :key="u.id">
+                                    <template x-for="u in hmItems" :key="u.id">
                                         <button type="button" class="w-full text-left px-4 py-3 hover:bg-gray-50"
-                                            @click="choose(u)">
+                                            @click="chooseHm(u)">
                                             <div class="text-sm font-semibold text-gray-900" x-text="u.label"></div>
                                         </button>
                                     </template>
                                 </div>
                             </div>
 
-                            <div class="mt-1 text-xs" :class="selectedId ? 'text-green-700' : 'text-gray-400'">
-                                <span x-show="selectedId">Sales user terpilih.</span>
-                                <span x-show="!selectedId">Wajib pilih sales dari dropdown.</span>
+                            <div class="mt-2 text-xs" :class="selectedHmId ? 'text-green-700' : 'text-gray-400'">
+                                <span x-show="selectedHmId">Health Manager terpilih.</span>
+                                <span x-show="!selectedHmId">Wajib pilih Health Manager dari dropdown.</span>
                             </div>
+
+                            <div class="mt-4">
+                                <label class="text-xs font-medium text-gray-600">Health Planner</label>
+
+                                <input type="hidden" name="sales_user_id" :value="selectedHpId">
+
+                                <div class="relative mt-1">
+                                    <input type="text" x-model="hpQuery" @focus="hpOpen = true; ensureHpLoaded()"
+                                        @input="filterHp()" @keydown.escape="hpOpen = false" :disabled="!selectedHmId"
+                                        :class="!selectedHmId ? 'bg-gray-50 cursor-not-allowed' : ''"
+                                        placeholder="Pilih / ketik Health Planner..."
+                                        class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
+
+                                    <!-- Dropdown putih -->
+                                    <div x-show="hpOpen && filteredHp.length > 0" x-transition
+                                        class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                                        <template x-for="u in filteredHp" :key="u.id">
+                                            <button type="button" class="w-full text-left px-4 py-3 hover:bg-gray-50"
+                                                @click="chooseHp(u)">
+                                                <div class="text-sm font-semibold text-gray-900" x-text="u.label"></div>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <div class="mt-2 text-xs" :class="selectedHpId ? 'text-green-700' : 'text-gray-400'">
+                                    <span x-show="selectedHpId">Health Planner terpilih.</span>
+                                    <span x-show="!selectedHpId">Wajib pilih Health Planner dari dropdown.</span>
+                                </div>
+                            </div>
+
                         </div>
+
 
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
@@ -483,7 +513,7 @@
             }
         }
 
-        function salesUserPicker() {
+        function hmHpPicker() {
             const orderNoEl = () => document.getElementById('order_no');
 
             function pad2(n) {
@@ -505,57 +535,149 @@
             }
 
             return {
-                query: @json($oldSalesUser ? $oldSalesUser->name . ($oldSalesUser->email ? " ({$oldSalesUser->email})" : '') : ''),
-                open: false,
-                items: [],
-                selectedId: @json(old('sales_user_id', $oldSalesUser?->id)),
-                lastFetch: '',
+                // HM
+                hmQuery: @json(
+                    $oldHealthManager
+                        ? $oldHealthManager->name . ($oldHealthManager->email ? " ({$oldHealthManager->email})" : '')
+                        : ''),
+                hmOpen: false,
+                hmItems: [],
+                selectedHmId: @json(old('health_manager_id', $oldHealthManager?->id)),
+                hmLastFetch: '',
 
-                init() {},
+                // HP (custom dropdown)
+                hpQuery: @json($oldSalesUser ? $oldSalesUser->name . ($oldSalesUser->email ? " ({$oldSalesUser->email})" : '') : ''),
+                selectedHpId: @json(old('sales_user_id', $oldSalesUser?->id)),
+                hpAll: [],
+                filteredHp: [],
+                hpOpen: false,
+                hpLoadedForHmId: @json(old('health_manager_id', $oldHealthManager?->id) ?? null),
 
-                async search() {
-                    this.selectedId = null;
+                init() {
+                    // kalau page reload karena validation error & HM sudah ada, load list HP
+                    if (this.selectedHmId) {
+                        this.ensureHpLoaded().then(() => this.filterHp());
+                    }
+
+                    // optional: klik di luar -> tutup dropdown
+                    document.addEventListener('click', (e) => {
+                        if (e.target.closest('[data-hmhp-picker]')) return;
+                        this.hmOpen = false;
+                        this.hpOpen = false;
+                    });
+                },
+
+                async searchHm() {
+                    this.selectedHmId = null;
+
+                    // reset HP saat HM berubah
+                    this.resetHp();
+
                     const el = orderNoEl();
                     if (el) el.value = '';
 
-                    const q = (this.query || '').trim();
+                    const q = (this.hmQuery || '').trim();
                     if (q.length < 2) {
-                        this.items = [];
+                        this.hmItems = [];
                         return;
                     }
-
-                    if (this.lastFetch === q) return;
-                    this.lastFetch = q;
+                    if (this.hmLastFetch === q) return;
+                    this.hmLastFetch = q;
 
                     const res = await fetch(
-                        `{{ route('sales-orders.sales-users.search') }}?q=${encodeURIComponent(q)}`, {
+                        `{{ route('sales-orders.health-managers.search') }}?q=${encodeURIComponent(q)}`, {
                             headers: {
                                 'Accept': 'application/json'
                             }
-                        });
+                        }
+                    );
+
                     if (!res.ok) return;
 
                     const data = await res.json();
-                    this.items = Array.isArray(data) ? data : [];
-                    this.open = true;
+                    this.hmItems = Array.isArray(data) ? data : [];
+                    this.hmOpen = true;
                 },
 
-                choose(u) {
-                    this.selectedId = u.id;
-                    this.query = u.label;
-                    this.open = false;
-                    this.items = [];
+                async chooseHm(u) {
+                    this.selectedHmId = u.id;
+                    this.hmQuery = u.label;
+                    this.hmOpen = false;
+                    this.hmItems = [];
+
+                    // reset HP setelah HM dipilih
+                    this.resetHp();
+
+                    const el = orderNoEl();
+                    if (el) el.value = '';
+
+                    await this.ensureHpLoaded();
+                    this.filterHp();
+                },
+
+                resetHp() {
+                    this.selectedHpId = null;
+                    this.hpQuery = '';
+                    this.hpAll = [];
+                    this.filteredHp = [];
+                    this.hpOpen = false;
+                    this.hpLoadedForHmId = null;
+                },
+
+                async ensureHpLoaded() {
+                    if (!this.selectedHmId) return;
+
+                    // kalau HM yang sama dan data sudah ada, skip fetch
+                    if (String(this.hpLoadedForHmId) === String(this.selectedHmId) && this.hpAll.length) return;
+
+                    const res = await fetch(
+                        `{{ route('sales-orders.health-planners.list') }}?health_manager_id=${encodeURIComponent(this.selectedHmId)}`, {
+                            headers: {
+                                'Accept': 'application/json'
+                            }
+                        }
+                    );
+
+                    if (!res.ok) {
+                        this.hpAll = [];
+                        this.filteredHp = [];
+                        this.hpLoadedForHmId = this.selectedHmId;
+                        return;
+                    }
+
+                    const data = await res.json();
+                    this.hpAll = Array.isArray(data) ? data : [];
+                    this.filteredHp = this.hpAll;
+                    this.hpLoadedForHmId = this.selectedHmId;
+                },
+
+                filterHp() {
+                    const q = (this.hpQuery || '').trim().toLowerCase();
+
+                    if (!q) {
+                        this.filteredHp = this.hpAll;
+                        return;
+                    }
+
+                    this.filteredHp = this.hpAll.filter(u =>
+                        (u.label || '').toLowerCase().includes(q)
+                    );
+                },
+
+                chooseHp(u) {
+                    this.selectedHpId = u.id;
+                    this.hpQuery = u.label;
+                    this.hpOpen = false;
 
                     const dst = sanitizeDst(u.dst_code);
                     const ts = formatTs(new Date());
-
                     const code = dst || 'DST';
                     const orderNo = `SO-${code}-${ts}`;
 
                     const el = orderNoEl();
                     if (el) el.value = orderNo;
-                }
-            }
+                },
+            };
         }
     </script>
 </x-dashboard-layout>

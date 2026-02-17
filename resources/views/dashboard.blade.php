@@ -165,31 +165,29 @@
             </div>
         </div>
 
-        <div class="rounded-2xl bg-white p-6 shadow-sm border">
+        <a href="{{ route('profile') }}#downline-tree"
+            class="block rounded-2xl bg-white p-6 shadow-sm border hover:shadow transition cursor-pointer">
             <div class="flex items-start justify-between">
                 <div>
                     <p class="text-sm text-gray-500">Total Downline</p>
                     <p class="mt-2 text-3xl font-bold">{{ number_format($totalActiveDownline ?? 0) }} Orang</p>
                     <p class="mt-1 text-xs text-gray-500">Total downline yang aktif.</p>
+                    <p class="mt-3 text-sm font-semibold text-blue-600">Lihat downline →</p>
                 </div>
+
                 <div class="text-indigo-600">
                     <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <!-- leader -->
                         <circle cx="12" cy="7" r="3" />
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                            d="M5 20v-1a5 5 0 015-5h4a5 5 0 015 5v1" />
-
-                        <!-- left downline -->
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 20v-1a5 5 0 015-5h4a5 5 0 015 5v1" />
                         <circle cx="4" cy="9" r="2" />
                         <path stroke-linecap="round" stroke-linejoin="round" d="M2 20v-1a4 4 0 014-4" />
-
-                        <!-- right downline -->
                         <circle cx="20" cy="9" r="2" />
                         <path stroke-linecap="round" stroke-linejoin="round" d="M22 20v-1a4 4 0 00-4-4" />
                     </svg>
                 </div>
             </div>
-        </div>
+        </a>
+
     </div>
 
     {{-- Bottom cards --}}
