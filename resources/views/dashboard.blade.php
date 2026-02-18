@@ -204,9 +204,9 @@
             class="block rounded-2xl bg-white p-6 shadow-sm border hover:shadow transition cursor-pointer">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">Total Health Planner</p>
+                    <p class="text-sm text-gray-500">Total Partners</p>
                     <p class="mt-2 text-3xl font-bold">{{ number_format($totalActiveDownline ?? 0) }} Orang</p>
-                    <p class="mt-1 text-xs text-gray-500">Total Health Planner yang aktif.</p>
+                    <p class="mt-1 text-xs text-gray-500">Total Partners yang aktif.</p>
                     <p class="mt-3 text-sm font-semibold text-blue-600">Lihat Health Planner →</p>
                 </div>
 
@@ -223,6 +223,33 @@
                 </div>
             </div>
         </a>
+
+        <div class="rounded-2xl bg-white p-6 shadow-sm border">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm text-gray-500">Total Health Planner (Aktif Bulan Ini)</p>
+                    <p class="mt-2 text-3xl font-bold">
+                        {{ number_format($totalActiveHealthPlannersThisMonth ?? 0) }} Orang
+                    </p>
+                    <p class="mt-1 text-xs text-gray-500">
+                        @if (auth()->user()->hasAnyRole(['Admin', 'Head Admin']))
+                            Seluruh Health Planner yang membuat minimal 1 SO di bulan ini.
+                        @else
+                            Health Planner di bawah Anda (multi-level) yang membuat minimal 1 SO di bulan ini.
+                        @endif
+                    </p>
+                </div>
+
+                <span class="text-sky-600">
+                    {{-- Icon --}}
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="7" r="3" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 21v-1a7 7 0 0114 0v1" />
+                    </svg>
+                </span>
+            </div>
+        </div>
+
 
         @if (auth()->user()->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']))
             <div class="rounded-2xl bg-white p-6 shadow-sm border">

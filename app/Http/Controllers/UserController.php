@@ -97,13 +97,20 @@ class UserController extends Controller
 
     public function create()
     {
-        $roles = \Spatie\Permission\Models\Role::query()->orderBy('name')->get();
+        $authUser = request()->user();
+
+        $roles = Role::query()
+            ->orderBy('name')
+            ->when(!$authUser->hasRole('Head Admin'), function ($q) {
+                $q->where('name', '!=', 'Head Admin');
+            })
+            ->get();
 
         $roleRanks = config('roles.rank');
 
         $oldReferrer = null;
         if (old('referrer_user_id')) {
-            $oldReferrer = \App\Models\User::with('roles')->find(old('referrer_user_id'));
+            $oldReferrer = User::with('roles')->find(old('referrer_user_id'));
         }
 
         return view('users.create', compact('roles', 'roleRanks', 'oldReferrer'));

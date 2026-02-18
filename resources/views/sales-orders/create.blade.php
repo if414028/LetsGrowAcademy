@@ -40,7 +40,7 @@
                         <h2 class="text-sm font-semibold text-gray-900">Order Info</h2>
 
                         <div class="mt-4" x-data="hmHpPicker()" x-init="init()" data-hmhp-picker>
-                            <label class="text-xs font-medium text-gray-600">Health Manager</label>
+                            <label class="text-xs font-medium text-gray-600">Health Manager <span class="text-red-500">*</span></label>
 
                             <input type="hidden" name="health_manager_id" :value="selectedHmId">
 
@@ -67,7 +67,7 @@
                             </div>
 
                             <div class="mt-4">
-                                <label class="text-xs font-medium text-gray-600">Health Planner</label>
+                                <label class="text-xs font-medium text-gray-600">Health Planner <span class="text-red-500">*</span></label>
 
                                 <input type="hidden" name="sales_user_id" :value="selectedHpId">
 
@@ -101,7 +101,7 @@
 
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
-                                <label class="text-xs font-medium text-gray-600">Order No</label>
+                                <label class="text-xs font-medium text-gray-600">Order No <span class="text-red-500">*</span></label>
                                 <input id="order_no" name="order_no" value="{{ old('order_no') }}"
                                     class="mt-1 w-full rounded-xl border-gray-200 bg-gray-50 focus:border-blue-500 focus:ring-blue-500"
                                     placeholder="Auto generated" readonly />
@@ -109,14 +109,14 @@
                             </div>
 
                             <div>
-                                <label class="text-xs font-medium text-gray-600">Key In At</label>
+                                <label class="text-xs font-medium text-gray-600">Key In At <span class="text-red-500">*</span></label>
                                 <input type="datetime-local" name="key_in_at" value="{{ old('key_in_at') }}"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
                                 <div class="mt-1 text-xs text-gray-400">Kosongkan untuk otomatis: sekarang.</div>
                             </div>
 
                             <div>
-                                <label class="text-xs font-medium text-gray-600">Payment Method</label>
+                                <label class="text-xs font-medium text-gray-600">Payment Method <span class="text-red-500">*</span></label>
                                 <select name="payment_method"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     <option value="">-</option>
@@ -147,7 +147,7 @@
                     {{-- Items / Products --}}
                     <div class="rounded-2xl border bg-white p-5" x-data="salesOrderItems(@js($products), @js(old('items', [['product_id' => '', 'qty' => 1]])))" x-init="init()">
                         <div class="flex items-center justify-between">
-                            <h2 class="text-sm font-semibold text-gray-900">Products</h2>
+                            <h2 class="text-sm font-semibold text-gray-900">Products <span class="text-red-500">*</span></h2>
 
                             <button type="button" @click="addRow()"
                                 class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -266,7 +266,7 @@
 
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div class="relative md:col-span-2">
-                                <label class="text-xs font-medium text-gray-600">Customer Name</label>
+                                <label class="text-xs font-medium text-gray-600">Customer Name <span class="text-red-500">*</span></label>
                                 <input name="customer_name" value="{{ old('customer_name') }}" x-model="query"
                                     @input.debounce.250ms="search()" @focus="open = true"
                                     @keydown.escape="open = false" placeholder="Ketik nama customer..."
@@ -297,18 +297,20 @@
                             </div>
 
                             <div>
-                                <label class="text-xs font-medium text-gray-600">Phone Number</label>
+                                <label class="text-xs font-medium text-gray-600">Phone Number <span class="text-red-500">*</span></label>
                                 <input name="customer_phone" value="{{ old('customer_phone') }}" x-model="phone"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                     placeholder="08xxxx" />
                             </div>
 
                             <div>
-                                <label class="text-xs font-medium text-gray-600">Address</label>
+                                <label class="text-xs font-medium text-gray-600">
+                                    Address <span class="text-red-500">*</span>
+                                </label>
                                 <input name="customer_address" value="{{ old('customer_address') }}"
-                                    x-model="address"
+                                    x-model="address" required
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                                    placeholder="Alamat (optional)" />
+                                    placeholder="Alamat customer..." />
                             </div>
                         </div>
                     </div>

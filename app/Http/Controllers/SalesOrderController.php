@@ -138,7 +138,7 @@ class SalesOrderController extends Controller
             'customer_id' => ['nullable', 'exists:customers,id'],
             'customer_name' => ['required', 'string', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:30'],
-            'customer_address' => ['nullable', 'string', 'max:500'],
+            'customer_address' => ['required', 'string', 'max:500'],
 
             // order fields
             'key_in_at' => ['nullable', 'date'],
@@ -342,7 +342,7 @@ class SalesOrderController extends Controller
             'customer_type' => ['required', Rule::in($this->customerTypes)],
             'customer_name' => ['required', 'string', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:30'],
-            'customer_address' => ['nullable', 'string', 'max:500'],
+            'customer_address' => ['required', 'string', 'max:500'],
 
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [

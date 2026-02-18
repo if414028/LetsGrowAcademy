@@ -163,6 +163,36 @@ class DashboardController extends Controller
             }
         }
 
+        // 6) Total Health Planner aktif melakukan minimal 1 SO di bulan ini
+        $totalActiveHealthPlannersThisMonth = 0;
+
+        $monthStart = now()->startOfMonth();
+        $monthEnd = now()->endOfMonth();
+
+        // Scope HP yang dihitung:
+        // - Admin/Head Admin: seluruh HP yang punya >= 1 SO bulan ini
+        // - selain itu: hanya HP di bawah user login (multi-level) yang punya >= 1 SO bulan ini
+        $hpScopeUserIds = $user->hasAnyRole(['Admin', 'Head Admin'])
+            ? null
+            : $scopeUserIds; // ini sudah include diri sendiri + downline
+
+        $totalActiveHealthPlannersThisMonth = User::query()
+            ->role('Health Planner')
+            ->where('users.status', 'Active')
+            ->when(!$user->hasAnyRole(['Admin', 'Head Admin']), function ($q) use ($hpScopeUserIds) {
+                $q->whereIn('users.id', $hpScopeUserIds);
+            })
+            ->whereExists(function ($sub) use ($monthStart, $monthEnd) {
+                $sub->select(DB::raw(1))
+                    ->from('sales_orders')
+                    ->whereColumn('sales_orders.sales_user_id', 'users.id')
+                    ->whereBetween('sales_orders.key_in_at', [$monthStart, $monthEnd]);
+                // kalau kamu mau hanya SO status tertentu, tinggal tambah:
+                // ->where('sales_orders.status', 'selesai');
+            })
+            ->distinct()
+            ->count();
+
         // =========================================================
         // HM PERFORMANCE TABLE (HM + Team Units)
         // tampil untuk: SM, Admin, Head Admin
@@ -293,6 +323,7 @@ class DashboardController extends Controller
             'totalBundlings',
             'totalActiveDownline',
             'totalActiveHealthManagers',
+            'totalActiveHealthPlannersThisMonth',
             'healthManagerPerformance',
             'trend',
             'salesTrendLabels',
