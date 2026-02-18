@@ -17,6 +17,7 @@ class SalesOrderController extends Controller
     private array $paymentMethods = ['partial', 'outright'];
     private array $statuses = ['menunggu verifikasi', 'dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'];
     private array $ccpStatuses = ['menunggu pengecekan', 'dibatalkan', 'ditolak', 'disetujui'];
+    private array $customerTypes = ['individu', 'corporate'];
 
     public function index(Request $request)
     {
@@ -148,6 +149,7 @@ class SalesOrderController extends Controller
             'payment_method' => ['nullable', Rule::in($this->paymentMethods)],
             'status' => ['required', Rule::in($this->statuses)],
             'ccp_status' => ['required', Rule::in($this->ccpStatuses)],
+            'customer_type' => ['required', Rule::in($this->customerTypes)],
 
             // items
             'items' => ['required', 'array', 'min:1'],
@@ -227,6 +229,7 @@ class SalesOrderController extends Controller
                 'order_no' => $validated['order_no'],
                 'sales_user_id' => $salesUserId,
                 'customer_id' => $customerId,
+                'customer_type' => $validated['customer_type'],
                 'key_in_at' => $validated['key_in_at'] ?? now(),
                 'install_date' => $installDate,
                 'is_recurring' => (bool) ($validated['is_recurring'] ?? false),
@@ -330,6 +333,7 @@ class SalesOrderController extends Controller
             'sales_user_id' => [$authUser->hasRole('Admin') ? 'required' : 'nullable', 'exists:users,id'],
 
             'customer_id' => ['nullable', 'exists:customers,id'],
+            'customer_type' => ['required', Rule::in($this->customerTypes)],
             'customer_name' => ['required', 'string', 'max:255'],
             'customer_phone' => ['nullable', 'string', 'max:30'],
             'customer_address' => ['nullable', 'string', 'max:500'],
@@ -398,6 +402,7 @@ class SalesOrderController extends Controller
                 'order_no' => $validated['order_no'],
                 'sales_user_id' => $salesUserId,
                 'customer_id' => $customerId,
+                'customer_type' => $validated['customer_type'],
                 'key_in_at' => $validated['key_in_at'] ?? $salesOrder->key_in_at ?? now(),
                 'install_date' => $installDate,
                 'is_recurring' => (bool) ($validated['is_recurring'] ?? false),

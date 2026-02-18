@@ -6,11 +6,12 @@
         </div>
 
         <div class="flex items-center gap-2">
-            <a href="{{ route('users.edit', $user) }}"
-                class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
-                Edit
-            </a>
-
+            @can('update', $user)
+                <a href="{{ route('users.edit', $user) }}"
+                    class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
+                    Edit
+                </a>
+            @endcan
         </div>
     </div>
 

@@ -119,6 +119,20 @@
                                 <label for="is_recurring" class="text-sm text-gray-700">Recurring</label>
                             </div>
                         </div>
+
+                        <div>
+                            <label class="text-xs font-medium text-gray-600">Jenis Customer</label>
+                            <select name="customer_type"
+                                class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                                <option value="individu" @selected(old('customer_type', $salesOrder->customer_type ?? 'individu') === 'individu')>
+                                    Individu
+                                </option>
+                                <option value="corporate" @selected(old('customer_type', $salesOrder->customer_type) === 'corporate')>
+                                    Corporate
+                                </option>
+                            </select>
+                        </div>
+
                     </div>
 
                     {{-- Items / Products --}}

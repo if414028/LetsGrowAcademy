@@ -19,13 +19,13 @@
                         </svg>
                     </div>
                     <div>
-                        <div class="text-sm text-white/80">Team Members</div>
+                        <div class="text-sm text-white/80">Direct Reports</div>
                         <div class="text-3xl font-bold leading-tight">{{ $teamMemberCount }}</div>
                     </div>
                 </div>
 
                 <div class="text-right">
-                    <div class="text-sm text-white/80">Total Units Sold</div>
+                    <div class="text-sm text-white/80">Total Net Sales</div>
                     <div class="text-3xl font-bold leading-tight">{{ $myTotalUnits }}</div>
                 </div>
             </div>
@@ -78,7 +78,7 @@
                     <thead
                         class="border-t border-b bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500">
                         <tr>
-                            <th class="px-6 py-3">Salesperson</th>
+                            <th class="px-6 py-3">Health Manager/Planner</th>
                             <th class="px-6 py-3">Units</th>
                             <th class="px-6 py-3">Last Activity</th>
                         </tr>

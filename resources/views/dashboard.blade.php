@@ -120,9 +120,9 @@
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">Total Unit Terjual</p>
+                    <p class="text-sm text-gray-500">Total Net Sales</p>
                     <p class="mt-2 text-3xl font-bold">{{ number_format($totalUnitsSold ?? 0) }}</p>
-                    <p class="mt-1 text-xs text-gray-500">Total units terjual (Anda + bawahan)</p>
+                    <p class="mt-1 text-xs text-gray-500">Total units terjual (Anda + Tim Anda)</p>
                 </div>
                 <span class="text-blue-600">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -136,7 +136,42 @@
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">Total Produk Reguler</p>
+                    <p class="text-sm text-gray-500">Total Penjualan Individu</p>
+                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalSalesIndividu ?? 0) }} Unit</p>
+                    <p class="mt-1 text-xs text-gray-500">Total unit terjual (customer individu).</p>
+                </div>
+                <span class="text-teal-600">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 11c1.657 0 3-1.567 3-3.5S13.657 4 12 4 9 5.567 9 7.5 10.343 11 12 11z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5 20v-1a7 7 0 0114 0v1" />
+                    </svg>
+                </span>
+            </div>
+        </div>
+
+        <div class="rounded-2xl bg-white p-6 shadow-sm border">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm text-gray-500">Total Penjualan Corporate</p>
+                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalSalesCorporate ?? 0) }} Unit</p>
+                    <p class="mt-1 text-xs text-gray-500">Total unit terjual (customer corporate).</p>
+                </div>
+                <span class="text-rose-600">
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 21h18M5 21V7a2 2 0 012-2h4v16M13 21V3h4a2 2 0 012 2v16" />
+                    </svg>
+                </span>
+            </div>
+        </div>
+
+
+        <div class="rounded-2xl bg-white p-6 shadow-sm border">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-sm text-gray-500">Total Produk Satuan</p>
                     <p class="mt-2 text-3xl font-bold">{{ number_format($totalRegularProducts ?? 0) }} Unit</p>
                     <p class="mt-1 text-xs text-gray-500">Total produk reguler yang aktif.</p>
                 </div>
@@ -169,16 +204,17 @@
             class="block rounded-2xl bg-white p-6 shadow-sm border hover:shadow transition cursor-pointer">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">Total Downline</p>
+                    <p class="text-sm text-gray-500">Total Health Planner</p>
                     <p class="mt-2 text-3xl font-bold">{{ number_format($totalActiveDownline ?? 0) }} Orang</p>
-                    <p class="mt-1 text-xs text-gray-500">Total downline yang aktif.</p>
-                    <p class="mt-3 text-sm font-semibold text-blue-600">Lihat downline →</p>
+                    <p class="mt-1 text-xs text-gray-500">Total Health Planner yang aktif.</p>
+                    <p class="mt-3 text-sm font-semibold text-blue-600">Lihat Health Planner →</p>
                 </div>
 
                 <div class="text-indigo-600">
                     <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="7" r="3" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 20v-1a5 5 0 015-5h4a5 5 0 015 5v1" />
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M5 20v-1a5 5 0 015-5h4a5 5 0 015 5v1" />
                         <circle cx="4" cy="9" r="2" />
                         <path stroke-linecap="round" stroke-linejoin="round" d="M2 20v-1a4 4 0 014-4" />
                         <circle cx="20" cy="9" r="2" />
@@ -188,6 +224,139 @@
             </div>
         </a>
 
+        @if (auth()->user()->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']))
+            <div class="rounded-2xl bg-white p-6 shadow-sm border">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <p class="text-sm text-gray-500">Total Health Manager</p>
+                        <p class="mt-2 text-3xl font-bold">
+                            {{ number_format($totalActiveHealthManagers ?? 0) }} Orang
+                        </p>
+                        <p class="mt-1 text-xs text-gray-500">
+                            Total Health Manager yang aktif.
+                        </p>
+                    </div>
+
+                    <span class="text-indigo-600">
+                        <!-- Icon Team / Leader -->
+                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <circle cx="12" cy="7" r="3" stroke-width="2" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M5 21v-1a7 7 0 0114 0v1" />
+                        </svg>
+                    </span>
+                </div>
+            </div>
+        @endif
+
+    </div>
+
+    @if (auth()->user()->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']))
+        <div class="mt-8 rounded-2xl bg-white shadow-sm border">
+            <div class="p-6 flex items-start justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-bold">Health Manager Performance</h2>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Total unit terjual (SO selesai) oleh Health Manager + tim nya (multi-level).
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-4 overflow-x-auto">
+                <div class="pl-6 pr-12 pb-6">
+                    <table class="min-w-[920px] w-full text-sm">
+                        <thead class="text-gray-500">
+                            <tr class="border-b">
+                                <th class="text-left font-semibold py-3">Health Manager</th>
+                                <th class="text-left font-semibold py-3">DST</th>
+                                <th class="text-center font-semibold py-3">Team Size</th>
+                                <th class="text-center font-semibold py-3">Total Units</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @forelse($healthManagerPerformance ?? [] as $hm)
+                                <tr class="border-b last:border-b-0">
+                                    <td class="py-3">
+                                        <div class="font-semibold text-gray-900">{{ $hm->name }}</div>
+                                        <div class="text-xs text-gray-500">{{ $hm->email }}</div>
+                                    </td>
+
+                                    <td class="py-3 text-gray-700">
+                                        {{ $hm->dst_code ?? '-' }}
+                                    </td>
+
+                                    <td class="py-3 text-center text-gray-700">
+                                        {{ number_format($hm->team_size ?? 0) }}
+                                    </td>
+
+                                    <td class="py-3 text-center font-bold text-gray-900">
+                                        {{ number_format($hm->units ?? 0) }}
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="4" class="py-6 text-center text-gray-500">
+                                        Belum ada data Health Manager.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+
+                    @if (auth()->user()->hasRole('Sales Manager'))
+                        <p class="mt-3 text-xs text-gray-500">
+                            *List ini hanya menampilkan Health Manager di bawah Anda.
+                        </p>
+                    @endif
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <div class="mt-8 rounded-2xl bg-white shadow-sm border">
+        <div class="p-6 pb-4">
+            <h2 class="text-xl font-bold">Kontes Berlangsung</h2>
+            <p class="mt-1 text-sm text-gray-500">
+                Daftar kontes aktif yang Anda ikuti.
+            </p>
+        </div>
+
+        <div class="px-6 pb-6">
+            @forelse($activeContests as $contest)
+                <a href="{{ route('contests.show', $contest) }}"
+                    class="block rounded-xl border p-4 mb-4 hover:bg-gray-50 transition">
+
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-semibold text-gray-900">
+                                {{ $contest->title }}
+                            </p>
+
+                            <p class="text-xs text-gray-500 mt-1">
+                                {{ \Carbon\Carbon::parse($contest->start_date)->translatedFormat('d M Y') }}
+                                —
+                                {{ \Carbon\Carbon::parse($contest->end_date)->translatedFormat('d M Y') }}
+                            </p>
+                        </div>
+
+                        <span class="text-amber-600">
+                            <!-- Trophy icon -->
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 21h8M12 17v4M7 4h10v3a5 5 0 01-10 0V4z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5 7H4a2 2 0 00-2 2v1a4 4 0 004 4M19 7h1a2 2 0 012 2v1a4 4 0 01-4 4" />
+                            </svg>
+                        </span>
+                    </div>
+                </a>
+            @empty
+                <div class="text-center py-6 text-sm text-gray-500">
+                    Tidak ada kontes aktif yang Anda ikuti.
+                </div>
+            @endforelse
+        </div>
     </div>
 
     {{-- Bottom cards --}}

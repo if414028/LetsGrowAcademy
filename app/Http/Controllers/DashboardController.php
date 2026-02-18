@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\UserHierarchy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\Contest;
 
 class DashboardController extends Controller
 {
@@ -104,6 +105,22 @@ class DashboardController extends Controller
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
             ->sum('sales_order_items.qty');
 
+        // 1a) Total Penjualan Individu (units) - SO selesai
+        $totalSalesIndividu = (int) SalesOrder::query()
+            ->whereIn('sales_orders.sales_user_id', $scopeUserIds)
+            ->where('sales_orders.status', 'selesai')
+            ->where('sales_orders.customer_type', 'individu')
+            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+            ->sum('sales_order_items.qty');
+
+        // 1b) Total Penjualan Corporate (units) - SO selesai
+        $totalSalesCorporate = (int) SalesOrder::query()
+            ->whereIn('sales_orders.sales_user_id', $scopeUserIds)
+            ->where('sales_orders.status', 'selesai')
+            ->where('sales_orders.customer_type', 'corporate')
+            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+            ->sum('sales_order_items.qty');
+
         // 2) Total produk reguler aktif
         $totalRegularProducts = (int) Product::query()
             ->where('type', 'regular')
@@ -121,6 +138,78 @@ class DashboardController extends Controller
             ->whereIn('id', $descendantIds)   // hanya bawahan, bukan diri sendiri
             ->where('status', 'Active')
             ->count();
+
+        // 5) Total Health Manager aktif (hanya tampil untuk SM, Admin, Head Admin)
+        $totalActiveHealthManagers = 0;
+
+        if ($user->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin'])) {
+
+            if ($user->hasRole('Sales Manager')) {
+                // HM direct child dari SM
+                $hmIds = $user->childrenUsers()
+                    ->role('Health Manager')
+                    ->pluck('users.id');
+
+                $totalActiveHealthManagers = User::query()
+                    ->whereIn('id', $hmIds)
+                    ->where('status', 'Active')
+                    ->count();
+            } else {
+                // Admin & Head Admin lihat semua HM aktif
+                $totalActiveHealthManagers = User::query()
+                    ->role('Health Manager')
+                    ->where('status', 'Active')
+                    ->count();
+            }
+        }
+
+        // =========================================================
+        // HM PERFORMANCE TABLE (HM + Team Units)
+        // tampil untuk: SM, Admin, Head Admin
+        // =========================================================
+        $healthManagerPerformance = collect();
+
+        if ($user->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin'])) {
+
+            // ambil list HM yang ditampilkan
+            if ($user->hasRole('Sales Manager')) {
+                // HM direct child dari SM
+                $healthManagers = $user->childrenUsers()
+                    ->role('Health Manager')
+                    ->where('users.status', 'Active')
+                    ->select('users.id', 'users.name', 'users.email', 'users.dst_code')
+                    ->get();
+            } else {
+                // Admin / Head Admin: semua HM aktif
+                $healthManagers = User::query()
+                    ->role('Health Manager')
+                    ->where('status', 'Active')
+                    ->select('id', 'name', 'email', 'dst_code')
+                    ->get();
+            }
+
+            // hitung total units (SO selesai) untuk tiap HM + tim multi-level
+            $healthManagerPerformance = $healthManagers->map(function ($hm) {
+
+                $descendantIds = $this->getAllDescendantUserIds((int) $hm->id);
+                $scopeIds = array_values(array_unique(array_merge([(int) $hm->id], $descendantIds)));
+
+                $units = (int) SalesOrder::query()
+                    ->whereIn('sales_orders.sales_user_id', $scopeIds)
+                    ->where('sales_orders.status', 'selesai')
+                    ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+                    ->sum('sales_order_items.qty');
+
+                return (object) [
+                    'id' => (int) $hm->id,
+                    'name' => $hm->name,
+                    'email' => $hm->email,
+                    'dst_code' => $hm->dst_code,
+                    'team_size' => count($descendantIds),
+                    'units' => $units,
+                ];
+            })->sortByDesc('units')->values();
+        }
 
         // =========================================================
         // SALES TREND (Weekly / Monthly)
@@ -181,16 +270,34 @@ class DashboardController extends Controller
             }
         }
 
+        // =========================================================
+        // ACTIVE CONTEST LIST (yang user ini ikut)
+        // =========================================================
+        $activeContests = Contest::query()
+            ->where('status', 'active')
+            ->whereDate('start_date', '<=', now())
+            ->whereDate('end_date', '>=', now())
+            ->whereHas('participants', function ($q) use ($user) {
+                $q->where('users.id', $user->id);
+            })
+            ->orderBy('end_date') // paling dekat berakhir dulu
+            ->get();
+
         return view('dashboard', compact(
             'soDeactivationWarnings',
             'selfWarning',
             'totalUnitsSold',
+            'totalSalesIndividu',
+            'totalSalesCorporate',
             'totalRegularProducts',
             'totalBundlings',
             'totalActiveDownline',
+            'totalActiveHealthManagers',
+            'healthManagerPerformance',
             'trend',
             'salesTrendLabels',
-            'salesTrendUnits'
+            'salesTrendUnits',
+            'activeContests',
         ));
     }
 

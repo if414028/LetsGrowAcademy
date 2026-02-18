@@ -11,7 +11,7 @@
             </div>
 
             <a href="{{ route('sales-orders.index') }}"
-               class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                 ← Back
             </a>
         </div>
@@ -46,10 +46,12 @@
                         <div>
                             <div class="text-xs text-gray-500">Recurring</div>
                             <div class="mt-1">
-                                @if($salesOrder->is_recurring)
-                                    <span class="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">Yes</span>
+                                @if ($salesOrder->is_recurring)
+                                    <span
+                                        class="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">Yes</span>
                                 @else
-                                    <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">No</span>
+                                    <span
+                                        class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">No</span>
                                 @endif
                             </div>
                         </div>
@@ -98,14 +100,33 @@
                             </div>
                         </div>
 
-                        @if(!empty($salesOrder->status_reason))
+                        @if (!empty($salesOrder->status_reason))
                             <div class="md:col-span-2">
                                 <div class="text-xs text-gray-500">Alasan Status</div>
-                                <div class="mt-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900">
+                                <div
+                                    class="mt-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900">
                                     {{ $salesOrder->status_reason }}
                                 </div>
                             </div>
                         @endif
+                        <div>
+                            <div class="text-xs text-gray-500">Jenis Customer</div>
+                            <div class="mt-1 text-gray-900">
+                                @php
+                                    $ct = strtolower((string) ($salesOrder->customer_type ?? ''));
+                                    $ctLabel = match ($ct) {
+                                        'corporate' => 'Corporate',
+                                        'individu' => 'Individu',
+                                        default => '-',
+                                    };
+                                @endphp
+
+                                <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">
+                                    {{ $ctLabel }}
+                                </span>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -114,7 +135,8 @@
                     <div class="flex items-center justify-between">
                         <h2 class="text-sm font-semibold text-gray-900">Items</h2>
                         <div class="text-sm text-gray-500">
-                            Total item: <span class="font-semibold text-gray-700">{{ $salesOrder->items->count() }}</span>
+                            Total item: <span
+                                class="font-semibold text-gray-700">{{ $salesOrder->items->count() }}</span>
                         </div>
                     </div>
 
@@ -142,7 +164,7 @@
                                         $pp = $item->productPrice;
 
                                         $billingType = $pp->billing_type ?? null; // monthly | one_time
-                                        $isMonthly = ($billingType === 'monthly');
+                                        $isMonthly = $billingType === 'monthly';
 
                                         $priceAmount = (int) ($pp?->amount ?? ($item->product?->price ?? 0)); // fallback data lama
                                         $qty = (int) $item->qty;
@@ -161,9 +183,9 @@
                                             $dur = $pp->duration_months ?? null;
 
                                             if ($isMonthly) {
-                                                $suffix = $dur ? " • Monthly ({$dur} bln)" : " • Monthly";
+                                                $suffix = $dur ? " • Monthly ({$dur} bln)" : ' • Monthly';
                                             } else {
-                                                $suffix = " • One Time";
+                                                $suffix = ' • One Time';
                                             }
 
                                             $priceLabel = ($pp->label ?? 'Price') . $suffix;
@@ -175,14 +197,12 @@
                                     <tr>
                                         <td class="px-4 py-3">
                                             <div class="h-10 w-10 overflow-hidden rounded-lg border bg-white">
-                                                @if($img)
-                                                    <img
-                                                        src="{{ \Illuminate\Support\Str::startsWith($img, ['http://','https://']) ? $img : asset('storage/'.$img) }}"
-                                                        alt="Product image"
-                                                        class="h-full w-full object-cover"
-                                                    />
+                                                @if ($img)
+                                                    <img src="{{ \Illuminate\Support\Str::startsWith($img, ['http://', 'https://']) ? $img : asset('storage/' . $img) }}"
+                                                        alt="Product image" class="h-full w-full object-cover" />
                                                 @else
-                                                    <div class="flex h-full w-full items-center justify-center text-xs text-gray-400">
+                                                    <div
+                                                        class="flex h-full w-full items-center justify-center text-xs text-gray-400">
                                                         N/A
                                                     </div>
                                                 @endif
@@ -197,7 +217,7 @@
                                             <div class="font-medium text-gray-900">
                                                 {{ $item->product?->product_name ?? '-' }}
                                             </div>
-                                            @if($item->product?->model)
+                                            @if ($item->product?->model)
                                                 <div class="text-xs text-gray-500">
                                                     {{ $item->product->model }}
                                                 </div>
@@ -209,8 +229,8 @@
                                                 {{ $priceLabel }}
                                             </div>
                                             <div class="text-xs text-gray-500">
-                                                {{ $priceAmount ? 'Rp '.number_format($priceAmount, 0, ',', '.') : '-' }}
-                                                @if($isMonthly)
+                                                {{ $priceAmount ? 'Rp ' . number_format($priceAmount, 0, ',', '.') : '-' }}
+                                                @if ($isMonthly)
                                                     <span class="text-gray-400">/bln</span>
                                                 @endif
                                             </div>
@@ -221,8 +241,8 @@
                                         </td>
 
                                         <td class="px-4 py-3 text-right font-semibold text-gray-900">
-                                            {{ $total ? 'Rp '.number_format($total, 0, ',', '.') : '-' }}
-                                            @if($isMonthly)
+                                            {{ $total ? 'Rp ' . number_format($total, 0, ',', '.') : '-' }}
+                                            @if ($isMonthly)
                                                 <span class="text-gray-400">/bln</span>
                                             @endif
                                         </td>
@@ -238,7 +258,7 @@
                         </table>
                     </div>
 
-                    @if($salesOrder->items->count())
+                    @if ($salesOrder->items->count())
                         @php
                             $grandTotalAll = $oneTimeTotal + $monthlyTotal;
                         @endphp
@@ -254,14 +274,14 @@
                             <div>
                                 One Time Total:
                                 <span class="font-semibold text-gray-900">
-                                    {{ 'Rp '.number_format($oneTimeTotal, 0, ',', '.') }}
+                                    {{ 'Rp ' . number_format($oneTimeTotal, 0, ',', '.') }}
                                 </span>
                             </div>
 
                             <div>
                                 Monthly Total:
                                 <span class="font-semibold text-gray-900">
-                                    {{ 'Rp '.number_format($monthlyTotal, 0, ',', '.') }}
+                                    {{ 'Rp ' . number_format($monthlyTotal, 0, ',', '.') }}
                                 </span>
                                 <span class="text-gray-400">/bln</span>
                             </div>
@@ -269,7 +289,7 @@
                             <div class="pt-1">
                                 Grand Total (All):
                                 <span class="font-semibold text-gray-900">
-                                    {{ 'Rp '.number_format($grandTotalAll, 0, ',', '.') }}
+                                    {{ 'Rp ' . number_format($grandTotalAll, 0, ',', '.') }}
                                 </span>
                             </div>
                         </div>
