@@ -201,6 +201,15 @@ class RolePermissionSeeder extends Seeder
             ]
         );
 
+        // ===== Admin user =====
+        $headAdminUser = User::updateOrCreate(
+            ['email' => 'adm.letsgrowacademy@gmail.com'], 
+            [
+                'name' => 'Lets Grow Academy Admin',
+                'password' => bcrypt('adminletsgrowacademy2026'),
+            ]
+        );
+
         $headAdminUser->syncRoles(['Head Admin']);
 
         // ===== Sales Manager =====
