@@ -26,18 +26,11 @@ class SalesOrderController extends Controller
 
         $q = SalesOrder::query()->with(['customer', 'salesUser']);
 
-        // ✅ Role-based scope
-        if ($user->hasAnyRole(['Sales Manager', 'Health Manager'])) {
-            // ambil semua bawahan (children) dari user ini
-            $childIds = $user->childrenUsers()->pluck('users.id');
-
-            // kalau tidak punya bawahan, hasilnya kosong
-            $q->whereIn('sales_user_id', $childIds);
-        } elseif (!$user->hasRole(['Admin', 'Head Admin'])) {
-            // opsional: kalau selain Admin / Manager tidak boleh lihat sama sekali
-            abort(403);
-            // atau kalau mau tampil kosong aja:
-            // $q->whereRaw('1=0');
+        // ✅ Admin & Head Admin: lihat semua
+        if (!$user->hasAnyRole(['Admin', 'Head Admin'])) {
+            // ✅ selain Admin: lihat order milik diri sendiri + semua downline (multi-level)
+            $visibleSalesUserIds = $this->descendantUserIds($user->id); // include root (self)
+            $q->whereIn('sales_user_id', $visibleSalesUserIds);
         }
 
         // 🔎 search
@@ -63,17 +56,26 @@ class SalesOrderController extends Controller
 
         $salesOrders = $q->latest('key_in_at')->paginate(10)->withQueryString();
         $activeStatus = $request->filled('status') ? $request->status : 'all';
-
         $statuses = $this->statuses;
 
         return view('sales-orders.index', compact('salesOrders', 'statuses', 'activeStatus'));
     }
 
+
     public function show(SalesOrder $salesOrder)
     {
+        $user = request()->user();
+
+        if (!$user->hasAnyRole(['Admin', 'Head Admin'])) {
+            $visibleSalesUserIds = $this->descendantUserIds($user->id);
+
+            abort_unless($visibleSalesUserIds->contains($salesOrder->sales_user_id), 403);
+        }
+
         $salesOrder->load(['customer', 'salesUser', 'items.product', 'items.productPrice']);
         return view('sales-orders.show', compact('salesOrder'));
     }
+
 
     public function create()
     {
