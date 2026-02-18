@@ -98,13 +98,21 @@ class PerformanceController extends Controller
     SUM(CASE WHEN so.ccp_status = 'disetujui' AND so.status = 'menunggu verifikasi' THEN 1 ELSE 0 END) as task_id
 ")->first();
 
-        // scope team: semua downline (kalau mau include diri sendiri, ganti ->push($user->id))
+        // scope team: semua downline
         $scopeUserIds = $childIds->unique()->values();
+
+        $soiAgg = DB::table('sales_order_items')
+            ->selectRaw('sales_order_id, COALESCE(SUM(qty),0) as ns_units')
+            ->groupBy('sales_order_id');
 
         $sheetQ = DB::table('sales_orders as so')
             ->join('users as u', 'u.id', '=', 'so.sales_user_id')
-            ->leftJoin('customers as c', 'c.id', '=', 'so.customer_id')
-            ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->leftJoin('customers as c', function ($j) {
+                $j->on('c.id', '=', 'so.customer_id')->whereNull('c.deleted_at');
+            })
+            ->leftJoinSub($soiAgg, 'soi', function ($j) {
+                $j->on('soi.sales_order_id', '=', 'so.id');
+            })
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
@@ -116,24 +124,14 @@ class PerformanceController extends Controller
             });
         }
 
-        // date range untuk sheet pakai key_in_at (karena format excel “tanggal key in”)
+        // date range (KEY IN only)
         if ($from) $sheetQ->whereDate('so.key_in_at', '>=', $from);
         if ($to)   $sheetQ->whereDate('so.key_in_at', '<=', $to);
 
+        // exclude null key_in_at kalau sedang filter
+        if ($from || $to) $sheetQ->whereNotNull('so.key_in_at');
+
         $teamSheetRows = $sheetQ
-            ->groupBy(
-                'so.id',
-                'u.id',
-                'u.name',
-                'u.full_name',
-                'c.full_name',
-                'so.key_in_at',
-                'so.ccp_status',
-                'so.status',
-                'so.install_date',
-                'so.updated_at',
-                'so.ccp_remarks'
-            )
             ->orderBy('u.name')
             ->orderBy('so.key_in_at')
             ->select([
@@ -146,9 +144,8 @@ class PerformanceController extends Controller
                 'so.status',
                 'so.install_date',
                 'so.ccp_remarks',
-                // fallback “tanggal CCP disetujui” => updated_at ketika status disetujui
                 DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
-                DB::raw("COALESCE(SUM(soi.qty), 0) as ns_units"),
+                DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])
             ->get()
             ->groupBy('hp_name');
