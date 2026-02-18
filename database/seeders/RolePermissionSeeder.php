@@ -202,7 +202,7 @@ class RolePermissionSeeder extends Seeder
         );
 
         // ===== Admin user =====
-        $headAdminUser = User::updateOrCreate(
+        $admin = User::updateOrCreate(
             ['email' => 'adm.letsgrowacademy@gmail.com'], 
             [
                 'name' => 'Lets Grow Academy Admin',
