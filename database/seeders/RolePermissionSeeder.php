@@ -210,7 +210,7 @@ class RolePermissionSeeder extends Seeder
             ]
         );
 
-        $headAdminUser->syncRoles(['Head Admin']);
+        $admin->syncRoles(['Admin']);
 
         // ===== Sales Manager =====
         $headAdminUser = User::updateOrCreate(
