@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Models\ProductPrice;
+use App\Models\UserHierarchy;
 
 class SalesOrderController extends Controller
 {
@@ -177,8 +178,7 @@ class SalesOrderController extends Controller
             }
 
             $hm = User::find((int) $validated['health_manager_id']);
-            $downlineIds = $hm ? $hm->childrenUsers()->pluck('users.id') : collect();
-
+            $downlineIds = $hm ? $this->descendantUserIds($hm->id) : collect();
 
             if (!$downlineIds->contains((int) $validated['sales_user_id'])) {
                 return back()
@@ -522,7 +522,7 @@ class SalesOrderController extends Controller
         if (!$hm) return response()->json([]);
 
         // ✅ gunakan relasi yang sudah terbukti dipakai di index()
-        $downlineIds = $hm->childrenUsers()->pluck('users.id'); // pastikan ini include semua downline
+        $downlineIds = $this->descendantUserIds($hm->id); // pastikan ini include semua downline
         if ($downlineIds->isEmpty()) return response()->json([]);
 
         $users = User::query()
@@ -547,9 +547,8 @@ class SalesOrderController extends Controller
 
 
     /**
-     * Ambil semua descendant user id dari 1 root user (BFS).
-     * Asumsi struktur hierarchy pakai parent_id di table users.
-     * Kalau nama kolom beda, ganti 'parent_id'.
+     * Ambil semua descendant user id dari 1 root user (BFS) via table user_hierarchies.
+     * Mengembalikan collection of ids (include root).
      */
     private function descendantUserIds(int $rootId)
     {
@@ -559,9 +558,9 @@ class SalesOrderController extends Controller
         while ($queue->isNotEmpty()) {
             $batch = $queue->splice(0)->all();
 
-            $children = User::query()
-                ->whereIn('parent_id', $batch)
-                ->pluck('id');
+            $children = UserHierarchy::query()
+                ->whereIn('parent_user_id', $batch)
+                ->pluck('child_user_id');
 
             $children = $children->diff($visited);
 
@@ -571,10 +570,9 @@ class SalesOrderController extends Controller
             $queue = $queue->merge($children);
         }
 
-        // kita return hanya downline (tanpa root) atau termasuk root, bebas:
-        // untuk filter HP, aman kalau root ikut juga, karena role HP tidak match.
         return $visited->values();
     }
+
 
     public function listHealthPlanners(Request $request)
     {
@@ -591,7 +589,7 @@ class SalesOrderController extends Controller
         if (!$hm) return response()->json([]);
 
         // downline HM (yang kamu pakai di search)
-        $downlineIds = $hm->childrenUsers()->pluck('users.id');
+        $downlineIds = $this->descendantUserIds($hm->id);
         if ($downlineIds->isEmpty()) return response()->json([]);
 
         $users = User::query()
