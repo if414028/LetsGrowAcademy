@@ -125,14 +125,13 @@ class SalesOrderController extends Controller
     {
         /** @var \App\Models\User $authUser */
         $authUser = Auth::user();
+        $isPrivileged = $authUser->hasAnyRole(['Admin', 'Head Admin']);
 
         $validated = $request->validate([
             'order_no' => ['required', 'string', 'max:50', 'unique:sales_orders,order_no'],
 
-            // Admin wajib pilih; non-admin nullable (dipaksa jadi auth user)
-            'health_manager_id' => [$authUser->hasRole('Admin') ? 'required' : 'nullable', 'exists:users,id'],
-            'sales_user_id' => [$authUser->hasRole('Admin') ? 'required' : 'nullable', 'exists:users,id'],
-
+            'health_manager_id' => [$isPrivileged ? 'required' : 'nullable', 'exists:users,id'],
+            'sales_user_id'     => [$isPrivileged ? 'required' : 'nullable', 'exists:users,id'],
 
             // customer input
             'customer_id' => ['nullable', 'exists:customers,id'],
@@ -152,6 +151,21 @@ class SalesOrderController extends Controller
             'payment_method' => ['nullable', Rule::in($this->paymentMethods)],
             'status' => ['required', Rule::in($this->statuses)],
             'ccp_status' => ['required', Rule::in($this->ccpStatuses)],
+
+            'ccp_remarks' => [
+                Rule::requiredIf(fn() => $request->input('ccp_status') === 'ditolak'),
+                Rule::prohibitedIf(fn() => $request->input('ccp_status') !== 'ditolak'),
+                'nullable',
+                'string',
+                'max:1000',
+            ],
+            'ccp_approved_at' => [
+                Rule::requiredIf(fn() => $request->input('ccp_status') === 'disetujui'),
+                Rule::prohibitedIf(fn() => $request->input('ccp_status') !== 'disetujui'),
+                'nullable',
+                'date',
+            ],
+
             'customer_type' => ['required', Rule::in($this->customerTypes)],
 
             // items
@@ -168,7 +182,7 @@ class SalesOrderController extends Controller
             ],
         ]);
 
-        if ($authUser->hasRole('Admin')) {
+        if ($authUser->hasAnyRole(['Admin', 'Head Admin'])) {
             $isHealthPlanner = User::role('Health Planner')
                 ->whereKey($validated['sales_user_id'])
                 ->exists();
@@ -213,8 +227,18 @@ class SalesOrderController extends Controller
             $validated['status_reason'] = null;
         }
 
+        // normalize ccp fields
+        if (($validated['ccp_status'] ?? null) !== 'ditolak') {
+            $validated['ccp_remarks'] = null;
+        }
+        if (($validated['ccp_status'] ?? null) !== 'disetujui') {
+            $validated['ccp_approved_at'] = null;
+        }
+
         return DB::transaction(function () use ($validated, $authUser) {
-            $salesUserId = $authUser->hasRole('Admin')
+            $isPrivileged = $authUser->hasAnyRole(['Admin', 'Head Admin']);
+
+            $salesUserId = $isPrivileged
                 ? (int) $validated['sales_user_id']
                 : (int) $authUser->id;
 
@@ -238,7 +262,9 @@ class SalesOrderController extends Controller
                 'payment_method' => $validated['payment_method'] ?? null,
                 'status' => $validated['status'],
                 'ccp_status' => $validated['ccp_status'],
-                'status_reason' => $validated['status_reason'], // ✅ BUG FIX: dulu tidak disimpan
+                'ccp_remarks' => $validated['ccp_remarks'] ?? null,
+                'ccp_approved_at' => $validated['ccp_approved_at'] ?? null,
+                'status_reason' => $validated['status_reason'],
             ]);
 
             // ITEMS: validated sudah aman
@@ -318,13 +344,24 @@ class SalesOrderController extends Controller
             $oldSalesUser = User::find(old('sales_user_id'), ['id', 'name', 'email', 'dst_code']);
         }
 
+        $oldHealthManager = null;
+        if (old('health_manager_id')) {
+            $oldHealthManager = User::find(old('health_manager_id'), ['id', 'name', 'email']);
+        } else {
+            $hmId = $this->nearestHealthManagerId((int) $salesOrder->sales_user_id);
+            if ($hmId) {
+                $oldHealthManager = User::find($hmId, ['id', 'name', 'email']);
+            }
+        }
+
         return view('sales-orders.edit', compact(
             'salesOrder',
             'paymentMethods',
             'statuses',
             'ccpStatuses',
             'products',
-            'oldSalesUser'
+            'oldSalesUser',
+            'oldHealthManager'
         ));
     }
 
@@ -332,11 +369,13 @@ class SalesOrderController extends Controller
     {
         /** @var \App\Models\User $authUser */
         $authUser = Auth::user();
+        $isPrivileged = $authUser->hasAnyRole(['Admin', 'Head Admin']);
 
         $validated = $request->validate([
             'order_no' => ['required', 'string', 'max:50', Rule::unique('sales_orders', 'order_no')->ignore($salesOrder->id)],
 
-            'sales_user_id' => [$authUser->hasRole('Admin') ? 'required' : 'nullable', 'exists:users,id'],
+            'health_manager_id' => [$isPrivileged ? 'required' : 'nullable', 'exists:users,id'],
+            'sales_user_id'     => [$isPrivileged ? 'required' : 'nullable', 'exists:users,id'],
 
             'customer_id' => ['nullable', 'exists:customers,id'],
             'customer_type' => ['required', Rule::in($this->customerTypes)],
@@ -356,6 +395,20 @@ class SalesOrderController extends Controller
             'status' => ['required', Rule::in($this->statuses)],
             'ccp_status' => ['required', Rule::in($this->ccpStatuses)],
 
+            'ccp_remarks' => [
+                Rule::requiredIf(fn() => $request->input('ccp_status') === 'ditolak'),
+                Rule::prohibitedIf(fn() => $request->input('ccp_status') !== 'ditolak'),
+                'nullable',
+                'string',
+                'max:1000',
+            ],
+            'ccp_approved_at' => [
+                Rule::requiredIf(fn() => $request->input('ccp_status') === 'disetujui'),
+                Rule::prohibitedIf(fn() => $request->input('ccp_status') !== 'disetujui'),
+                'nullable',
+                'date',
+            ],
+
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
@@ -368,6 +421,27 @@ class SalesOrderController extends Controller
                 'max:500',
             ],
         ]);
+
+        if ($isPrivileged) {
+            $isHealthPlanner = User::role('Health Planner')
+                ->whereKey($validated['sales_user_id'])
+                ->exists();
+
+            if (!$isHealthPlanner) {
+                return back()
+                    ->withErrors(['sales_user_id' => 'Health Planner wajib dipilih.'])
+                    ->withInput();
+            }
+
+            $hm = User::find((int) $validated['health_manager_id']);
+            $downlineIds = $hm ? $this->descendantUserIds($hm->id) : collect();
+
+            if (!$downlineIds->contains((int) $validated['sales_user_id'])) {
+                return back()
+                    ->withErrors(['sales_user_id' => 'Health Planner yang dipilih bukan bawahan dari Health Manager tersebut.'])
+                    ->withInput();
+            }
+        }
 
         foreach ($request->input('items', []) as $i => $row) {
             $pid = $row['product_id'] ?? null;
@@ -391,8 +465,16 @@ class SalesOrderController extends Controller
             $validated['status_reason'] = null;
         }
 
+        if (($validated['ccp_status'] ?? null) !== 'ditolak') {
+            $validated['ccp_remarks'] = null;
+        }
+        if (($validated['ccp_status'] ?? null) !== 'disetujui') {
+            $validated['ccp_approved_at'] = null;
+        }
+
         return DB::transaction(function () use ($validated, $authUser, $salesOrder) {
-            $salesUserId = $authUser->hasRole('Admin')
+            $isPrivileged = $authUser->hasAnyRole(['Admin', 'Head Admin']);
+            $salesUserId = $isPrivileged
                 ? (int) $validated['sales_user_id']
                 : (int) $authUser->id;
 
@@ -415,6 +497,8 @@ class SalesOrderController extends Controller
                 'payment_method' => $validated['payment_method'] ?? null,
                 'status' => $validated['status'],
                 'ccp_status' => $validated['ccp_status'],
+                'ccp_remarks' => $validated['ccp_remarks'] ?? null,
+                'ccp_approved_at' => $validated['ccp_approved_at'] ?? null,
                 'status_reason' => $validated['status_reason'],
             ]);
 
@@ -607,5 +691,29 @@ class SalesOrderController extends Controller
             ->values();
 
         return response()->json($users);
+    }
+
+    private function nearestHealthManagerId(int $userId): ?int
+    {
+        $visited = [];
+        $current = $userId;
+
+        while ($current) {
+            if (isset($visited[$current])) break;
+            $visited[$current] = true;
+
+            $parentId = UserHierarchy::query()
+                ->where('child_user_id', $current)
+                ->value('parent_user_id');
+
+            if (!$parentId) return null;
+
+            $isHm = User::role('Health Manager')->whereKey($parentId)->exists();
+            if ($isHm) return (int) $parentId;
+
+            $current = (int) $parentId;
+        }
+
+        return null;
     }
 }

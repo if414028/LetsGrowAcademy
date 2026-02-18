@@ -21,6 +21,8 @@ class SalesOrder extends Model
         'payment_method',
         'status',
         'ccp_status',
+        'ccp_remarks',
+        'ccp_approved_at',
         'status_reason',
     ];
 
@@ -28,6 +30,7 @@ class SalesOrder extends Model
         'key_in_at'     => 'datetime',
         'install_date'  => 'date',
         'is_recurring'  => 'boolean',
+        'ccp_approved_at'  => 'datetime',
     ];
 
     /**

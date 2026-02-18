@@ -44,43 +44,78 @@
                             $authUser = auth()->user();
                         @endphp
 
-                        @if ($authUser->hasRole('Admin'))
-                            <div class="mt-4" x-data="salesUserPickerEdit()" x-init="init()">
-                                <label class="text-xs font-medium text-gray-600">Sales User</label>
+                        @if ($authUser->hasAnyRole(['Admin', 'Head Admin']))
+                            <div class="mt-4" x-data="hmHpPickerEdit()" x-init="init()" data-hmhp-picker>
+                                {{-- hidden to backend --}}
+                                <input type="hidden" name="health_manager_id" :value="hmSelectedId">
+                                <input type="hidden" name="sales_user_id" :value="hpSelectedId">
 
-                                {{-- hidden yang dikirim ke backend --}}
-                                <input type="hidden" name="sales_user_id" :value="selectedId">
-
+                                {{-- HEALTH MANAGER --}}
+                                <label class="text-xs font-medium text-gray-600">Health Manager</label>
                                 <div class="relative mt-1">
-                                    <input type="text" x-model="query" @input.debounce.250ms="search()"
-                                        @focus="open = true" @keydown.escape="open = false"
-                                        placeholder="Ketik nama sales..."
+                                    <input type="text" x-model="hmQuery" @input.debounce.250ms="searchHM()"
+                                        @focus="hmOpen = true" @keydown.escape="hmOpen = false"
+                                        placeholder="Ketik nama HM..."
                                         class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
 
-                                    {{-- dropdown --}}
-                                    <div x-show="open && items.length > 0" x-transition
-                                        class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
-                                        <template x-for="u in items" :key="u.id">
+                                    <div x-show="hmOpen && hmItems.length > 0" x-transition
+                                        class="absolute z-40 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                                        <template x-for="u in hmItems" :key="u.id">
                                             <button type="button" class="w-full text-left px-4 py-3 hover:bg-gray-50"
-                                                @click="choose(u)">
+                                                @click="chooseHM(u)">
                                                 <div class="text-sm font-semibold text-gray-900" x-text="u.label"></div>
                                             </button>
                                         </template>
                                     </div>
                                 </div>
 
-                                <div class="mt-1 text-xs" :class="selectedId ? 'text-green-700' : 'text-gray-400'">
-                                    <span x-show="selectedId">Sales user terpilih.</span>
-                                    <span x-show="!selectedId">Wajib pilih sales dari dropdown.</span>
+                                <div class="mt-1 text-xs" :class="hmSelectedId ? 'text-green-700' : 'text-gray-400'">
+                                    <span x-show="hmSelectedId">Health Manager terpilih.</span>
+                                    <span x-show="!hmSelectedId">Wajib pilih HM dari dropdown.</span>
+                                </div>
+
+                                {{-- HEALTH PLANNER --}}
+                                <div class="mt-4">
+                                    <label class="text-xs font-medium text-gray-600">Health Planner (Sales)</label>
+
+                                    <div class="relative mt-1">
+                                        <input type="text" x-model="hpQuery" @focus="hpOpen = true; ensureHpLoaded()"
+                                            @input="filterHp()" @keydown.escape="hpOpen = false"
+                                            :disabled="!hmSelectedId"
+                                            :class="!hmSelectedId ? 'bg-gray-50 cursor-not-allowed' : ''"
+                                            placeholder="Pilih / ketik Health Planner..."
+                                            class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
+
+                                        <div x-show="hpOpen && filteredHp.length > 0" x-transition
+                                            class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                                            <template x-for="u in filteredHp" :key="u.id">
+                                                <button type="button"
+                                                    class="w-full text-left px-4 py-3 hover:bg-gray-50"
+                                                    @click="chooseHP(u)">
+                                                    <div class="text-sm font-semibold text-gray-900" x-text="u.label">
+                                                    </div>
+                                                    <div class="text-xs text-gray-500"
+                                                        x-text="u.dst_code ? ('DST: ' + u.dst_code) : ''"></div>
+                                                </button>
+                                            </template>
+                                        </div>
+
+                                    </div>
+
+                                    <div class="mt-1 text-xs"
+                                        :class="hpSelectedId ? 'text-green-700' : 'text-gray-400'">
+                                        <span x-show="hpSelectedId">Health Planner terpilih.</span>
+                                        <span x-show="!hpSelectedId">Wajib pilih HP dari dropdown.</span>
+                                    </div>
                                 </div>
                             </div>
                         @else
-                            {{-- Non-admin: sales user dipaksa auth user --}}
                             <input type="hidden" name="sales_user_id" value="{{ $authUser->id }}">
                             <div class="mt-4 text-xs text-gray-500">
                                 Sales User: <span class="font-semibold text-gray-900">{{ $authUser->name }}</span>
                             </div>
                         @endif
+
 
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
@@ -335,7 +370,7 @@
                         <div class="mt-4 space-y-4">
                             <div>
                                 <label class="text-xs font-medium text-gray-600">CCP Status</label>
-                                <select name="ccp_status"
+                                <select name="ccp_status" x-model="ccpStatus"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     @foreach ($ccpStatuses as $s)
                                         <option value="{{ $s }}" @selected(old('ccp_status', $salesOrder->ccp_status) === $s)>
@@ -343,6 +378,30 @@
                                         </option>
                                     @endforeach
                                 </select>
+                            </div>
+
+                            {{-- CCP Remarks (when ditolak) --}}
+                            <div class="mt-4" x-show="showCcpRemarks" x-transition>
+                                <label class="text-xs font-medium text-gray-600">Remarks (CCP Ditolak)</label>
+                                <textarea name="ccp_remarks" rows="3" x-model="ccpRemarks" :required="requiredCcpRemarks"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                    placeholder="Masukkan alasan kenapa ditolak..."></textarea>
+
+                                <div class="mt-1 text-xs text-gray-400" x-show="requiredCcpRemarks">
+                                    Wajib diisi jika CCP status: ditolak.
+                                </div>
+                            </div>
+
+                            {{-- CCP Approved At (when disetujui) --}}
+                            <div class="mt-4" x-show="showCcpApprovedAt" x-transition>
+                                <label class="text-xs font-medium text-gray-600">Tanggal CCP Disetujui</label>
+                                <input type="datetime-local" name="ccp_approved_at" x-model="ccpApprovedAt"
+                                    :required="requiredCcpApprovedAt"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
+
+                                <div class="mt-1 text-xs text-gray-400" x-show="requiredCcpApprovedAt">
+                                    Wajib diisi jika CCP status: disetujui.
+                                </div>
                             </div>
 
                             <div>
@@ -393,6 +452,133 @@
     </div>
 
     <script>
+        function hmHpPickerEdit() {
+            return {
+                // HM
+                hmQuery: @json(old('health_manager_label')
+                        ? old('health_manager_label')
+                        : ($oldHealthManager?->name
+                            ? $oldHealthManager->name . ($oldHealthManager->email ? " ({$oldHealthManager->email})" : '')
+                            : '')),
+                hmOpen: false,
+                hmItems: [],
+                hmSelectedId: @json(old('health_manager_id', $oldHealthManager?->id)),
+                hmLastFetch: '',
+
+                // HP (list + filter seperti create)
+                hpQuery: @json(old('sales_user_label')
+                        ? old('sales_user_label')
+                        : ($oldSalesUser?->name
+                            ? $oldSalesUser->name . ($oldSalesUser->email ? " ({$oldSalesUser->email})" : '')
+                            : '')),
+                hpSelectedId: @json(old('sales_user_id', $oldSalesUser?->id)),
+                hpAll: [],
+                filteredHp: [],
+                hpOpen: false,
+                hpLoadedForHmId: @json(old('health_manager_id', $oldHealthManager?->id) ?? null),
+
+                init() {
+                    // kalau HM sudah ada saat edit, auto load list HP supaya bisa langsung dropdown
+                    if (this.hmSelectedId) {
+                        this.ensureHpLoaded().then(() => this.filterHp());
+                    }
+
+                    document.addEventListener('click', (e) => {
+                        if (e.target.closest('[data-hmhp-picker]')) return;
+                        this.hmOpen = false;
+                        this.hpOpen = false;
+                    });
+                },
+
+                async searchHM() {
+                    // ⚠️ jangan null-in hmSelectedId di sini (biar HP gak jadi disabled mendadak)
+                    // reset HP hanya kalau user memang mengganti HM via chooseHM()
+                    const q = (this.hmQuery || '').trim();
+                    if (q.length < 2) {
+                        this.hmItems = [];
+                        return;
+                    }
+                    if (this.hmLastFetch === q) return;
+                    this.hmLastFetch = q;
+
+                    const res = await fetch(
+                        `{{ route('sales-orders.health-managers.search') }}?q=${encodeURIComponent(q)}`, {
+                            headers: {
+                                'Accept': 'application/json'
+                            }
+                        });
+                    if (!res.ok) return;
+
+                    const data = await res.json();
+                    this.hmItems = Array.isArray(data) ? data : [];
+                    this.hmOpen = true;
+                },
+
+                async chooseHM(u) {
+                    this.hmSelectedId = u.id;
+                    this.hmQuery = u.label;
+                    this.hmOpen = false;
+                    this.hmItems = [];
+
+                    // reset HP karena HM beneran berubah
+                    this.resetHp();
+
+                    await this.ensureHpLoaded();
+                    this.filterHp();
+                },
+
+                resetHp() {
+                    this.hpSelectedId = null;
+                    this.hpQuery = '';
+                    this.hpAll = [];
+                    this.filteredHp = [];
+                    this.hpOpen = false;
+                    this.hpLoadedForHmId = null;
+                },
+
+                async ensureHpLoaded() {
+                    if (!this.hmSelectedId) return;
+
+                    if (String(this.hpLoadedForHmId) === String(this.hmSelectedId) && this.hpAll.length) return;
+
+                    const res = await fetch(
+                        `{{ route('sales-orders.health-planners.list') }}?health_manager_id=${encodeURIComponent(this.hmSelectedId)}`, {
+                            headers: {
+                                'Accept': 'application/json'
+                            }
+                        }
+                    );
+
+                    if (!res.ok) {
+                        this.hpAll = [];
+                        this.filteredHp = [];
+                        this.hpLoadedForHmId = this.hmSelectedId;
+                        return;
+                    }
+
+                    const data = await res.json();
+                    this.hpAll = Array.isArray(data) ? data : [];
+                    this.filteredHp = this.hpAll;
+                    this.hpLoadedForHmId = this.hmSelectedId;
+                },
+
+                filterHp() {
+                    const q = (this.hpQuery || '').trim().toLowerCase();
+                    if (!q) {
+                        this.filteredHp = this.hpAll;
+                        return;
+                    }
+                    this.filteredHp = this.hpAll.filter(u => (u.label || '').toLowerCase().includes(q));
+                },
+
+                chooseHP(u) {
+                    this.hpSelectedId = u.id;
+                    this.hpQuery = u.label;
+                    this.hpOpen = false;
+                },
+            }
+        }
+
         function customerPickerEdit() {
             return {
                 query: @json(old('customer_name', $salesOrder->customer?->full_name ?? '')),
@@ -613,16 +799,29 @@
 
         function statusInstallFormEdit() {
             return {
+                // existing
                 status: @json(old('status', $salesOrder->status)),
                 installDate: @json(old(
                         'install_date',
                         $salesOrder->install_date ? \Carbon\Carbon::parse($salesOrder->install_date)->format('Y-m-d') : '')),
                 reason: @json(old('status_reason', $salesOrder->status_reason ?? '')),
 
+                // ✅ new CCP state
+                ccpStatus: @json(old('ccp_status', $salesOrder->ccp_status ?? 'menunggu pengecekan')),
+                ccpRemarks: @json(old('ccp_remarks', $salesOrder->ccp_remarks ?? '')),
+                ccpApprovedAt: @json(old(
+                        'ccp_approved_at',
+                        $salesOrder->ccp_approved_at ? \Carbon\Carbon::parse($salesOrder->ccp_approved_at)->format('Y-m-d\TH:i') : '')),
+
                 normalizeStatus(v) {
                     return (v || '').toString().trim().toLowerCase();
                 },
 
+                normalizeCcp(v) {
+                    return (v || '').toString().trim().toLowerCase();
+                },
+
+                // existing computed
                 get showInstallDate() {
                     return this.normalizeStatus(this.status) !== 'menunggu verifikasi';
                 },
@@ -641,8 +840,30 @@
                     return this.showReason;
                 },
 
+                // ✅ new computed for CCP
+                get showCcpRemarks() {
+                    return this.normalizeCcp(this.ccpStatus) === 'ditolak';
+                },
+
+                get requiredCcpRemarks() {
+                    return this.showCcpRemarks;
+                },
+
+                get showCcpApprovedAt() {
+                    return this.normalizeCcp(this.ccpStatus) === 'disetujui';
+                },
+
+                get requiredCcpApprovedAt() {
+                    return this.showCcpApprovedAt;
+                },
+
                 init() {
                     if (!this.showInstallDate) this.installDate = '';
+                    if (!this.showReason) this.reason = '';
+
+                    // ✅ normalize CCP fields on load
+                    if (!this.showCcpRemarks) this.ccpRemarks = '';
+                    if (!this.showCcpApprovedAt) this.ccpApprovedAt = '';
                 },
 
                 bindWatchers() {
@@ -651,6 +872,14 @@
 
                         if (st === 'menunggu verifikasi') this.installDate = '';
                         if (!['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st)) this.reason = '';
+                    });
+
+                    // ✅ watcher CCP
+                    this.$watch('ccpStatus', (val) => {
+                        const c = this.normalizeCcp(val);
+
+                        if (c !== 'ditolak') this.ccpRemarks = '';
+                        if (c !== 'disetujui') this.ccpApprovedAt = '';
                     });
                 }
             }
