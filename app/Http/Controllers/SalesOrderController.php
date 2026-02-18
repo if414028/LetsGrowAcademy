@@ -259,7 +259,11 @@ class SalesOrderController extends Controller
 
     public function searchSalesUsers(Request $request)
     {
-        abort_unless(Auth::check() && Auth::user()->hasRole('Admin'), 403);
+        abort_unless(
+            $request->user() &&
+                $request->user()->hasAnyRole(['Admin', 'Head Admin']),
+            403
+        );
 
         $q = trim((string) $request->get('q', ''));
         if (mb_strlen($q) < 2) return response()->json([]);
@@ -473,7 +477,11 @@ class SalesOrderController extends Controller
 
     public function searchHealthManagers(Request $request)
     {
-        abort_unless(Auth::check() && Auth::user()->hasRole('Admin'), 403);
+        abort_unless(
+            $request->user() &&
+                $request->user()->hasAnyRole(['Admin', 'Head Admin']),
+            403
+        );
 
         $q = trim((string) $request->get('q', ''));
         if (mb_strlen($q) < 2) return response()->json([]);
@@ -498,7 +506,11 @@ class SalesOrderController extends Controller
 
     public function searchHealthPlanners(Request $request)
     {
-        abort_unless(Auth::check() && Auth::user()->hasRole('Admin'), 403);
+        abort_unless(
+            $request->user() &&
+                $request->user()->hasAnyRole(['Admin', 'Head Admin']),
+            403
+        );
 
         $managerId = (int) $request->get('health_manager_id');
         if (!$managerId) return response()->json([]);
@@ -566,7 +578,11 @@ class SalesOrderController extends Controller
 
     public function listHealthPlanners(Request $request)
     {
-        abort_unless(Auth::check() && Auth::user()->hasRole('Admin'), 403);
+        abort_unless(
+            $request->user() &&
+                $request->user()->hasAnyRole(['Admin', 'Head Admin']),
+            403
+        );
 
         $managerId = (int) $request->get('health_manager_id');
         if (!$managerId) return response()->json([]);
