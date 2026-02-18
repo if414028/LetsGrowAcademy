@@ -15,7 +15,11 @@ use App\Models\UserHierarchy;
 
 class SalesOrderController extends Controller
 {
-    private array $paymentMethods = ['partial', 'outright'];
+    private array $paymentMethods = [
+        'partial'  => 'CC',
+        'outright' => 'POA',
+    ];
+
     private array $statuses = ['menunggu verifikasi', 'dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'];
     private array $ccpStatuses = ['menunggu pengecekan', 'dibatalkan', 'ditolak', 'disetujui'];
     private array $customerTypes = ['individu', 'corporate'];
@@ -148,7 +152,7 @@ class SalesOrderController extends Controller
                 'date',
             ],
             'is_recurring' => ['nullable', 'boolean'],
-            'payment_method' => ['nullable', Rule::in($this->paymentMethods)],
+            'payment_method' => ['nullable', Rule::in(array_keys($this->paymentMethods))],
             'status' => ['required', Rule::in($this->statuses)],
             'ccp_status' => ['required', Rule::in($this->ccpStatuses)],
 
@@ -391,7 +395,7 @@ class SalesOrderController extends Controller
                 'date',
             ],
             'is_recurring' => ['nullable', 'boolean'],
-            'payment_method' => ['nullable', Rule::in($this->paymentMethods)],
+            'payment_method' => ['nullable', Rule::in(array_keys($this->paymentMethods))],
             'status' => ['required', Rule::in($this->statuses)],
             'ccp_status' => ['required', Rule::in($this->ccpStatuses)],
 

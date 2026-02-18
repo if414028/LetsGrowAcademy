@@ -139,12 +139,14 @@
                                 <select name="payment_method"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     <option value="">-</option>
-                                    @foreach ($paymentMethods as $m)
-                                        <option value="{{ $m }}" @selected(old('payment_method', $salesOrder->payment_method) === $m)>
-                                            {{ strtoupper($m) }}
+
+                                    @foreach ($paymentMethods as $value => $label)
+                                        <option value="{{ $value }}" @selected(old('payment_method', $salesOrder->payment_method ?? null) === $value)>
+                                            {{ $label }}
                                         </option>
                                     @endforeach
                                 </select>
+
                             </div>
 
                             <div class="flex items-center gap-2 pt-2">

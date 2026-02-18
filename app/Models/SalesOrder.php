@@ -61,4 +61,15 @@ class SalesOrder extends Model
     {
         return $this->hasMany(\App\Models\SalesOrderItem::class);
     }
+
+    // app/Models/SalesOrder.php
+
+    public function getPaymentMethodLabelAttribute(): string
+    {
+        return match ($this->payment_method) {
+            'partial'  => 'CC',
+            'outright' => 'POA',
+            default    => (string) $this->payment_method,
+        };
+    }
 }

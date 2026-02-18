@@ -187,7 +187,7 @@
                     </div>
                 </div>
 
-                <div class="mt-6 border-t pt-6">
+                {{-- <div class="mt-6 border-t pt-6">
                     <h2 class="text-lg font-semibold text-gray-900">Hierarchy</h2>
                     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
@@ -203,7 +203,7 @@
                             </p>
                         </div>
                     </div>
-                </div>
+                </div> --}}
             </div>
         </div>
     </div>

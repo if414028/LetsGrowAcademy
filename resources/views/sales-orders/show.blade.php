@@ -59,7 +59,7 @@
                         <div>
                             <div class="text-xs text-gray-500">Payment Method</div>
                             <div class="mt-1 text-gray-900">
-                                {{ $salesOrder->payment_method ? strtoupper($salesOrder->payment_method) : '-' }}
+                                {{ $salesOrder->payment_method_label ?? '-' }}
                             </div>
                         </div>
 

@@ -25,7 +25,7 @@ class PerformanceController extends Controller
             ->when($q !== '', function ($qq) use ($q) {
                 $qq->where(function ($w) use ($q) {
                     $w->where('users.name', 'like', "%{$q}%")
-                    ->orWhere('users.full_name', 'like', "%{$q}%");
+                        ->orWhere('users.full_name', 'like', "%{$q}%");
                 });
             })
             ->leftJoin('sales_orders', function ($join) use ($from, $to) {
@@ -77,6 +77,82 @@ class PerformanceController extends Controller
             ->selectRaw('COALESCE(SUM(sales_order_items.qty), 0) as units')
             ->value('units');
 
+        // scope user ids: saya + semua downline
+        $scopeUserIds = $childIds->push($user->id)->unique()->values();
+
+        // ✅ Summary berdasarkan sales_orders
+        $summaryQ = DB::table('sales_orders as so')
+            ->whereNull('so.deleted_at')
+            ->whereIn('so.sales_user_id', $scopeUserIds);
+
+        // (Opsional tapi recommended) filter range pakai key_in_at biar cocok konsep "Total Key-in"
+        if ($from) $summaryQ->whereDate('so.key_in_at', '>=', $from);
+        if ($to)   $summaryQ->whereDate('so.key_in_at', '<=', $to);
+
+        $summary = $summaryQ->selectRaw("
+    COUNT(*) as total_key_in,
+    SUM(CASE WHEN so.status = 'selesai' THEN 1 ELSE 0 END) as total_installed_ok,
+    SUM(CASE WHEN so.status = 'dijadwalkan' THEN 1 ELSE 0 END) as total_dijadwalkan,
+    SUM(CASE WHEN so.status = 'menunggu verifikasi' THEN 1 ELSE 0 END) as total_menunggu_jadwal,
+    SUM(CASE WHEN so.ccp_status = 'disetujui' THEN 1 ELSE 0 END) as total_ns,
+    SUM(CASE WHEN so.ccp_status = 'disetujui' AND so.status = 'menunggu verifikasi' THEN 1 ELSE 0 END) as task_id
+")->first();
+
+        // scope team: semua downline (kalau mau include diri sendiri, ganti ->push($user->id))
+        $scopeUserIds = $childIds->unique()->values();
+
+        $sheetQ = DB::table('sales_orders as so')
+            ->join('users as u', 'u.id', '=', 'so.sales_user_id')
+            ->leftJoin('customers as c', 'c.id', '=', 'so.customer_id')
+            ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->whereNull('so.deleted_at')
+            ->whereIn('so.sales_user_id', $scopeUserIds);
+
+        // filter member
+        if ($q !== '') {
+            $sheetQ->where(function ($w) use ($q) {
+                $w->where('u.name', 'like', "%{$q}%")
+                    ->orWhere('u.full_name', 'like', "%{$q}%");
+            });
+        }
+
+        // date range untuk sheet pakai key_in_at (karena format excel “tanggal key in”)
+        if ($from) $sheetQ->whereDate('so.key_in_at', '>=', $from);
+        if ($to)   $sheetQ->whereDate('so.key_in_at', '<=', $to);
+
+        $teamSheetRows = $sheetQ
+            ->groupBy(
+                'so.id',
+                'u.id',
+                'u.name',
+                'u.full_name',
+                'c.full_name',
+                'so.key_in_at',
+                'so.ccp_status',
+                'so.status',
+                'so.install_date',
+                'so.updated_at',
+                'so.ccp_remarks'
+            )
+            ->orderBy('u.name')
+            ->orderBy('so.key_in_at')
+            ->select([
+                'so.id',
+                'so.sales_user_id',
+                DB::raw("COALESCE(NULLIF(u.full_name,''), u.name) as hp_name"),
+                DB::raw("COALESCE(c.full_name, '-') as customer_name"),
+                'so.key_in_at',
+                'so.ccp_status',
+                'so.status',
+                'so.install_date',
+                'so.ccp_remarks',
+                // fallback “tanggal CCP disetujui” => updated_at ketika status disetujui
+                DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
+                DB::raw("COALESCE(SUM(soi.qty), 0) as ns_units"),
+            ])
+            ->get()
+            ->groupBy('hp_name');
+
         return view('performances.index', [
             'teamPerformance' => $teamPerformance,
             'teamMemberCount' => $childIds->count(),
@@ -84,6 +160,8 @@ class PerformanceController extends Controller
             'q'               => $q,
             'from'            => $from,
             'to'              => $to,
+            'summary'         => $summary,
+            'teamSheetRows'   => $teamSheetRows,
         ]);
     }
 

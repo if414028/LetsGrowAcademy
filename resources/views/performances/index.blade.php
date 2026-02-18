@@ -25,17 +25,95 @@
                 </div>
 
                 <div class="text-right">
-                    <div class="text-sm text-white/80">Total Net Sales</div>
+                    <div class="text-sm text-white/80">Total Net Sales Saya</div>
                     <div class="text-3xl font-bold leading-tight">{{ $myTotalUnits }}</div>
                 </div>
             </div>
         </div>
 
+        {{-- Summary Cards --}}
+        <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
+                <div class="text-xs font-semibold text-green-700 uppercase tracking-wider">
+                    Total sudah install (OK)
+                </div>
+                <div class="mt-2 text-3xl font-bold text-green-900">
+                    {{ (int) ($summary->total_installed_ok ?? 0) }}
+                </div>
+                <div class="mt-1 text-sm text-green-600">
+                    Status: selesai
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 shadow-sm">
+                <div class="text-xs font-semibold text-yellow-700 uppercase tracking-wider">
+                    Dijadwalkan
+                </div>
+                <div class="mt-2 text-3xl font-bold text-yellow-900">
+                    {{ (int) ($summary->total_dijadwalkan ?? 0) }}
+                </div>
+                <div class="mt-1 text-sm text-yellow-600">
+                    Status: dijadwalkan
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-300 bg-gray-50 p-5 shadow-sm">
+                <div class="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Menunggu jadwal
+                </div>
+                <div class="mt-2 text-3xl font-bold text-gray-800">
+                    {{ (int) ($summary->total_menunggu_jadwal ?? 0) }}
+                </div>
+                <div class="mt-1 text-sm text-gray-500">
+                    Status: menunggu verifikasi
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    Total NS
+                </div>
+                <div class="mt-2 text-3xl font-bold text-gray-900">
+                    {{ (int) ($summary->total_ns ?? 0) }}
+                </div>
+                <div class="mt-1 text-sm text-gray-500">
+                    CCP status: disetujui
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+                <div class="text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                    Total key in
+                </div>
+                <div class="mt-2 text-3xl font-bold text-blue-900">
+                    {{ (int) ($summary->total_key_in ?? 0) }}
+                </div>
+                <div class="mt-1 text-sm text-blue-600">
+                    Total keseluruhan SO
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
+                <div class="text-xs font-semibold text-purple-700 uppercase tracking-wider">
+                    Task ID
+                </div>
+                <div class="mt-2 text-3xl font-bold text-purple-900">
+                    {{ (int) ($summary->task_id ?? 0) }}
+                </div>
+                <div class="mt-1 text-sm text-purple-600">
+                    CCP disetujui + menunggu verifikasi
+                </div>
+            </div>
+        </div>
+
+
         {{-- Table --}}
+        {{-- Table (Excel-like Sheet) --}}
         <div class="mt-6 rounded-2xl border bg-white shadow-sm">
             <div class="flex items-center justify-between gap-4 p-5 flex-wrap">
-                <h2 class="text-lg font-semibold text-gray-900">Team Performance</h2>
+                <h2 class="text-lg font-semibold text-gray-900">Team Sheet</h2>
 
+                {{-- form filter kamu tetap --}}
                 <form method="GET" class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end sm:gap-3">
                     {{-- Date From --}}
                     <div class="w-full sm:w-auto">
@@ -76,22 +154,70 @@
             <div class="overflow-x-auto">
                 <table class="min-w-full text-left">
                     <thead
-                        class="border-t border-b bg-gray-50 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                        class="border-t border-b bg-blue-50 text-xs font-semibold uppercase tracking-wider text-blue-900">
                         <tr>
-                            <th class="px-6 py-3">Health Manager/Planner</th>
-                            <th class="px-6 py-3">Units</th>
-                            <th class="px-6 py-3">Last Activity</th>
+                            <th class="px-4 py-3 w-[240px]">Nama HP</th>
+                            <th class="px-4 py-3 w-[320px]">Nama Customer</th>
+                            <th class="px-4 py-3">Tanggal Key-in</th>
+                            <th class="px-4 py-3">CCP Disetujui</th>
+                            <th class="px-4 py-3">Key-in</th>
+                            <th class="px-4 py-3">Install/NS</th>
+                            <th class="px-4 py-3 w-[280px]">Remarks</th>
                         </tr>
                     </thead>
 
                     <tbody class="divide-y">
-                        @foreach ($teamPerformance as $row)
-                            <tr class="hover:bg-gray-50 cursor-pointer" @click="openSheet({{ $row['id'] }})">
-                                <td class="px-6 py-4 text-sm font-medium text-gray-900">{{ $row['name'] }}</td>
-                                <td class="px-6 py-4 text-sm text-gray-700">{{ $row['units'] }}</td>
-                                <td class="px-6 py-4 text-sm text-gray-700">{{ $row['last_activity'] }}</td>
+                        @php
+                            $fmt = fn($d) => $d ? \Carbon\Carbon::parse($d)->format('d-M') : '-';
+                        @endphp
+
+                        @forelse(($teamSheetRows ?? collect()) as $hpName => $rows)
+                            @php $rowspan = $rows->count(); @endphp
+
+                            @foreach ($rows as $i => $r)
+                                <tr class="hover:bg-gray-50">
+                                    {{-- Nama HP (rowspan) --}}
+                                    @if ($i === 0)
+                                        <td class="px-4 py-3 text-sm font-semibold text-gray-900 align-top"
+                                            rowspan="{{ $rowspan }}">
+                                            {{ $hpName }}
+                                        </td>
+                                    @endif
+
+                                    <td class="px-4 py-3 text-sm text-gray-900">{{ $r->customer_name }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-700">{{ $fmt($r->key_in_at) }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-700">
+                                        {{ $r->ccp_approved_at ? $fmt($r->ccp_approved_at) : '-' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm font-semibold text-gray-900">
+                                        {{ (int) $r->ns_units }}NS
+                                    </td>
+
+                                    {{-- Install/NS --}}
+                                    <td class="px-4 py-3 text-sm">
+                                        @if (($r->status ?? '') === 'selesai')
+                                            <span
+                                                class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
+                                                OK
+                                            </span>
+                                        @else
+                                            <span class="text-gray-500">-</span>
+                                        @endif
+                                    </td>
+
+                                    {{-- Remarks (simple derived; kamu bisa ganti sesuai field yang ada) --}}
+                                    <td class="px-4 py-3 text-sm text-gray-700">
+                                        {{ $r->ccp_remarks ?? '-' }}
+                                    </td>
+                                </tr>
+                            @endforeach
+                        @empty
+                            <tr>
+                                <td colspan="7" class="px-6 py-10 text-center text-sm text-gray-500">
+                                    Tidak ada data.
+                                </td>
                             </tr>
-                        @endforeach
+                        @endforelse
                     </tbody>
                 </table>
             </div>
@@ -189,49 +315,44 @@
 @push('scripts')
     <script>
         document.addEventListener('alpine:init', () => {
-        Alpine.data('teamSheet', () => ({
-                    sheetOpen: false,
-                    loading: false,
-                    detail: {},
+            Alpine.data('teamSheet', () => ({
+                sheetOpen: false,
+                loading: false,
+                detail: {},
 
-                    async openSheet(userId) {
-                        this.sheetOpen = true;
-                        this.loading = true;
-                        this.detail = {};
+                async openSheet(userId) {
+                    this.sheetOpen = true;
+                    this.loading = true;
+                    this.detail = {};
 
-                        try {
-                            const params = new URLSearchParams(window.location.search);
-                            const res = await fetch(
-                                `{{ url('/performance/team') }}/${userId}?${params.toString()}`, {
-                                    headers: {
-                                        'Accept': 'application/json'
-                                    }
-                                });
-                            headers: {
-                                'Accept': 'application/json'
-                            }
-                        });
+                    try {
+                        const params = new URLSearchParams(window.location.search);
+                        const res = await fetch(
+                            `{{ url('/performance/team') }}/${userId}?${params.toString()}`, {
+                                headers: {
+                                    'Accept': 'application/json'
+                                }
+                            });
 
-                    if (!res.ok) throw new Error('Failed to load');
-                    this.detail = await res.json();
-                }
-                catch (e) {
-                    this.detail = {
-                        name: 'Error',
-                        total_units: 0,
-                        orders: []
-                    };
-                } finally {
+                        if (!res.ok) throw new Error('Failed to load');
+                        this.detail = await res.json();
+                    } catch (e) {
+                        this.detail = {
+                            name: 'Error',
+                            total_units: 0,
+                            orders: []
+                        };
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                closeSheet() {
+                    this.sheetOpen = false;
                     this.loading = false;
-                }
-            },
-
-            closeSheet() {
-                this.sheetOpen = false;
-                this.loading = false;
-                this.detail = {};
-            },
-        }))
-        })
+                    this.detail = {};
+                },
+            }));
+        });
     </script>
 @endpush
