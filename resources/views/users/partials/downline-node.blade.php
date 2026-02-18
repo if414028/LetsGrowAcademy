@@ -2,6 +2,41 @@
     $hasChildren = !empty($node['children'] ?? []);
     $initial = strtoupper(mb_substr($node['name'] ?? 'U', 0, 1));
     $photoUrl = !empty($node['photo']) ? asset('storage/' . $node['photo']) : null;
+
+    $role = $node['role'] ?? null;
+
+    $roleConfig = match ($role) {
+        'Admin', 'Head Admin' => [
+            'bg' => 'bg-blue-50',
+            'text' => 'text-blue-700',
+            'border' => 'border-blue-200',
+            'dot' => 'bg-blue-500',
+        ],
+        'Sales Manager' => [
+            'bg' => 'bg-green-50',
+            'text' => 'text-green-700',
+            'border' => 'border-green-200',
+            'dot' => 'bg-green-500',
+        ],
+        'Health Manager' => [
+            'bg' => 'bg-yellow-50',
+            'text' => 'text-yellow-800',
+            'border' => 'border-yellow-200',
+            'dot' => 'bg-yellow-500',
+        ],
+        'Health Planner' => [
+            'bg' => 'bg-red-50',
+            'text' => 'text-red-700',
+            'border' => 'border-red-200',
+            'dot' => 'bg-red-500',
+        ],
+        default => [
+            'bg' => 'bg-gray-50',
+            'text' => 'text-gray-600',
+            'border' => 'border-gray-200',
+            'dot' => 'bg-gray-400',
+        ],
+    };
 @endphp
 
 <div class="flex flex-col items-center">
@@ -24,6 +59,18 @@
             <p class="mt-2 text-sm font-semibold text-gray-900 truncate w-full">
                 {{ $node['name'] ?? '-' }}
             </p>
+
+            @if ($role)
+                <div
+                    class="mt-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-semibold rounded-full border
+        {{ $roleConfig['bg'] }} 
+        {{ $roleConfig['text'] }} 
+        {{ $roleConfig['border'] }}">
+
+                    <span class="h-1.5 w-1.5 rounded-full {{ $roleConfig['dot'] }}"></span>
+                    {{ $role }}
+                </div>
+            @endif
 
             <p class="mt-1 text-[11px] text-gray-500">
                 {{ $node['phone_number'] ?? '-' }}

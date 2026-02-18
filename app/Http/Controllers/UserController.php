@@ -690,6 +690,7 @@ class UserController extends Controller
         // Load user sekali saja
         $users = User::query()
             ->select(['id', 'name', 'phone_number', 'photo'])
+            ->with('roles')
             ->whereIn('id', $userIds)
             ->where('status', 'Active')
             ->get()
@@ -721,6 +722,7 @@ class UserController extends Controller
                 'name' => $u->name ?? '-',
                 'phone_number' => $u->phone_number ?? '-',
                 'photo' => $u->photo,
+                'role' => $u->getRoleNames()->first(),
                 'children' => $children,
             ];
         };
