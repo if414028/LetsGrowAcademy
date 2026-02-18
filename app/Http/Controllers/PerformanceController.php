@@ -12,7 +12,7 @@ class PerformanceController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $childIds = $user->childrenUsers()->pluck('users.id');
+        $childIds = $user->downlineUserIds();
 
         $q = trim((string) $request->get('q', ''));
 

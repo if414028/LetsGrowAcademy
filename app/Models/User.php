@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
+use Illuminate\Support\Collection;
 
 class User extends Authenticatable
 {
@@ -162,5 +163,32 @@ class User extends Authenticatable
     public function contestWinners()
     {
         return $this->hasMany(ContestWinner::class, 'user_id');
+    }
+
+    public function descendantUserIds(): \Illuminate\Support\Collection
+    {
+        // table: user_hierarchies (ancestor_id, descendant_id)
+        return \App\Models\UserHierarchy::where('ancestor_id', $this->id)
+            ->pluck('descendant_id');
+    }
+
+    public function downlineUserIds(): Collection
+    {
+        $seen = collect();
+        $queue = collect([$this->id]);
+
+        while ($queue->isNotEmpty()) {
+            $current = $queue->shift();
+
+            $children = UserHierarchy::where('parent_user_id', $current)
+                ->pluck('child_user_id');
+
+            $new = $children->diff($seen);
+
+            $seen = $seen->merge($new);
+            $queue = $queue->merge($new);
+        }
+
+        return $seen->values();
     }
 }
