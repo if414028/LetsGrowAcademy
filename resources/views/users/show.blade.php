@@ -213,8 +213,8 @@
         <div class="rounded-2xl bg-white shadow-sm border p-6">
             <div class="flex items-center justify-between gap-4">
                 <div>
-                    <h2 class="text-lg font-semibold text-gray-900">Downline Tree</h2>
-                    <p class="mt-1 text-sm text-gray-500">Semua downliner dari user ini.</p>
+                    <h2 class="text-lg font-semibold text-gray-900">Partner Tree</h2>
+                    <p class="mt-1 text-sm text-gray-500">Semua partner dari user ini.</p>
                 </div>
 
                 <div class="text-xs text-gray-500">
@@ -227,7 +227,7 @@
             @endphp
 
             @if (!$hasAnyDownline)
-                <p class="mt-4 text-sm text-gray-500">Belum ada downliner.</p>
+                <p class="mt-4 text-sm text-gray-500">Belum ada partner.</p>
             @else
                 <div class="mt-5 overflow-x-auto">
                     {{-- track: bikin ada “ruang” kiri-kanan agar node kiri tidak kepotong --}}
