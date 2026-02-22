@@ -1,4 +1,7 @@
 <x-dashboard-layout>
+    <script>
+        window.performanceMemberOptions = @json($memberOptions ?? []);
+    </script>
     <div x-data="teamSheet">
         <div class="flex items-center justify-between gap-4">
             <div>
@@ -100,7 +103,7 @@
         {{-- Table --}}
         {{-- Table (Excel-like Sheet) --}}
         <div class="mt-6 rounded-2xl border bg-white shadow-sm">
-            <div class="flex items-center justify-between gap-4 p-5 flex-wrap">
+            <div class="relative flex items-center justify-between gap-4 p-5 flex-wrap">
                 <h2 class="text-lg font-semibold text-gray-900">Team Sheet</h2>
 
                 {{-- form filter kamu tetap --}}
@@ -121,12 +124,32 @@
                     focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
                     </div>
 
-                    {{-- Search Member --}}
-                    <div class="w-full sm:w-auto">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Member</label>
-                        <input name="q" value="{{ $q }}" placeholder="Search member..."
-                            class="w-full sm:w-64 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none
-                    focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                    {{-- Member (searchable dropdown) --}}
+                    <div class="w-full sm:w-auto" x-data="memberSelect(window.performanceMemberOptions, @js($memberId ?? null), @js($memberLabel ?? ''))">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Partner</label>
+
+                        <input type="hidden" name="member_id" :value="selectedId">
+
+                        <div class="relative">
+                            <input type="text" x-model="query" @focus="open = true" @click="open = true"
+                                @input="open = true" @keydown.escape="open = false" placeholder="Pilih partner..."
+                                class="w-full sm:w-64 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none
+                   focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+
+                            <div x-show="open" x-cloak @click.outside="open = false"
+                                class="absolute z-[9999] mt-2 w-full max-h-56 overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                                <template x-for="m in filtered()" :key="m.id">
+                                    <button type="button" class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                                        @click="choose(m)">
+                                        <span x-text="m.label"></span>
+                                    </button>
+                                </template>
+
+                                <div x-show="filtered().length === 0" class="px-3 py-2 text-sm text-gray-500">
+                                    Tidak ada hasil.
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <button type="submit"
@@ -152,6 +175,7 @@
                             <th class="px-4 py-3">CCP Disetujui</th>
                             <th class="px-4 py-3">Key-in</th>
                             <th class="px-4 py-3">Install/NS</th>
+                            <th class="px-4 py-3">Tanggal Instalasi</th>
                             <th class="px-4 py-3 w-[280px]">Remarks</th>
                         </tr>
                     </thead>
@@ -195,15 +219,20 @@
                                         @endif
                                     </td>
 
+                                    {{-- Tanggal Instalasi --}}
+                                    <td class="px-4 py-3 text-sm text-gray-700">
+                                        {{ $fmt($r->install_date) }}
+                                    </td>
+
                                     {{-- Remarks (simple derived; kamu bisa ganti sesuai field yang ada) --}}
                                     <td class="px-4 py-3 text-sm text-gray-700">
-                                        {{ $r->ccp_remarks ?? '-' }}
+                                        {{ $r->remarks ?? '-' }}
                                     </td>
                                 </tr>
                             @endforeach
                         @empty
                             <tr>
-                                <td colspan="7" class="px-6 py-10 text-center text-sm text-gray-500">
+                                <td colspan="8" class="px-6 py-10 text-center text-sm text-gray-500">
                                     Tidak ada data.
                                 </td>
                             </tr>
@@ -302,47 +331,26 @@
         </div>
 </x-dashboard-layout>
 
-@push('scripts')
-    <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('teamSheet', () => ({
-                sheetOpen: false,
-                loading: false,
-                detail: {},
+<script>
+    // ✅ GLOBAL FACTORY (dipakai langsung oleh x-data="memberSelect(...)")
+    window.memberSelect = function(members, initialId, initialLabel) {
+        return {
+            open: false,
+            members: members || [],
+            selectedId: initialId || null,
+            query: initialLabel || '',
 
-                async openSheet(userId) {
-                    this.sheetOpen = true;
-                    this.loading = true;
-                    this.detail = {};
+            filtered() {
+                const q = (this.query || '').toLowerCase().trim();
+                if (!q) return this.members;
+                return this.members.filter(m => (m.label || '').toLowerCase().includes(q));
+            },
 
-                    try {
-                        const params = new URLSearchParams(window.location.search);
-                        const res = await fetch(
-                            `{{ url('/performance/team') }}/${userId}?${params.toString()}`, {
-                                headers: {
-                                    'Accept': 'application/json'
-                                }
-                            });
-
-                        if (!res.ok) throw new Error('Failed to load');
-                        this.detail = await res.json();
-                    } catch (e) {
-                        this.detail = {
-                            name: 'Error',
-                            total_units: 0,
-                            orders: []
-                        };
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-
-                closeSheet() {
-                    this.sheetOpen = false;
-                    this.loading = false;
-                    this.detail = {};
-                },
-            }));
-        });
-    </script>
-@endpush
+            choose(m) {
+                this.selectedId = m.id;
+                this.query = m.label;
+                this.open = false;
+            },
+        };
+    };
+</script>

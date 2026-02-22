@@ -12,9 +12,28 @@ class PerformanceController extends Controller
 {
     public function index(Request $request)
     {
-        $user = $request->user();
-        $childIds = $user->downlineUserIds();
+        $authUser = $request->user();
 
+        // semua downline auth (untuk list dropdown)
+        $authDownlineIds = $authUser->downlineUserIds();
+
+        // ✅ member_id terpilih (optional)
+        $memberId = (int) $request->get('member_id', 0);
+
+        // allowed ids = auth + downline auth
+        $allowedIds = $authDownlineIds->push($authUser->id)->unique()->values();
+
+        // ✅ base user = auth user (default), atau user terpilih (jika valid)
+        $baseUser = $authUser;
+        if ($memberId && $allowedIds->contains($memberId)) {
+            $baseUser = User::query()->whereKey($memberId)->first() ?? $authUser;
+        }
+
+        // ✅ scope = baseUser + seluruh downline baseUser
+        $childIds = $baseUser->downlineUserIds(); // downline dari yang dipilih
+        $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+
+        // keyword (kita tidak pakai lagi untuk filtering di query, karena sudah pakai dropdown)
         $q = trim((string) $request->get('q', ''));
 
         // date range dari request
@@ -26,28 +45,31 @@ class PerformanceController extends Controller
             $from = Carbon::now()->startOfMonth()->subMonth()->toDateString();
             $to   = Carbon::now()->endOfMonth()->addMonth()->toDateString();
         } else {
-            // opsional: kalau user cuma isi salah satu
             if ($from && !$to) $to = Carbon::parse($from)->endOfMonth()->toDateString();
             if (!$from && $to) $from = Carbon::parse($to)->startOfMonth()->toDateString();
         }
 
+        // ✅ dropdown options: auth user + semua downline auth
+        $memberOptions = User::query()
+            ->whereIn('id', $allowedIds)
+            ->orderByRaw("COALESCE(NULLIF(full_name,''), name) asc")
+            ->get(['id', 'name', 'full_name'])
+            ->map(fn($u) => [
+                'id' => $u->id,
+                'label' => trim(($u->full_name ?: $u->name) . ($u->id === $authUser->id ? ' (Saya)' : '')),
+            ])
+            ->values();
+
         // =========================
-        // TEAM PERFORMANCE (units selesai)
+        // TEAM PERFORMANCE (units selesai) -> scope: downline baseUser
         // =========================
         $teamPerformance = User::query()
-            ->whereIn('users.id', $childIds)
-            ->when($q !== '', function ($qq) use ($q) {
-                $qq->where(function ($w) use ($q) {
-                    $w->where('users.name', 'like', "%{$q}%")
-                        ->orWhere('users.full_name', 'like', "%{$q}%");
-                });
-            })
+            ->whereIn('users.id', $childIds) // ranking untuk downline-nya saja
             ->leftJoin('sales_orders', function ($join) use ($from, $to) {
                 $join->on('sales_orders.sales_user_id', '=', 'users.id')
                     ->whereNull('sales_orders.deleted_at')
-                    ->where('sales_orders.status', 'selesai'); // ✅ hanya selesai
+                    ->where('sales_orders.status', 'selesai');
 
-                // ✅ filter install_date range
                 if ($from) $join->whereDate('sales_orders.install_date', '>=', $from);
                 if ($to)   $join->whereDate('sales_orders.install_date', '<=', $to);
             })
@@ -79,48 +101,42 @@ class PerformanceController extends Controller
             });
 
         // =========================
-        // MY TOTAL UNITS (self selesai)
+        // MY TOTAL UNITS -> sekarang mengikuti baseUser (biar konsisten saat pilih member)
         // =========================
         $myTotalUnitsQ = DB::table('sales_orders')
             ->whereNull('sales_orders.deleted_at')
-            ->where('sales_orders.sales_user_id', $user->id)
+            ->where('sales_orders.sales_user_id', $baseUser->id)
             ->where('sales_orders.status', 'selesai')
             ->leftJoin('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id');
 
         if ($from) $myTotalUnitsQ->whereDate('sales_orders.install_date', '>=', $from);
         if ($to)   $myTotalUnitsQ->whereDate('sales_orders.install_date', '<=', $to);
 
-        $myTotalUnits = $myTotalUnitsQ
+        $myTotalUnits = (int) $myTotalUnitsQ
             ->selectRaw('COALESCE(SUM(sales_order_items.qty), 0) as units')
             ->value('units');
 
         // =========================
-        // SUMMARY CARDS (self + downline)
+        // SUMMARY CARDS -> scope: baseUser + downline baseUser
         // =========================
-        $scopeUserIds = $childIds->push($user->id)->unique()->values();
-
         $summaryQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        // ✅ range pakai key_in_at
         if ($from) $summaryQ->whereDate('so.key_in_at', '>=', $from);
         if ($to)   $summaryQ->whereDate('so.key_in_at', '<=', $to);
-
-        // exclude null key_in_at kalau sedang filter/default range
         if ($from || $to) $summaryQ->whereNotNull('so.key_in_at');
 
         $summary = $summaryQ->selectRaw("
-        -- Total Key-In:
         SUM(
             CASE
-                WHEN so.ccp_status = 'menunggu pengecekan'
+                WHEN COALESCE(so.is_recurring, 0) = 0
+                 AND so.ccp_status = 'menunggu pengecekan'
                  AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
                 THEN 1 ELSE 0
             END
         ) as total_key_in,
 
-        -- Total Recurring:
         SUM(
             CASE
                 WHEN COALESCE(so.is_recurring, 0) = 1
@@ -130,7 +146,6 @@ class PerformanceController extends Controller
             END
         ) as total_recurring,
 
-        -- Menunggu Jadwal:
         SUM(
             CASE
                 WHEN COALESCE(so.is_recurring, 0) = 1
@@ -140,7 +155,6 @@ class PerformanceController extends Controller
             END
         ) as menunggu_jadwal,
 
-        -- Task ID:
         SUM(
             CASE
                 WHEN COALESCE(so.is_recurring, 0) = 1
@@ -150,7 +164,6 @@ class PerformanceController extends Controller
             END
         ) as task_id,
 
-        -- Total Sudah Install:
         SUM(
             CASE
                 WHEN so.status = 'selesai'
@@ -160,10 +173,8 @@ class PerformanceController extends Controller
     ")->first();
 
         // =========================
-        // TEAM SHEET (downline)
+        // TEAM SHEET -> scope: baseUser + downline baseUser (bukan cuma downline)
         // =========================
-        $scopeUserIds = $childIds->unique()->values();
-
         $soiAgg = DB::table('sales_order_items')
             ->selectRaw('sales_order_id, COALESCE(SUM(qty),0) as ns_units')
             ->groupBy('sales_order_id');
@@ -179,19 +190,8 @@ class PerformanceController extends Controller
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        // filter member
-        if ($q !== '') {
-            $sheetQ->where(function ($w) use ($q) {
-                $w->where('u.name', 'like', "%{$q}%")
-                    ->orWhere('u.full_name', 'like', "%{$q}%");
-            });
-        }
-
-        // date range (KEY IN)
         if ($from) $sheetQ->whereDate('so.key_in_at', '>=', $from);
         if ($to)   $sheetQ->whereDate('so.key_in_at', '<=', $to);
-
-        // exclude null key_in_at kalau sedang filter/default range
         if ($from || $to) $sheetQ->whereNotNull('so.key_in_at');
 
         $teamSheetRows = $sheetQ
@@ -206,7 +206,9 @@ class PerformanceController extends Controller
                 'so.ccp_status',
                 'so.status',
                 'so.install_date',
+                'so.status_reason',
                 'so.ccp_remarks',
+                DB::raw("COALESCE(NULLIF(so.status_reason,''), NULLIF(so.ccp_remarks,''), '-') as remarks"),
                 DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
                 DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])
@@ -215,13 +217,18 @@ class PerformanceController extends Controller
 
         return view('performances.index', [
             'teamPerformance' => $teamPerformance,
-            'teamMemberCount' => $childIds->count(),
-            'myTotalUnits'    => (int) $myTotalUnits,
-            'q'               => $q,
+            'teamMemberCount' => $childIds->count(),     // direct reports dari baseUser
+            'myTotalUnits'    => $myTotalUnits,          // total units baseUser
+            'q'               => $q,                     // tidak dipakai untuk query, tapi boleh tetap dipassing
             'from'            => $from,
             'to'              => $to,
             'summary'         => $summary,
             'teamSheetRows'   => $teamSheetRows,
+
+            // ✅ tambahan untuk dropdown
+            'memberOptions'   => $memberOptions,
+            'memberId'        => $baseUser->id,          // selected (default auth)
+            'memberLabel'     => ($baseUser->full_name ?: $baseUser->name),
         ]);
     }
 
