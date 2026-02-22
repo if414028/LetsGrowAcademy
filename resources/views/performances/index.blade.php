@@ -27,10 +27,12 @@
                     </div>
                 </div>
 
-                <div class="text-right">
-                    <div class="text-sm text-white/80">Total Net Sales Saya</div>
-                    <div class="text-3xl font-bold leading-tight">{{ $myTotalUnits }}</div>
-                </div>
+                @hasanyrole('Health Planner')
+                    <div class="text-right">
+                        <div class="text-sm text-white/80">Total Net Sales Saya</div>
+                        <div class="text-3xl font-bold leading-tight">{{ $myTotalUnits }}</div>
+                    </div>
+                @endhasanyrole
             </div>
         </div>
 
