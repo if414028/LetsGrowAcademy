@@ -114,8 +114,7 @@ class PerformanceController extends Controller
         -- Total Key-In:
         SUM(
             CASE
-                WHEN COALESCE(so.is_recurring, 0) = 0
-                 AND so.ccp_status = 'menunggu pengecekan'
+                WHEN so.ccp_status = 'menunggu pengecekan'
                  AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
                 THEN 1 ELSE 0
             END
