@@ -19,6 +19,7 @@ class SalesOrder extends Model
         'install_date',
         'is_recurring',
         'payment_method',
+        'payment_method_remarks',
         'status',
         'ccp_status',
         'ccp_remarks',

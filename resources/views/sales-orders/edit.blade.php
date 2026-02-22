@@ -372,7 +372,9 @@
                         <div class="mt-4 space-y-4">
                             <div>
                                 <label class="text-xs font-medium text-gray-600">CCP Status</label>
-                                <select name="ccp_status" x-model="ccpStatus"
+                                <input type="hidden" name="ccp_status" x-bind:value="ccpStatus" x-show="disabledAll">
+                                <select name="ccp_status" x-model="ccpStatus" :disabled="disabledAll"
+                                    :disabled="disabledAll"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     @foreach ($ccpStatuses as $s)
                                         <option value="{{ $s }}" @selected(old('ccp_status', $salesOrder->ccp_status) === $s)>
@@ -385,7 +387,8 @@
                             {{-- CCP Remarks (when ditolak) --}}
                             <div class="mt-4" x-show="showCcpRemarks" x-transition>
                                 <label class="text-xs font-medium text-gray-600">Remarks (CCP Ditolak)</label>
-                                <textarea name="ccp_remarks" rows="3" x-model="ccpRemarks" :required="requiredCcpRemarks"
+                                <textarea name="ccp_remarks" :disabled="disabledAll" rows="3" x-model="ccpRemarks"
+                                    :required="requiredCcpRemarks"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                     placeholder="Masukkan alasan kenapa ditolak..."></textarea>
 
@@ -397,8 +400,8 @@
                             {{-- CCP Approved At (when disetujui) --}}
                             <div class="mt-4" x-show="showCcpApprovedAt" x-transition>
                                 <label class="text-xs font-medium text-gray-600">Tanggal CCP Disetujui</label>
-                                <input type="datetime-local" name="ccp_approved_at" x-model="ccpApprovedAt"
-                                    :required="requiredCcpApprovedAt"
+                                <input type="datetime-local" name="ccp_approved_at" :disabled="disabledAll"
+                                    x-model="ccpApprovedAt" :required="requiredCcpApprovedAt"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
 
                                 <div class="mt-1 text-xs text-gray-400" x-show="requiredCcpApprovedAt">
@@ -408,7 +411,8 @@
 
                             <div>
                                 <label class="text-xs font-medium text-gray-600">Status Instalasi</label>
-                                <select name="status" x-model="status"
+                                <input type="hidden" name="status" x-bind:value="status" x-show="disabledAll">
+                                <select name="status" x-model="status" :disabled="disabledAll"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     @foreach ($statuses as $s)
                                         <option value="{{ $s }}" @selected(old('status', $salesOrder->status) === $s)>
@@ -420,8 +424,8 @@
                                 {{-- Installation Date --}}
                                 <div class="mt-4" x-show="showInstallDate" x-transition>
                                     <label class="text-xs font-medium text-gray-600">Installation Date</label>
-                                    <input type="date" name="install_date" x-model="installDate"
-                                        :required="requiredInstallDate"
+                                    <input type="date" name="install_date" :disabled="disabledAll"
+                                        x-model="installDate" :required="requiredInstallDate"
                                         class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
 
                                     <div class="mt-1 text-xs text-gray-400" x-show="requiredInstallDate">
@@ -433,7 +437,7 @@
                             {{-- Status Reason --}}
                             <div class="mt-4" x-show="showReason" x-transition>
                                 <label class="text-xs font-medium text-gray-600">Alasan</label>
-                                <textarea name="status_reason" rows="3" x-model="reason" :required="requiredReason"
+                                <textarea name="status_reason" :disabled="disabledAll" rows="3" x-model="reason" :required="requiredReason"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                     placeholder="Masukkan alasan..."></textarea>
 
@@ -801,14 +805,18 @@
 
         function statusInstallFormEdit() {
             return {
-                // existing
+
+                // 🔹 recurring state
+                isRecurring: @json(old('is_recurring', $salesOrder->is_recurring) ? true : false),
+
+                // 🔹 status instalasi
                 status: @json(old('status', $salesOrder->status)),
                 installDate: @json(old(
                         'install_date',
                         $salesOrder->install_date ? \Carbon\Carbon::parse($salesOrder->install_date)->format('Y-m-d') : '')),
                 reason: @json(old('status_reason', $salesOrder->status_reason ?? '')),
 
-                // ✅ new CCP state
+                // 🔹 CCP
                 ccpStatus: @json(old('ccp_status', $salesOrder->ccp_status ?? 'menunggu pengecekan')),
                 ccpRemarks: @json(old('ccp_remarks', $salesOrder->ccp_remarks ?? '')),
                 ccpApprovedAt: @json(old(
@@ -823,17 +831,28 @@
                     return (v || '').toString().trim().toLowerCase();
                 },
 
-                // existing computed
+                // 🔹 DISABLE SECTION jika tidak recurring
+                get disabledAll() {
+                    return !this.isRecurring;
+                },
+
+                // =============================
+                // COMPUTED LOGIC
+                // =============================
+
                 get showInstallDate() {
-                    return this.normalizeStatus(this.status) !== 'menunggu verifikasi';
+                    return !this.disabledAll &&
+                        this.normalizeStatus(this.status) !== 'menunggu verifikasi';
                 },
 
                 get requiredInstallDate() {
+                    if (this.disabledAll) return false;
                     const st = this.normalizeStatus(this.status);
                     return ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'].includes(st);
                 },
 
                 get showReason() {
+                    if (this.disabledAll) return false;
                     const st = this.normalizeStatus(this.status);
                     return ['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st);
                 },
@@ -842,9 +861,9 @@
                     return this.showReason;
                 },
 
-                // ✅ new computed for CCP
                 get showCcpRemarks() {
-                    return this.normalizeCcp(this.ccpStatus) === 'ditolak';
+                    return !this.disabledAll &&
+                        this.normalizeCcp(this.ccpStatus) === 'ditolak';
                 },
 
                 get requiredCcpRemarks() {
@@ -852,37 +871,86 @@
                 },
 
                 get showCcpApprovedAt() {
-                    return this.normalizeCcp(this.ccpStatus) === 'disetujui';
+                    return !this.disabledAll &&
+                        this.normalizeCcp(this.ccpStatus) === 'disetujui';
                 },
 
                 get requiredCcpApprovedAt() {
                     return this.showCcpApprovedAt;
                 },
 
-                init() {
-                    if (!this.showInstallDate) this.installDate = '';
-                    if (!this.showReason) this.reason = '';
+                // =============================
+                // INIT
+                // =============================
 
-                    // ✅ normalize CCP fields on load
-                    if (!this.showCcpRemarks) this.ccpRemarks = '';
-                    if (!this.showCcpApprovedAt) this.ccpApprovedAt = '';
+                init() {
+                    this.syncCheckbox();
+
+                    if (!this.isRecurring) {
+                        this.resetAll();
+                    }
                 },
 
                 bindWatchers() {
+
+                    // 🔹 listen recurring checkbox
+                    document.getElementById('is_recurring')
+                        ?.addEventListener('change', (e) => {
+                            this.isRecurring = e.target.checked;
+
+                            if (!this.isRecurring) {
+                                this.resetAll();
+                            }
+                        });
+
+                    // 🔹 status watcher
                     this.$watch('status', (val) => {
+                        if (this.disabledAll) return;
+
                         const st = this.normalizeStatus(val);
 
-                        if (st === 'menunggu verifikasi') this.installDate = '';
-                        if (!['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st)) this.reason = '';
+                        if (st === 'menunggu verifikasi') {
+                            this.installDate = '';
+                        }
+
+                        if (!['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st)) {
+                            this.reason = '';
+                        }
                     });
 
-                    // ✅ watcher CCP
+                    // 🔹 CCP watcher
                     this.$watch('ccpStatus', (val) => {
+                        if (this.disabledAll) return;
+
                         const c = this.normalizeCcp(val);
 
-                        if (c !== 'ditolak') this.ccpRemarks = '';
-                        if (c !== 'disetujui') this.ccpApprovedAt = '';
+                        if (c !== 'ditolak') {
+                            this.ccpRemarks = '';
+                        }
+
+                        if (c !== 'disetujui') {
+                            this.ccpApprovedAt = '';
+                        }
                     });
+                },
+
+                // =============================
+                // HELPERS
+                // =============================
+
+                resetAll() {
+                    this.status = 'menunggu verifikasi';
+                    this.installDate = '';
+                    this.reason = '';
+
+                    this.ccpStatus = 'menunggu pengecekan';
+                    this.ccpRemarks = '';
+                    this.ccpApprovedAt = '';
+                },
+
+                syncCheckbox() {
+                    const el = document.getElementById('is_recurring');
+                    if (el) el.checked = this.isRecurring;
                 }
             }
         }

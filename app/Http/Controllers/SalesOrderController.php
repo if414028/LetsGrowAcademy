@@ -153,6 +153,13 @@ class SalesOrderController extends Controller
             ],
             'is_recurring' => ['nullable', 'boolean'],
             'payment_method' => ['nullable', Rule::in(array_keys($this->paymentMethods))],
+            'payment_method_remarks' => [
+                // opsional, tapi hanya boleh ada kalau Admin/Head Admin DAN payment_method = outright (POA)
+                Rule::prohibitedIf(fn() => !$isPrivileged || $request->input('payment_method') !== 'outright'),
+                'nullable',
+                'string',
+                'max:1000',
+            ],
             'status' => ['required', Rule::in($this->statuses)],
             'ccp_status' => ['required', Rule::in($this->ccpStatuses)],
 
@@ -239,6 +246,11 @@ class SalesOrderController extends Controller
             $validated['ccp_approved_at'] = null;
         }
 
+        // normalize payment_method_remarks
+        if (!$isPrivileged || (($validated['payment_method'] ?? null) !== 'outright')) {
+            $validated['payment_method_remarks'] = null;
+        }
+
         return DB::transaction(function () use ($validated, $authUser) {
             $isPrivileged = $authUser->hasAnyRole(['Admin', 'Head Admin']);
 
@@ -264,6 +276,7 @@ class SalesOrderController extends Controller
                 'install_date' => $installDate,
                 'is_recurring' => (bool) ($validated['is_recurring'] ?? false),
                 'payment_method' => $validated['payment_method'] ?? null,
+                'payment_method_remarks' => $validated['payment_method_remarks'] ?? null,
                 'status' => $validated['status'],
                 'ccp_status' => $validated['ccp_status'],
                 'ccp_remarks' => $validated['ccp_remarks'] ?? null,
@@ -396,6 +409,12 @@ class SalesOrderController extends Controller
             ],
             'is_recurring' => ['nullable', 'boolean'],
             'payment_method' => ['nullable', Rule::in(array_keys($this->paymentMethods))],
+            'payment_method_remarks' => [
+                Rule::prohibitedIf(fn() => !$isPrivileged || $request->input('payment_method') !== 'outright'),
+                'nullable',
+                'string',
+                'max:1000',
+            ],
             'status' => ['required', Rule::in($this->statuses)],
             'ccp_status' => ['required', Rule::in($this->ccpStatuses)],
 
@@ -476,6 +495,10 @@ class SalesOrderController extends Controller
             $validated['ccp_approved_at'] = null;
         }
 
+        if (!$isPrivileged || (($validated['payment_method'] ?? null) !== 'outright')) {
+            $validated['payment_method_remarks'] = null;
+        }
+
         return DB::transaction(function () use ($validated, $authUser, $salesOrder) {
             $isPrivileged = $authUser->hasAnyRole(['Admin', 'Head Admin']);
             $salesUserId = $isPrivileged
@@ -499,6 +522,7 @@ class SalesOrderController extends Controller
                 'install_date' => $installDate,
                 'is_recurring' => (bool) ($validated['is_recurring'] ?? false),
                 'payment_method' => $validated['payment_method'] ?? null,
+                'payment_method_remarks' => $validated['payment_method_remarks'] ?? null,
                 'status' => $validated['status'],
                 'ccp_status' => $validated['ccp_status'],
                 'ccp_remarks' => $validated['ccp_remarks'] ?? null,

@@ -63,6 +63,15 @@
                             </div>
                         </div>
 
+                        @if ($salesOrder->payment_method === 'outright' && filled($salesOrder->payment_method_remarks))
+                            <div>
+                                <div class="text-xs text-gray-500">Payment Method Remarks</div>
+                                {{ $salesOrder->payment_method_remarks }}
+                                <div class="mt-1 text-gray-900 whitespace-pre-line">
+                                </div>
+                            </div>
+                        @endif
+
                         <div>
                             <div class="text-xs text-gray-500">Sales</div>
                             <div class="mt-1 text-gray-900">
