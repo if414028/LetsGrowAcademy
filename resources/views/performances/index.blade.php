@@ -33,15 +33,29 @@
 
         {{-- Summary Cards --}}
         <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div class="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
-                <div class="text-xs font-semibold text-green-700 uppercase tracking-wider">
-                    Total sudah install (OK)
+            {{-- Total Key-In --}}
+            <div class="rounded-2xl border border-gray-300 bg-gray-50 p-5 shadow-sm">
+                <div class="text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Total Key-In
                 </div>
-                <div class="mt-2 text-3xl font-bold text-green-900">
-                    {{ (int) ($summary->total_installed_ok ?? 0) }}
+                <div class="mt-2 text-3xl font-bold text-gray-800">
+                    {{ (int) ($summary->total_key_in ?? 0) }}
                 </div>
-                <div class="mt-1 text-sm text-green-600">
-                    Status: selesai
+                <div class="mt-1 text-sm text-gray-500">
+                    Total keseluruhan SO
+                </div>
+            </div>
+
+            {{-- Total Key-In --}}
+            <div class="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+                <div class="text-xs font-semibold text-blue-700 uppercase tracking-wider">
+                    Total Recurring
+                </div>
+                <div class="mt-2 text-3xl font-bold text-blue-900">
+                    {{ (int) ($summary->total_recurring ?? 0) }}
+                </div>
+                <div class="mt-1 text-sm text-blue-600">
+                    Status: menunggu verifikasi
                 </div>
             </div>
 
@@ -50,46 +64,10 @@
                     Dijadwalkan
                 </div>
                 <div class="mt-2 text-3xl font-bold text-yellow-900">
-                    {{ (int) ($summary->total_dijadwalkan ?? 0) }}
+                    {{ (int) ($summary->menunggu_jadwal ?? 0) }}
                 </div>
                 <div class="mt-1 text-sm text-yellow-600">
                     Status: dijadwalkan
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-300 bg-gray-50 p-5 shadow-sm">
-                <div class="text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Menunggu jadwal
-                </div>
-                <div class="mt-2 text-3xl font-bold text-gray-800">
-                    {{ (int) ($summary->total_menunggu_jadwal ?? 0) }}
-                </div>
-                <div class="mt-1 text-sm text-gray-500">
-                    Status: menunggu verifikasi
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    Total NS
-                </div>
-                <div class="mt-2 text-3xl font-bold text-gray-900">
-                    {{ (int) ($summary->total_ns ?? 0) }}
-                </div>
-                <div class="mt-1 text-sm text-gray-500">
-                    CCP status: disetujui
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
-                <div class="text-xs font-semibold text-blue-700 uppercase tracking-wider">
-                    Total key in
-                </div>
-                <div class="mt-2 text-3xl font-bold text-blue-900">
-                    {{ (int) ($summary->total_key_in ?? 0) }}
-                </div>
-                <div class="mt-1 text-sm text-blue-600">
-                    Total keseluruhan SO
                 </div>
             </div>
 
@@ -102,6 +80,18 @@
                 </div>
                 <div class="mt-1 text-sm text-purple-600">
                     CCP disetujui + menunggu verifikasi
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
+                <div class="text-xs font-semibold text-green-700 uppercase tracking-wider">
+                    Total sudah install (OK)
+                </div>
+                <div class="mt-2 text-3xl font-bold text-green-900">
+                    {{ (int) ($summary->total_sudah_install ?? 0) }}
+                </div>
+                <div class="mt-1 text-sm text-green-600">
+                    Status: selesai
                 </div>
             </div>
         </div>

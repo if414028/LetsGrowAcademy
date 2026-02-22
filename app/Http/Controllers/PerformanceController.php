@@ -6,6 +6,7 @@ use App\Models\SalesOrder;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class PerformanceController extends Controller
 {
@@ -16,10 +17,23 @@ class PerformanceController extends Controller
 
         $q = trim((string) $request->get('q', ''));
 
-        // date range (install_date)
-        $from = $request->get('from'); // format: YYYY-MM-DD
+        // date range dari request
+        $from = $request->get('from'); // YYYY-MM-DD
         $to   = $request->get('to');
 
+        // ✅ default range: bulan ini -1 bulan s/d +1 bulan (kalau user tidak filter)
+        if (!$from && !$to) {
+            $from = Carbon::now()->startOfMonth()->subMonth()->toDateString();
+            $to   = Carbon::now()->endOfMonth()->addMonth()->toDateString();
+        } else {
+            // opsional: kalau user cuma isi salah satu
+            if ($from && !$to) $to = Carbon::parse($from)->endOfMonth()->toDateString();
+            if (!$from && $to) $from = Carbon::parse($to)->startOfMonth()->toDateString();
+        }
+
+        // =========================
+        // TEAM PERFORMANCE (units selesai)
+        // =========================
         $teamPerformance = User::query()
             ->whereIn('users.id', $childIds)
             ->when($q !== '', function ($qq) use ($q) {
@@ -54,7 +68,7 @@ class PerformanceController extends Controller
                 if ($from) $lastOrderQ->whereDate('install_date', '>=', $from);
                 if ($to)   $lastOrderQ->whereDate('install_date', '<=', $to);
 
-                $lastOrder = $lastOrderQ->latest('install_date')->first(); // atau key_in_at
+                $lastOrder = $lastOrderQ->latest('install_date')->first();
 
                 return [
                     'id'            => $u->id,
@@ -64,6 +78,9 @@ class PerformanceController extends Controller
                 ];
             });
 
+        // =========================
+        // MY TOTAL UNITS (self selesai)
+        // =========================
         $myTotalUnitsQ = DB::table('sales_orders')
             ->whereNull('sales_orders.deleted_at')
             ->where('sales_orders.sales_user_id', $user->id)
@@ -77,28 +94,75 @@ class PerformanceController extends Controller
             ->selectRaw('COALESCE(SUM(sales_order_items.qty), 0) as units')
             ->value('units');
 
-        // scope user ids: saya + semua downline
+        // =========================
+        // SUMMARY CARDS (self + downline)
+        // =========================
         $scopeUserIds = $childIds->push($user->id)->unique()->values();
 
-        // ✅ Summary berdasarkan sales_orders
         $summaryQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        // (Opsional tapi recommended) filter range pakai key_in_at biar cocok konsep "Total Key-in"
+        // ✅ range pakai key_in_at
         if ($from) $summaryQ->whereDate('so.key_in_at', '>=', $from);
         if ($to)   $summaryQ->whereDate('so.key_in_at', '<=', $to);
 
-        $summary = $summaryQ->selectRaw("
-    COUNT(*) as total_key_in,
-    SUM(CASE WHEN so.status = 'selesai' THEN 1 ELSE 0 END) as total_installed_ok,
-    SUM(CASE WHEN so.status = 'dijadwalkan' THEN 1 ELSE 0 END) as total_dijadwalkan,
-    SUM(CASE WHEN so.status = 'menunggu verifikasi' THEN 1 ELSE 0 END) as total_menunggu_jadwal,
-    SUM(CASE WHEN so.ccp_status = 'disetujui' THEN 1 ELSE 0 END) as total_ns,
-    SUM(CASE WHEN so.ccp_status = 'disetujui' AND so.status = 'menunggu verifikasi' THEN 1 ELSE 0 END) as task_id
-")->first();
+        // exclude null key_in_at kalau sedang filter/default range
+        if ($from || $to) $summaryQ->whereNotNull('so.key_in_at');
 
-        // scope team: semua downline
+        $summary = $summaryQ->selectRaw("
+        -- Total Key-In:
+        SUM(
+            CASE
+                WHEN COALESCE(so.is_recurring, 0) = 0
+                 AND so.ccp_status = 'menunggu pengecekan'
+                 AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
+                THEN 1 ELSE 0
+            END
+        ) as total_key_in,
+
+        -- Total Recurring:
+        SUM(
+            CASE
+                WHEN COALESCE(so.is_recurring, 0) = 1
+                 AND so.ccp_status = 'menunggu pengecekan'
+                 AND so.status = 'menunggu verifikasi'
+                THEN 1 ELSE 0
+            END
+        ) as total_recurring,
+
+        -- Menunggu Jadwal:
+        SUM(
+            CASE
+                WHEN COALESCE(so.is_recurring, 0) = 1
+                 AND so.ccp_status = 'disetujui'
+                 AND so.status = 'menunggu jadwal'
+                THEN 1 ELSE 0
+            END
+        ) as menunggu_jadwal,
+
+        -- Task ID:
+        SUM(
+            CASE
+                WHEN COALESCE(so.is_recurring, 0) = 1
+                 AND so.ccp_status = 'disetujui'
+                 AND so.status IN ('dijadwalkan', 'ditunda', 'gagal penelponan')
+                THEN 1 ELSE 0
+            END
+        ) as task_id,
+
+        -- Total Sudah Install:
+        SUM(
+            CASE
+                WHEN so.status = 'selesai'
+                THEN 1 ELSE 0
+            END
+        ) as total_sudah_install
+    ")->first();
+
+        // =========================
+        // TEAM SHEET (downline)
+        // =========================
         $scopeUserIds = $childIds->unique()->values();
 
         $soiAgg = DB::table('sales_order_items')
@@ -124,11 +188,11 @@ class PerformanceController extends Controller
             });
         }
 
-        // date range (KEY IN only)
+        // date range (KEY IN)
         if ($from) $sheetQ->whereDate('so.key_in_at', '>=', $from);
         if ($to)   $sheetQ->whereDate('so.key_in_at', '<=', $to);
 
-        // exclude null key_in_at kalau sedang filter
+        // exclude null key_in_at kalau sedang filter/default range
         if ($from || $to) $sheetQ->whereNotNull('so.key_in_at');
 
         $teamSheetRows = $sheetQ
