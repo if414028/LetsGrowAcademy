@@ -11,6 +11,7 @@ use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
+use App\Models\SalesOrder;
 
 class UserController extends Controller
 {
@@ -703,6 +704,23 @@ class UserController extends Controller
             ->get()
             ->keyBy('id');
 
+        // ====== AGGREGATE SALES ORDER METRICS (1x query) ======
+        $keyInByUser = SalesOrder::query()
+            ->select('sales_user_id', DB::raw('COUNT(*) as cnt'))
+            ->whereIn('sales_user_id', $userIds)
+            ->whereRaw('LOWER(ccp_status) = ?', ['menunggu pengecekan'])
+            ->whereRaw('LOWER(status) = ?', ['menunggu verifikasi'])
+            ->where('is_recurring', 0)
+            ->groupBy('sales_user_id')
+            ->pluck('cnt', 'sales_user_id'); // [sales_user_id => cnt]
+
+        $netSalesByUser = SalesOrder::query()
+            ->select('sales_user_id', DB::raw('COUNT(*) as cnt'))
+            ->whereIn('sales_user_id', $userIds)
+            ->where('status', 'selesai')
+            ->groupBy('sales_user_id')
+            ->pluck('cnt', 'sales_user_id'); // [sales_user_id => cnt]
+
         // adjacency: parent -> [child...]
         $childrenByParent = [];
         foreach ($rows as $r) {
@@ -710,17 +728,16 @@ class UserController extends Controller
         }
 
         // builder node rekursif
-        $buildNode = function ($userId) use (&$buildNode, $users, $childrenByParent) {
+        $buildNode = function ($userId) use (&$buildNode, $users, $childrenByParent, $keyInByUser, $netSalesByUser) {
             $u = $users->get($userId);
 
-            // kalau user tidak active / tidak ada, node ini di-skip
             if (!$u) {
                 return null;
             }
 
             $children = collect($childrenByParent[$userId] ?? [])
                 ->map(fn($cid) => $buildNode($cid))
-                ->filter() // buang null children
+                ->filter()
                 ->values()
                 ->all();
 
@@ -730,6 +747,11 @@ class UserController extends Controller
                 'phone_number' => $u->phone_number ?? '-',
                 'photo' => $u->photo,
                 'role' => $u->getRoleNames()->first(),
+
+                // ✅ metrics
+                'total_key_in' => (int) ($keyInByUser[$u->id] ?? 0),
+                'total_net_sales' => (int) ($netSalesByUser[$u->id] ?? 0),
+
                 'children' => $children,
             ];
         };

@@ -87,6 +87,22 @@
             <p class="mt-1 text-[11px] text-gray-500">
                 {{ $node['phone_number'] ?? '-' }}
             </p>
+
+            @php
+                $totalKeyIn = (int) ($node['total_key_in'] ?? 0);
+                $totalNetSales = (int) ($node['total_net_sales'] ?? 0);
+            @endphp
+
+            <div class="mt-3 grid grid-cols-2 gap-2 w-full">
+                <div class="rounded-xl border bg-gray-50 px-2 py-2">
+                    <div class="text-[10px] text-gray-500">Key-In</div>
+                    <div class="text-sm font-semibold text-gray-900">{{ $totalKeyIn }}</div>
+                </div>
+                <div class="rounded-xl border bg-gray-50 px-2 py-2">
+                    <div class="text-[10px] text-gray-500">Net Sales</div>
+                    <div class="text-sm font-semibold text-gray-900">{{ $totalNetSales }}</div>
+                </div>
+            </div>
         </div>
     </a>
 
