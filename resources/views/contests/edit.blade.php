@@ -15,6 +15,21 @@
     // dari controller: $selectedHmIds
     $selectedHmIds = $selectedHmIds ?? [];
     $oldHmIds = collect(old('hm_ids', $selectedHmIds))->map(fn($v) => (int) $v);
+
+    // qualifier detect + rules defaults
+    $type = old('type', $contest->type ?? 'leaderboard');
+    $rules = (array) ($contest->rules ?? []);
+
+    $isQualifier = $type === 'qualifier' || !empty($rules);
+
+    $oldMinPersonal = old('monthly_min_personal_ns', $rules['monthly_min_personal_ns'] ?? 3);
+    $oldMinDirect = old('monthly_min_direct_active_partner', $rules['monthly_min_direct_active_partner'] ?? 3);
+    $oldMinPartnerActive = old(
+        'direct_partner_active_min_personal_ns',
+        $rules['direct_partner_active_min_personal_ns'] ?? 1,
+    );
+
+    $oldDateBasis = old('date_basis', $contest->date_basis ?? 'install_date');
 @endphp
 
 <x-dashboard-layout>
@@ -42,14 +57,15 @@
     @endif
 
     {{-- optional notice kalau status bukan draft (harusnya sudah ke-block dari controller/policy) --}}
-    @if(($contest->status ?? 'draft') !== 'draft')
+    @if (($contest->status ?? 'draft') !== 'draft')
         <div class="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
             Kontes ini sudah <span class="font-semibold">{{ $contest->status }}</span>, sehingga tidak bisa diubah.
         </div>
     @endif
 
     <div class="mt-6 rounded-2xl border bg-white p-6 shadow-sm ring-1 ring-black/5">
-        <form method="POST" action="{{ route('contests.update', $contest) }}" enctype="multipart/form-data" class="space-y-6">
+        <form method="POST" action="{{ route('contests.update', $contest) }}" enctype="multipart/form-data"
+            class="space-y-6">
             @csrf
             @method('PUT')
 
@@ -65,8 +81,7 @@
                 <div class="md:col-span-2">
                     <label class="text-sm font-semibold text-gray-700">Deskripsi</label>
                     <textarea name="description" rows="3"
-                        class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        placeholder="(Opsional)">{{ old('description', $contest->description) }}</textarea>
+                        class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500" placeholder="(Opsional)">{{ old('description', $contest->description) }}</textarea>
                 </div>
 
                 <div>
@@ -85,12 +100,51 @@
                         required>
                 </div>
 
+                {{-- Contest Type --}}
+                <div class="md:col-span-2">
+                    <label class="text-sm font-semibold text-gray-700">Tipe Kontes</label>
+                    <select id="contest_type" name="type"
+                        class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                        <option value="leaderboard"
+                            {{ old('type', $contest->type ?? 'leaderboard') === 'leaderboard' ? 'selected' : '' }}>
+                            Leaderboard (Ranking berdasarkan Total Qty)
+                        </option>
+                        <option value="qualifier"
+                            {{ old('type', $contest->type ?? '') === 'qualifier' ? 'selected' : '' }}>
+                            Qualifier 133 (Pemenang bisa banyak)
+                        </option>
+                    </select>
+                    <p class="mt-2 text-xs text-gray-500">
+                        Semua kontes dihitung dari <span class="font-semibold">total qty</span> Sales Order “selesai”.
+                        Qualifier 133 menambah syarat bulanan (personal + direct active partner).
+                    </p>
+                </div>
+
+                {{-- Date basis --}}
+                <div class="md:col-span-2">
+                    <label class="text-sm font-semibold text-gray-700">Basis Tanggal</label>
+                    <select id="date_basis" name="date_basis"
+                        class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                        <option value="install_date" {{ $oldDateBasis === 'install_date' ? 'selected' : '' }}>
+                            Install Date
+                        </option>
+                        <option value="key_in_at" {{ $oldDateBasis === 'key_in_at' ? 'selected' : '' }}>
+                            Key-in Date
+                        </option>
+                    </select>
+                    <p class="mt-2 text-xs text-gray-500">
+                        Tanggal yang dipakai untuk filter periode kontes.
+                    </p>
+                </div>
+
                 <div>
-                    <label class="text-sm font-semibold text-gray-700">Target Unit</label>
-                    <input type="number" name="target_unit"
-                        value="{{ old('target_unit', $contest->target_unit) }}"
+                    <label id="target_label" class="text-sm font-semibold text-gray-700">Target Unit</label>
+                    <input type="number" name="target_unit" value="{{ old('target_unit', $contest->target_unit) }}"
                         class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        placeholder="Contoh: 10" min="1" required>
+                        placeholder="Contoh: 25" min="1" required>
+                    <p id="target_hint" class="mt-2 text-xs text-gray-500">
+                        Target ini dipakai untuk indikator progress (dan tetap ditampilkan di detail kontes).
+                    </p>
                 </div>
 
                 <div>
@@ -103,9 +157,10 @@
                 <div class="md:col-span-2">
                     <label class="text-sm font-semibold text-gray-700">Banner (Opsional)</label>
 
-                    @if($bannerSrc)
+                    @if ($bannerSrc)
                         <div class="mt-2 flex items-center gap-3">
-                            <img src="{{ $bannerSrc }}" alt="Banner" class="h-16 w-16 rounded-xl border object-cover">
+                            <img src="{{ $bannerSrc }}" alt="Banner"
+                                class="h-16 w-16 rounded-xl border object-cover">
                             <label class="inline-flex items-center gap-2 text-sm text-gray-700">
                                 <input type="checkbox" name="remove_banner" value="1"
                                     class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -117,8 +172,79 @@
 
                     <input type="file" name="banner" accept="image/*"
                         class="mt-2 block w-full text-sm text-gray-600
-                                  file:mr-4 file:rounded-xl file:border-0 file:bg-gray-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-gray-700 hover:file:bg-gray-200">
-                    <p class="mt-2 text-xs text-gray-500">Jika diupload, akan mengganti banner sebelumnya (disimpan ke storage public).</p>
+                               file:mr-4 file:rounded-xl file:border-0 file:bg-gray-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-gray-700 hover:file:bg-gray-200">
+                    <p class="mt-2 text-xs text-gray-500">
+                        Jika diupload, akan mengganti banner sebelumnya (disimpan ke storage public).
+                    </p>
+                </div>
+
+                {{-- Rules 133 (Qualifier) --}}
+                <div id="rules_133" class="md:col-span-2 {{ $isQualifier ? '' : 'hidden' }}">
+                    <div class="rounded-2xl border bg-purple-50 p-5">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <div class="text-sm font-semibold text-gray-900">Rules Qualifier 133</div>
+                                <div class="text-xs text-gray-600">
+                                    Pemenang adalah HP yang memenuhi syarat <span class="font-semibold">di setiap
+                                        bulan</span>
+                                    selama periode kontes. Pemenang bisa banyak.
+                                </div>
+                            </div>
+                            <span
+                                class="inline-flex rounded-full bg-purple-100 px-2.5 py-1 text-xs font-semibold text-purple-700">
+                                133
+                            </span>
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="text-sm font-semibold text-gray-700">Minimal Personal / Bulan
+                                    (Qty)</label>
+                                <input type="number" name="monthly_min_personal_ns" min="1"
+                                    value="{{ $oldMinPersonal }}"
+                                    class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                                <p class="mt-2 text-xs text-gray-500">
+                                    Contoh: 3 (tiap bulan minimal personal qty 3).
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="text-sm font-semibold text-gray-700">Minimal Direct Active Partner /
+                                    Bulan</label>
+                                <input type="number" name="monthly_min_direct_active_partner" min="0"
+                                    value="{{ $oldMinDirect }}"
+                                    class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                                <p class="mt-2 text-xs text-gray-500">
+                                    Contoh: 3 (minimal 3 direct partner active tiap bulan).
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="text-sm font-semibold text-gray-700">Definisi Active Partner (Qty
+                                    Min)</label>
+                                <input type="number" name="direct_partner_active_min_personal_ns" min="1"
+                                    value="{{ $oldMinPartnerActive }}"
+                                    class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                                <p class="mt-2 text-xs text-gray-500">
+                                    Active jika partner punya minimal qty ini dalam bulan tsb (default 1).
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 rounded-xl border bg-white p-4 text-xs text-gray-700">
+                            <div class="font-semibold text-gray-900">Catatan:</div>
+                            <ul class="mt-1 list-disc ml-5 space-y-1">
+                                <li>
+                                    “Direct partner” = bawahan langsung (direct report) dari HP.
+                                </li>
+                                <li>
+                                    Semua perhitungan berdasarkan Sales Order status <span
+                                        class="font-semibold">selesai</span> dan dijumlahkan
+                                    dari <span class="font-semibold">total qty item</span>.
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -148,13 +274,16 @@
                         </div>
                         <input type="hidden" name="target_mode" value="all_downline">
 
-                    {{-- Health Manager / Admin / Head Admin: pilih HM --}}
-                    @elseif($isHM || auth()->user()->hasAnyRole(['Admin', 'Head Admin']))
+                        {{-- Health Manager / Admin / Head Admin: pilih HM --}}
+                    @elseif (
+                        $isHM ||
+                            auth()->user()->hasAnyRole(['Admin', 'Head Admin']))
                         <label class="text-sm font-semibold text-gray-700">Pilih Health Manager</label>
                         <select name="hm_ids[]" multiple
                             class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500">
                             @forelse(($healthManagers ?? []) as $hm)
-                                <option value="{{ $hm->id }}" {{ $oldHmIds->contains((int)$hm->id) ? 'selected' : '' }}>
+                                <option value="{{ $hm->id }}"
+                                    {{ $oldHmIds->contains((int) $hm->id) ? 'selected' : '' }}>
                                     {{ $hm->name }} ({{ $hm->dst_code ?? '-' }})
                                 </option>
                             @empty
@@ -165,7 +294,7 @@
                             Peserta kontes akan mencakup HM terpilih dan seluruh HP di bawahnya.
                         </p>
 
-                    {{-- Role lain --}}
+                        {{-- Role lain --}}
                     @else
                         <div class="rounded-xl border bg-white px-4 py-3 text-sm text-gray-700">
                             Kamu tidak memiliki akses untuk mengubah kontes.
@@ -188,4 +317,29 @@
             </div>
         </form>
     </div>
+
+    <script>
+        (function() {
+            const typeEl = document.getElementById('contest_type');
+            const rulesEl = document.getElementById('rules_133');
+            const targetLabel = document.getElementById('target_label');
+
+            function sync() {
+                const type = typeEl?.value || 'leaderboard';
+                const isQualifier = type === 'qualifier';
+
+                if (rulesEl) {
+                    if (isQualifier) rulesEl.classList.remove('hidden');
+                    else rulesEl.classList.add('hidden');
+                }
+
+                if (targetLabel) {
+                    targetLabel.textContent = 'Target Unit';
+                }
+            }
+
+            typeEl?.addEventListener('change', sync);
+            sync();
+        })();
+    </script>
 </x-dashboard-layout>

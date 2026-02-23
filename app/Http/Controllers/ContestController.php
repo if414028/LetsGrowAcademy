@@ -3,19 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\Contest;
-use App\Models\SalesOrder;
 use App\Models\User;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
 use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Spatie\Permission\Models\Role;
 
 class ContestController extends Controller
 {
     use AuthorizesRequests, DispatchesJobs, ValidatesRequests;
+
     /**
      * Display a listing of the resource.
      */
@@ -28,9 +28,14 @@ class ContestController extends Controller
 
         $query = Contest::query()->with(['creator', 'creatorRole']);
 
-        // ✅ SM: lihat kontes untuk timnya (HM downline + HP di bawahnya)
+        /**
+         * RULE:
+         * - Participant = hanya HP
+         * - HM/SM melihat kontes berdasarkan rules.target_hm_ids
+         */
+
         if ($user->hasRole('Sales Manager')) {
-            // ambil semua HM direct child dari SM
+            // HM direct child SM
             $hmIds = User::query()
                 ->whereIn('id', function ($q) use ($user) {
                     $q->select('child_user_id')
@@ -39,14 +44,24 @@ class ContestController extends Controller
                 })
                 ->whereHas('roles', fn($r) => $r->where('name', 'Health Manager'))
                 ->pluck('id')
+                ->map(fn($v) => (int) $v)
                 ->all();
 
-            // jika SM belum punya HM, biar ga error / ga return semua data
-            $query->whereHas('participants', function ($p) use ($hmIds) {
-                $p->whereIn('users.id', $hmIds ?: [0]);
+            // kontes yang target_hm_ids mengandung salah satu HM-nya SM
+            $query->where(function ($w) use ($hmIds) {
+                if (empty($hmIds)) {
+                    $w->whereRaw('1 = 0');
+                    return;
+                }
+                foreach ($hmIds as $hmId) {
+                    $w->orWhereJsonContains('rules->target_hm_ids', $hmId);
+                }
             });
+        } elseif ($user->hasRole('Health Manager')) {
+            // kontes yang target_hm_ids mengandung HM ini
+            $query->whereJsonContains('rules->target_hm_ids', (int) $user->id);
         } else {
-            // ✅ selain SM: kontes yang user ini terdaftar
+            // HP / role lain: kontes yang dia participant
             $query->whereHas('participants', function ($p) use ($user) {
                 $p->where('users.id', $user->id);
             });
@@ -67,8 +82,6 @@ class ContestController extends Controller
 
         return view('contests.index', compact('contests'));
     }
-
-
 
     /**
      * Show the form for creating a new resource.
@@ -118,7 +131,6 @@ class ContestController extends Controller
         abort(403);
     }
 
-
     /**
      * Store a newly created resource in storage.
      */
@@ -134,6 +146,13 @@ class ContestController extends Controller
             'target_unit' => ['required', 'integer', 'min:1'],
             'reward' => ['nullable', 'string', 'max:255'],
             'banner' => ['nullable', 'image', 'max:2048'],
+
+            'date_basis' => ['nullable', 'in:install_date,key_in_at'],
+            'type' => ['nullable', 'in:leaderboard,qualifier'],
+
+            // qualifier rules
+            'monthly_min_personal_ns' => ['nullable', 'integer', 'min:1'],
+            'monthly_min_direct_active_partner' => ['nullable', 'integer', 'min:0'],
         ];
 
         // HM/Admin/Head Admin: wajib pilih HM minimal 1
@@ -154,7 +173,6 @@ class ContestController extends Controller
 
             // Tentukan HM target
             if ($user->hasRole('Sales Manager')) {
-                // auto: semua HM direct child SM
                 $selectedHmIds = User::query()
                     ->whereIn('id', function ($q) use ($user) {
                         $q->select('child_user_id')
@@ -163,18 +181,44 @@ class ContestController extends Controller
                     })
                     ->whereHas('roles', fn($r) => $r->where('name', 'Health Manager'))
                     ->pluck('id')
+                    ->map(fn($v) => (int) $v)
                     ->values()
                     ->all();
             } else {
-                // HM/Admin/Head Admin: dari input
                 $selectedHmIds = array_values(array_unique(array_map('intval', $data['hm_ids'] ?? [])));
             }
 
             // Ambil semua HP di bawah HM terpilih
             $hpIds = $this->getDescendantsByRole($selectedHmIds, 'Health Planner');
 
-            // Participants = HM + HP + creator
-            $participantIds = array_values(array_unique(array_merge($selectedHmIds, $hpIds, [$user->id])));
+            // ✅ Participants = HP ONLY
+            $participantIds = array_values(array_unique($hpIds));
+
+            $dateBasis = $data['date_basis'] ?? 'install_date';
+            $type = $data['type'] ?? 'leaderboard';
+
+            $isQualifier = ($type === 'qualifier')
+                || !empty($data['monthly_min_personal_ns'])
+                || !empty($data['monthly_min_direct_active_partner']);
+
+            if ($isQualifier) {
+                $type = 'qualifier';
+            }
+
+            $baseRules = [];
+
+            // selalu simpan target HM supaya index() HM/SM bisa filter
+            $baseRules['target_hm_ids'] = $selectedHmIds;
+
+            if ($isQualifier) {
+                $baseRules = array_merge($baseRules, [
+                    'monthly_min_personal_ns' => (int) ($data['monthly_min_personal_ns'] ?? 3), // qty personal min
+                    'monthly_min_direct_active_partner' => (int) ($data['monthly_min_direct_active_partner'] ?? 3),
+                    'direct_partner_active_min_personal_ns' => 1, // partner active minimal qty >= 1
+                    'active_partner_definition' => 'partner_personal_qty_min_1',
+                    'partner_relation' => 'direct',
+                ]);
+            }
 
             $contest = Contest::create([
                 'title' => $data['title'],
@@ -187,9 +231,13 @@ class ContestController extends Controller
                 'created_by_user_id' => $user->id,
                 'created_by_role_id' => $user->roles()->first()?->id,
                 'status' => 'draft',
+
+                'date_basis' => $dateBasis,
+                'type' => $type,
+                'rules' => !empty($baseRules) ? $baseRules : null,
             ]);
 
-            // Eligible roles: HM + HP
+            // Eligible roles: HM + HP (boleh tetap, untuk reference)
             $hmRoleId = Role::where('name', 'Health Manager')->value('id');
             $hpRoleId = Role::where('name', 'Health Planner')->value('id');
             $contest->eligibleRoles()->sync(array_values(array_filter([$hmRoleId, $hpRoleId])));
@@ -211,6 +259,23 @@ class ContestController extends Controller
         });
     }
 
+    private function getDirectChildrenIds(int $parentUserId, ?string $roleName = null): array
+    {
+        $ids = DB::table('user_hierarchies')
+            ->where('parent_user_id', $parentUserId)
+            ->pluck('child_user_id')
+            ->map(fn($v) => (int) $v)
+            ->all();
+
+        if (!$roleName) return $ids;
+
+        return User::query()
+            ->whereIn('id', $ids ?: [0])
+            ->whereHas('roles', fn($q) => $q->where('name', $roleName))
+            ->pluck('id')
+            ->map(fn($v) => (int) $v)
+            ->all();
+    }
 
     private function getDescendantsByRole(array $rootUserIds, string $roleName): array
     {
@@ -242,7 +307,6 @@ class ContestController extends Controller
         $allDescendantIds = array_keys($visited);
         if (empty($allDescendantIds)) return [];
 
-        // filter by role
         return User::query()
             ->whereIn('id', $allDescendantIds)
             ->whereHas('roles', fn($q) => $q->where('name', $roleName))
@@ -256,12 +320,10 @@ class ContestController extends Controller
      */
     public function show(Contest $contest)
     {
-        // authorize view (pakai Gate biar aman walau authorize() belum kepakai)
         if (Gate::denies('view', $contest)) {
             abort(403);
         }
 
-        // ambil peserta HP saja (Health Planner)
         $hpParticipants = $contest->participants()
             ->whereHas('roles', fn($r) => $r->where('name', 'Health Planner'))
             ->select('users.id', 'users.name')
@@ -269,53 +331,170 @@ class ContestController extends Controller
 
         $hpIds = $hpParticipants->pluck('id')->all();
 
-        // kalau belum ada HP, leaderboard kosong
         $rows = [];
-        if (!empty($hpIds)) {
-            $start = $contest->start_date?->startOfDay();
-            $end   = $contest->end_date?->endOfDay();
+        $months = [];
+        $winners = [];
 
-            // progress = count sales order selesai dalam periode
-            $progressMap = DB::table('sales_orders')
-                ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-                ->whereIn('sales_orders.sales_user_id', $hpIds)
-                ->where('sales_orders.status', 'selesai')
-                ->when($start && $end, function ($q) use ($start, $end) {
-                    $q->whereBetween('sales_orders.install_date', [$start, $end]); // atau key_in_at
-                })
-                ->groupBy('sales_orders.sales_user_id')
-                ->selectRaw('sales_orders.sales_user_id, COALESCE(SUM(sales_order_items.qty),0) as total_unit')
-                ->pluck('total_unit', 'sales_orders.sales_user_id');
+        $type = $contest->type ?? 'leaderboard';
+        $dateBasis = $contest->date_basis ?? 'install_date';
+        $rules = (array) ($contest->rules ?? []);
+        $isQualifier = ($type === 'qualifier') || !empty($rules);
 
-            $target = (int) ($contest->target_unit ?? 0);
-
-            $rows = $hpParticipants->map(function ($u) use ($progressMap, $target) {
-                $done = (int) ($progressMap[$u->id] ?? 0);
-                $pct = $target > 0 ? min(100, (int) round(($done / $target) * 100)) : 0;
-
-                return [
-                    'user_id' => $u->id,
-                    'name' => $u->name,
-                    'done' => $done,
-                    'pct' => $pct,
-                ];
-            })->sortByDesc('done')->values()->all();
-
-            // assign rank (handle tie)
-            $rank = 0;
-            $prev = null;
-            foreach ($rows as $i => $row) {
-                if ($prev === null || $row['done'] !== $prev) {
-                    $rank = $i + 1;
-                    $prev = $row['done'];
-                }
-                $rows[$i]['rank'] = $rank;
-            }
+        if (empty($hpIds)) {
+            return view('contests.show', compact('contest', 'rows', 'months', 'winners'));
         }
 
-        return view('contests.show', compact('contest', 'rows'));
+        $start = $contest->start_date?->copy()->startOfDay();
+        $end   = $contest->end_date?->copy()->endOfDay();
+
+        // =========================
+        // ✅ MODE: QUALIFIER 133
+        // =========================
+        if ($isQualifier) {
+            $minPersonal = (int) ($rules['monthly_min_personal_ns'] ?? 3);
+            $minDirectActive = (int) ($rules['monthly_min_direct_active_partner'] ?? 3);
+            $minPartnerActive = (int) ($rules['direct_partner_active_min_personal_ns'] ?? 1);
+
+            $months = $this->buildMonthRanges($start, $end);
+
+            // personal qty per bulan (SUM qty) untuk semua peserta HP
+            $personalQtyByMonth = [];
+            foreach ($months as $m) {
+                $personalQtyByMonth[$m['key']] = DB::table('sales_orders')
+                    ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+                    ->whereIn('sales_orders.sales_user_id', $hpIds)
+                    ->where('sales_orders.status', 'selesai')
+                    ->whereBetween("sales_orders.$dateBasis", [$m['from'], $m['to']])
+                    ->groupBy('sales_orders.sales_user_id')
+                    ->selectRaw('sales_orders.sales_user_id, COALESCE(SUM(sales_order_items.qty),0) as total_qty')
+                    ->pluck('total_qty', 'sales_orders.sales_user_id')
+                    ->map(fn($v) => (int) $v)
+                    ->all();
+            }
+
+            $rows = $hpParticipants->map(function ($u) use (
+                $months,
+                $personalQtyByMonth,
+                $minPersonal,
+                $minDirectActive,
+                $minPartnerActive
+            ) {
+                $perMonth = [];
+                $allEligible = true;
+
+                // direct partners = direct children role Health Planner
+                $directPartnerIds = $this->getDirectChildrenIds((int) $u->id, 'Health Planner');
+
+                foreach ($months as $m) {
+                    $monthKey = $m['key'];
+
+                    $personal = (int) (($personalQtyByMonth[$monthKey][$u->id] ?? 0));
+
+                    // active partner: partner dianggap active kalau qty >= minPartnerActive (default 1)
+                    $activePartnerCount = 0;
+                    if (!empty($directPartnerIds)) {
+                        foreach ($directPartnerIds as $pid) {
+                            $pPersonal = (int) (($personalQtyByMonth[$monthKey][$pid] ?? 0));
+                            if ($pPersonal >= $minPartnerActive) {
+                                $activePartnerCount++;
+                            }
+                        }
+                    }
+
+                    $eligibleMonth = ($personal >= $minPersonal) && ($activePartnerCount >= $minDirectActive);
+                    if (!$eligibleMonth) $allEligible = false;
+
+                    $perMonth[] = [
+                        'key' => $monthKey,
+                        'label' => $m['label'],
+                        'personal_ns' => $personal, // legacy key untuk blade kamu
+                        'active_partner' => $activePartnerCount,
+                        'eligible' => $eligibleMonth,
+                    ];
+                }
+
+                return [
+                    'user_id' => (int) $u->id,
+                    'name' => $u->name,
+                    'months' => $perMonth,
+                    'is_winner' => $allEligible,
+                ];
+            })->values()->all();
+
+            $winners = array_values(array_filter($rows, fn($r) => $r['is_winner'] === true));
+
+            return view('contests.show', compact('contest', 'rows', 'months', 'winners'));
+        }
+
+        // =========================
+        // ✅ MODE: LEADERBOARD
+        // =========================
+        $progressMap = DB::table('sales_orders')
+            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+            ->whereIn('sales_orders.sales_user_id', $hpIds)
+            ->where('sales_orders.status', 'selesai')
+            ->when($start && $end, function ($q) use ($start, $end, $dateBasis) {
+                $q->whereBetween("sales_orders.$dateBasis", [$start, $end]);
+            })
+            ->groupBy('sales_orders.sales_user_id')
+            ->selectRaw('sales_orders.sales_user_id, COALESCE(SUM(sales_order_items.qty),0) as total_unit')
+            ->pluck('total_unit', 'sales_orders.sales_user_id');
+
+        $target = (int) ($contest->target_unit ?? 0);
+
+        $rows = $hpParticipants->map(function ($u) use ($progressMap, $target) {
+            $done = (int) ($progressMap[$u->id] ?? 0);
+            $pct = $target > 0 ? min(100, (int) round(($done / $target) * 100)) : 0;
+
+            return [
+                'user_id' => (int) $u->id,
+                'name' => $u->name,
+                'done' => $done,
+                'pct' => $pct,
+            ];
+        })->sortByDesc('done')->values()->all();
+
+        // rank with tie
+        $rank = 0;
+        $prev = null;
+        foreach ($rows as $i => $row) {
+            if ($prev === null || $row['done'] !== $prev) {
+                $rank = $i + 1;
+                $prev = $row['done'];
+            }
+            $rows[$i]['rank'] = $rank;
+        }
+
+        return view('contests.show', compact('contest', 'rows', 'months', 'winners'));
     }
 
+    private function buildMonthRanges($start, $end): array
+    {
+        if (!$start || !$end) return [];
+
+        $cursor = $start->copy()->startOfMonth();
+        $last = $end->copy()->startOfMonth();
+
+        $out = [];
+        while ($cursor <= $last) {
+            $from = $cursor->copy()->startOfMonth()->startOfDay();
+            $to = $cursor->copy()->endOfMonth()->endOfDay();
+
+            if ($from < $start) $from = $start->copy();
+            if ($to > $end) $to = $end->copy();
+
+            $out[] = [
+                'key' => $cursor->format('Y-m'),
+                'label' => $cursor->format('M Y'),
+                'from' => $from,
+                'to' => $to,
+            ];
+
+            $cursor->addMonthNoOverflow();
+        }
+
+        return $out;
+    }
 
     /**
      * Show the form for editing the specified resource.
@@ -326,13 +505,11 @@ class ContestController extends Controller
             abort(403);
         }
 
-        // hard lock (jaga-jaga)
         if (in_array($contest->status, ['active', 'ended'], true)) {
             abort(403, 'Kontes yang sudah aktif / selesai tidak bisa diubah.');
         }
 
         $user = $request->user();
-        $healthManagers = collect();
 
         // SM: tidak perlu pilih HM (auto)
         if ($user->hasRole('Sales Manager')) {
@@ -346,26 +523,22 @@ class ContestController extends Controller
                 ->orderBy('name')
                 ->get();
 
-            // HM yang sudah terdaftar di kontes ini
-            $selectedHmIds = $contest->participants()
-                ->whereHas('roles', fn($r) => $r->where('name', 'Health Manager'))
-                ->pluck('users.id')
-                ->map(fn($v) => (int)$v)
-                ->all();
+            // ✅ ambil selected HM dari rules.target_hm_ids (bukan participants)
+            $selectedHmIds = (array) (($contest->rules ?? [])['target_hm_ids'] ?? []);
 
             return view('contests.edit', compact('contest', 'healthManagers', 'selectedHmIds'));
         }
 
         // HM: pilih HM dalam 1 SM (atau minimal dirinya)
         if ($user->hasRole('Health Manager')) {
-            $parentSmId = DB::table('user_hierarchy')
+            $parentSmId = DB::table('user_hierarchies')
                 ->where('child_user_id', $user->id)
                 ->value('parent_user_id');
 
             $healthManagers = User::query()
                 ->whereIn('id', function ($q) use ($parentSmId) {
                     $q->select('child_user_id')
-                        ->from('user_hierarchy')
+                        ->from('user_hierarchies')
                         ->where('parent_user_id', $parentSmId);
                 })
                 ->whereHas('roles', fn($r) => $r->where('name', 'Health Manager'))
@@ -376,18 +549,14 @@ class ContestController extends Controller
                 $healthManagers->prepend($user);
             }
 
-            $selectedHmIds = $contest->participants()
-                ->whereHas('roles', fn($r) => $r->where('name', 'Health Manager'))
-                ->pluck('users.id')
-                ->map(fn($v) => (int)$v)
-                ->all();
+            // ✅ ambil selected HM dari rules.target_hm_ids
+            $selectedHmIds = (array) (($contest->rules ?? [])['target_hm_ids'] ?? []);
 
             return view('contests.edit', compact('contest', 'healthManagers', 'selectedHmIds'));
         }
 
         abort(403);
     }
-
 
     /**
      * Update the specified resource in storage.
@@ -413,9 +582,15 @@ class ContestController extends Controller
             'reward' => ['nullable', 'string', 'max:255'],
             'banner' => ['nullable', 'image', 'max:2048'],
             'remove_banner' => ['nullable', 'boolean'],
+
+            'date_basis' => ['nullable', 'in:install_date,key_in_at'],
+            'type' => ['nullable', 'in:leaderboard,qualifier'],
+
+            'monthly_min_personal_ns' => ['nullable', 'integer', 'min:1'],
+            'monthly_min_direct_active_partner' => ['nullable', 'integer', 'min:0'],
         ];
 
-        // HM/Admin/Head Admin: boleh ubah peserta HM (minimal 1)
+        // HM/Admin/Head Admin: boleh ubah target HM (minimal 1)
         if ($user->hasRole('Health Manager') || $user->hasAnyRole(['Admin', 'Head Admin'])) {
             $rules['hm_ids'] = ['required', 'array', 'min:1'];
             $rules['hm_ids.*'] = ['integer'];
@@ -425,12 +600,9 @@ class ContestController extends Controller
 
         return DB::transaction(function () use ($data, $request, $user, $contest) {
 
-            // handle banner
             $bannerUrl = $contest->banner_url;
 
             if (($data['remove_banner'] ?? false) && $bannerUrl) {
-                // optional: hapus file juga kalau mau
-                // Storage::disk('public')->delete($bannerUrl);
                 $bannerUrl = null;
             }
 
@@ -439,28 +611,63 @@ class ContestController extends Controller
                 $bannerUrl = $path;
             }
 
-            // Tentukan HM target (untuk update peserta)
+            // Tentukan HM target
             if ($user->hasRole('Sales Manager')) {
                 $selectedHmIds = User::query()
                     ->whereIn('id', function ($q) use ($user) {
                         $q->select('child_user_id')
-                            ->from('user_hierarchy')
+                            ->from('user_hierarchies')
                             ->where('parent_user_id', $user->id);
                     })
                     ->whereHas('roles', fn($r) => $r->where('name', 'Health Manager'))
                     ->pluck('id')
+                    ->map(fn($v) => (int) $v)
                     ->values()
                     ->all();
             } else {
                 $selectedHmIds = array_values(array_unique(array_map('intval', $data['hm_ids'] ?? [])));
             }
 
-            // Ambil semua HP di bawah HM terpilih
+            // Ambil HP di bawah HM target
             $hpIds = $this->getDescendantsByRole($selectedHmIds, 'Health Planner');
 
-            $participantIds = array_values(array_unique(array_merge($selectedHmIds, $hpIds, [$contest->created_by_user_id])));
+            // ✅ Participants = HP ONLY
+            $participantIds = array_values(array_unique($hpIds));
 
-            // update contest
+            $dateBasis = $data['date_basis'] ?? ($contest->date_basis ?? 'install_date');
+            $type = $data['type'] ?? ($contest->type ?? 'leaderboard');
+
+            $isQualifier = ($type === 'qualifier')
+                || !empty($data['monthly_min_personal_ns'])
+                || !empty($data['monthly_min_direct_active_partner']);
+
+            if ($isQualifier) {
+                $type = 'qualifier';
+            }
+
+            // merge rules lama supaya target_hm_ids tidak hilang
+            $oldRules = (array) ($contest->rules ?? []);
+            $newRules = $oldRules;
+
+            // selalu update target HM
+            $newRules['target_hm_ids'] = $selectedHmIds;
+
+            if ($isQualifier) {
+                $newRules = array_merge($newRules, [
+                    'monthly_min_personal_ns' => (int) ($data['monthly_min_personal_ns'] ?? 3),
+                    'monthly_min_direct_active_partner' => (int) ($data['monthly_min_direct_active_partner'] ?? 3),
+                    'direct_partner_active_min_personal_ns' => 1,
+                    'active_partner_definition' => 'partner_personal_qty_min_1',
+                    'partner_relation' => 'direct',
+                ]);
+            } else {
+                // kalau bukan qualifier, kamu bisa pilih mau keep rules atau set null
+                // tapi kita keep target_hm_ids biar index HM/SM tetap jalan
+                $newRules = [
+                    'target_hm_ids' => $selectedHmIds,
+                ];
+            }
+
             $contest->update([
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
@@ -469,9 +676,13 @@ class ContestController extends Controller
                 'target_unit' => $data['target_unit'],
                 'reward' => $data['reward'] ?? null,
                 'banner_url' => $bannerUrl,
+
+                'date_basis' => $dateBasis,
+                'type' => $type,
+                'rules' => !empty($newRules) ? $newRules : null,
             ]);
 
-            // update participants (sync)
+            // sync participants
             $now = now();
             $attachData = [];
             foreach ($participantIds as $uid) {
@@ -488,10 +699,6 @@ class ContestController extends Controller
         });
     }
 
-
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Contest $contest)
     {
         //
@@ -506,7 +713,6 @@ class ContestController extends Controller
         }
 
         $contest->update(['status' => 'active']);
-
 
         return back()->with('success', 'Kontes berhasil dipublish.');
     }

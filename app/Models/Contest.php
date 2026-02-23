@@ -22,12 +22,17 @@ class Contest extends Model
         'banner_url',
         'created_by_user_id',
         'created_by_role_id',
-        'status'
+        'status',
+        'metric',
+        'date_basis',
+        'rules',
+        'type',
     ];
 
     protected $casts = [
         'start_date' => 'date',
-        'end_date' => 'date'
+        'end_date' => 'date',
+        'rules' => 'array'
     ];
 
     /**
