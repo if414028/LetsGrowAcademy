@@ -1,4 +1,15 @@
 <x-dashboard-layout>
+    @php
+        $authUser = request()->user();
+
+        $isAdminLike = $authUser->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']);
+
+        $topTitle = $isAdminLike ? 'Top Performance Health Manager' : 'Top Performance Health Planner';
+
+        $leaderDesc = $isAdminLike
+            ? 'All Health Manager for selected period.'
+            : 'All Health Planner for selected period.';
+    @endphp
     <div class="space-y-6">
 
         {{-- Header --}}
@@ -12,12 +23,12 @@
         {{-- Tabs: Weekly / Monthly --}}
         <div class="inline-flex rounded-xl bg-gray-100 p-1">
             <a href="{{ route('reports.index', ['period' => 'weekly']) }}"
-               class="px-6 py-2 rounded-lg text-sm font-medium
+                class="px-6 py-2 rounded-lg text-sm font-medium
                {{ $period === 'weekly' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900' }}">
                 Weekly
             </a>
             <a href="{{ route('reports.index', ['period' => 'monthly']) }}"
-               class="px-6 py-2 rounded-lg text-sm font-medium
+                class="px-6 py-2 rounded-lg text-sm font-medium
                {{ $period === 'monthly' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900' }}">
                 Monthly
             </a>
@@ -39,24 +50,13 @@
                 <div class="flex items-center gap-4">
                     <div class="h-12 w-12 rounded-xl {{ $iconBg }} flex items-center justify-center">
                         {{-- Icon --}}
-                        @if($isMonthly)
+                        @if ($isMonthly)
                             {{-- Monthly icon --}}
-                            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none"
-                                xmlns="http://www.w3.org/2000/svg">
-                                <path
-                                    d="M4 16L9 11L13 15L20 8"
-                                    stroke="white"
-                                    stroke-width="2.5"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                />
-                                <path
-                                    d="M14 8H20V14"
-                                    stroke="white"
-                                    stroke-width="2.5"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                />
+                            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M4 16L9 11L13 15L20 8" stroke="white" stroke-width="2.5" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path d="M14 8H20V14" stroke="white" stroke-width="2.5" stroke-linecap="round"
+                                    stroke-linejoin="round" />
                             </svg>
                         @else
                             {{-- Weekly icon --}}
@@ -91,7 +91,7 @@
         <div class="bg-white rounded-2xl shadow ring-1 ring-black/5 p-6">
             <div class="flex items-center justify-between">
                 <h2 class="text-lg font-semibold text-gray-900">
-                    Top Performers – {{ $period === 'weekly' ? 'Weekly' : 'Monthly' }}
+                    {{ $topTitle }} – {{ $period === 'weekly' ? 'Weekly' : 'Monthly' }}
                 </h2>
                 <div class="text-sm text-gray-500">
                     Top 10 (auto)
@@ -99,7 +99,7 @@
             </div>
 
             <div class="mt-4">
-                @if($topPerformers->count() === 0)
+                @if ($topPerformers->count() === 0)
                     <div class="text-sm text-gray-500">No data available for this period.</div>
                 @else
                     <div class="h-72">
@@ -113,7 +113,7 @@
         <div class="bg-white rounded-2xl shadow ring-1 ring-black/5 p-6">
             <h2 class="text-lg font-semibold text-gray-900">Leaderboard</h2>
             <p class="text-sm text-gray-500 mt-1">
-                All downline sales for selected period.
+                {{ $leaderDesc }}
             </p>
 
             <div class="mt-4 overflow-x-auto">
@@ -129,7 +129,8 @@
                         @forelse($leaderboard as $row)
                             <tr class="text-gray-800">
                                 <td class="py-3 pr-4">
-                                    <span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold
+                                    <span
+                                        class="inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold
                                         {{ $row['rank'] === 1 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-700' }}">
                                         #{{ $row['rank'] }}
                                     </span>
@@ -154,31 +155,35 @@
     {{-- Chart.js --}}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        @if($topPerformers->count() > 0)
-        const ctx = document.getElementById('topPerformersChart');
+        @if ($topPerformers->count() > 0)
+            const ctx = document.getElementById('topPerformersChart');
 
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: @json($chartLabels),
-                datasets: [{
-                    label: 'Units Sold',
-                    data: @json($chartUnits),
-                    borderWidth: 1,
-                    borderRadius: 10
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true }
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: @json($chartLabels),
+                    datasets: [{
+                        label: 'Units Sold',
+                        data: @json($chartUnits),
+                        borderWidth: 1,
+                        borderRadius: 10
+                    }]
                 },
-                plugins: {
-                    legend: { display: false }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
                 }
-            }
-        });
+            });
         @endif
     </script>
 </x-dashboard-layout>

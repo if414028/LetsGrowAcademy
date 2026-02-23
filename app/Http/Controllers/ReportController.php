@@ -14,9 +14,6 @@ class ReportController extends Controller
     {
         $user = $request->user();
 
-        // ambil semua bawahan (children)
-        $childIds = $user->childrenUsers()->pluck('users.id');
-
         // period: weekly | monthly
         $period = $request->get('period', 'weekly');
         if (!in_array($period, ['weekly', 'monthly'], true)) {
@@ -25,48 +22,124 @@ class ReportController extends Controller
 
         [$start, $end, $label] = $this->dateRange($period);
 
-        // ===== Units aggregate (orders join items) =====
-        $itemsAgg = DB::table('sales_orders')
+        // =========================
+        // 1) Tentukan kandidat yang di-rank (target rows)
+        // =========================
+        $isAdminLike = $user->hasAnyRole(['Admin', 'Head Admin', 'Sales Manager']);
+        $isHM        = $user->hasRole('Health Manager');
+
+        if ($isAdminLike) {
+            // Semua Health Manager di sistem
+            $targetsQ = User::query()
+                ->whereHas('roles', fn($q) => $q->where('name', 'Health Manager'));
+        } elseif ($isHM) {
+            // Semua Health Planner direct bawahan HM
+            $targetsQ = User::query()
+                ->whereIn('users.id', $user->childrenUsers()->pluck('users.id'))
+                ->whereHas('roles', fn($q) => $q->where('name', 'Health Planner'));
+        } else {
+            // Health Planner: semua direct bawahan
+            $targetsQ = User::query()
+                ->whereIn('users.id', $user->childrenUsers()->pluck('users.id'));
+        }
+
+        $targets = $targetsQ->select('users.id', 'users.name')->get();
+        $targetIds = $targets->pluck('id')->map(fn($v) => (int)$v)->values();
+
+        if ($targetIds->isEmpty()) {
+            return view('reports.index', [
+                'period'        => $period,
+                'rangeLabel'    => $label,
+                'start'         => $start,
+                'end'           => $end,
+                'topPerformers' => collect(),
+                'leaderboard'   => collect(),
+                'chartLabels'   => collect(),
+                'chartUnits'    => collect(),
+            ]);
+        }
+
+        // =========================
+        // 2) Units per seller (SUM qty) hanya status selesai
+        // =========================
+        $unitsPerSeller = DB::table('sales_orders')
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+            ->where('sales_orders.status', 'selesai')
+            ->whereBetween('sales_orders.created_at', [$start, $end])
+            ->groupBy('sales_orders.sales_user_id')
             ->select(
                 'sales_orders.sales_user_id',
                 DB::raw('COALESCE(SUM(sales_order_items.qty), 0) as units')
-            )
-            ->whereBetween('sales_orders.created_at', [$start, $end])
-            ->groupBy('sales_orders.sales_user_id');
+            );
 
-        // ===== Leaderboard: semua bawahan (units, revenue=0 sementara) =====
-        $leaderboard = User::query()
-            ->whereIn('users.id', $childIds)
-            ->leftJoinSub($itemsAgg, 'items_agg', function ($join) {
-                $join->on('items_agg.sales_user_id', '=', 'users.id');
-            })
-            ->select(
-                'users.id',
-                'users.name',
-                DB::raw('COALESCE(items_agg.units, 0) as units'),
-                DB::raw('0 as revenue') // ✅ revenue belum tersedia di schema
+        // =========================
+        // 3) Recursive CTE: descendants (target -> semua turunan) + include self
+        //    user_hierarchies: parent_user_id, child_user_id
+        // =========================
+        $targetsInline = '(' . $targetIds->implode(',') . ')';
+
+        // NOTE: kalau kamu ingin filter relation_type tertentu, tambahkan:
+        // AND uh.relation_type = '...'
+        $cteSql = "
+            WITH RECURSIVE descendants AS (
+                -- anchor: tiap target adalah descendant dirinya sendiri
+                SELECT u.id AS ancestor_id, u.id AS descendant_id
+                FROM users u
+                WHERE u.id IN {$targetsInline}
+
+                UNION ALL
+
+                -- recursive: ambil anak dari descendant sebelumnya
+                SELECT d.ancestor_id, uh.child_user_id AS descendant_id
+                FROM descendants d
+                JOIN user_hierarchies uh
+                    ON uh.parent_user_id = d.descendant_id
             )
-            ->orderByDesc('units')
-            ->orderBy('users.name')
-            ->get()
+            SELECT d.ancestor_id, COALESCE(SUM(u.units), 0) AS units
+            FROM descendants d
+            LEFT JOIN (
+                " . $unitsPerSeller->toSql() . "
+            ) u
+                ON u.sales_user_id = d.descendant_id
+            GROUP BY d.ancestor_id
+        ";
+
+        // binding untuk subquery $unitsPerSeller
+        $unitsPerTargetRows = DB::select($cteSql, $unitsPerSeller->getBindings());
+
+        // map: ancestor_id => units
+        $unitsMap = collect($unitsPerTargetRows)
+            ->mapWithKeys(fn($r) => [(int)$r->ancestor_id => (int)$r->units]);
+
+        // =========================
+        // 4) Build leaderboard TOP 10 (sesuai requirement)
+        // =========================
+        $leaderboard = $targets
+            ->map(function ($t) use ($unitsMap) {
+                $id = (int)$t->id;
+                return [
+                    'id'    => $id,
+                    'name'  => (string)$t->name,
+                    'units' => (int)($unitsMap[$id] ?? 0),
+                ];
+            })
+            ->sortBy([
+                ['units', 'desc'],
+                ['name', 'asc'],
+            ])
+            ->values()
+            ->take(10)
             ->values()
             ->map(function ($row, $idx) {
                 return [
-                    'rank'    => $idx + 1,
-                    'id'      => (int) $row->id,
-                    'name'    => (string) $row->name,
-                    'units'   => (int) $row->units,
-                    'revenue' => 0.0,
+                    'rank'  => $idx + 1,
+                    'id'    => $row['id'],
+                    'name'  => $row['name'],
+                    'units' => $row['units'],
                 ];
             });
 
-        // Top performers: top 10 dari leaderboard
-        $topPerformers = $leaderboard->take(10)->values();
-
-        // data chart
-        $chartLabels = $topPerformers->pluck('name');
-        $chartUnits  = $topPerformers->pluck('units');
+        $topPerformers = $leaderboard;
 
         return view('reports.index', [
             'period'        => $period,
@@ -75,8 +148,8 @@ class ReportController extends Controller
             'end'           => $end,
             'topPerformers' => $topPerformers,
             'leaderboard'   => $leaderboard,
-            'chartLabels'   => $chartLabels,
-            'chartUnits'    => $chartUnits,
+            'chartLabels'   => $topPerformers->pluck('name'),
+            'chartUnits'    => $topPerformers->pluck('units'),
         ]);
     }
 
@@ -91,7 +164,6 @@ class ReportController extends Controller
             return [$start, $end, $label];
         }
 
-        // weekly default: last 7 days
         $start = $now->copy()->subDays(6)->startOfDay();
         $end   = $now->copy()->endOfDay();
         $label = 'Last 7 Days';
