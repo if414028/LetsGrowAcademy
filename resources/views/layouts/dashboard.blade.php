@@ -73,17 +73,16 @@
                     </a>
                 @endrole
 
-                @hasanyrole('Admin|Head Admin|Sales Manager|Health Manager')
-                    <a href="{{ route('sales-orders.index') }}"
-                        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+
+                <a href="{{ route('sales-orders.index') }}"
+                    class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                               {{ request()->routeIs('sales-orders.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12h6m-6 4h6M7 6h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z" />
-                        </svg>
-                        Sales Orders
-                    </a>
-                @endhasanyrole
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6M7 6h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z" />
+                    </svg>
+                    Sales Orders
+                </a>
 
                 <a href="{{ route('contests.index') }}"
                     class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
@@ -186,17 +185,15 @@
                         </a>
                     @endrole
 
-                    @hasanyrole('Admin|Head Admin|Sales Manager|Health Manager')
-                        <a href="{{ route('sales-orders.index') }}" @click="sidebarOpen=false"
-                            class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+                    <a href="{{ route('sales-orders.index') }}" @click="sidebarOpen=false"
+                        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                                     {{ request()->routeIs('sales-orders.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
-                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M9 12h6m-6 4h6M7 6h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z" />
-                            </svg>
-                            Sales Orders
-                        </a>
-                    @endhasanyrole
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12h6m-6 4h6M7 6h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z" />
+                        </svg>
+                        Sales Orders
+                    </a>
 
                     <a href="{{ route('contests.index') }}" @click="sidebarOpen=false"
                         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium

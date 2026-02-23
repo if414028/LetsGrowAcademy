@@ -32,9 +32,15 @@ class SalesOrderController extends Controller
 
         // ✅ Admin & Head Admin: lihat semua
         if (!$user->hasAnyRole(['Admin', 'Head Admin'])) {
-            // ✅ selain Admin: lihat order milik diri sendiri + semua downline (multi-level)
-            $visibleSalesUserIds = $this->descendantUserIds($user->id); // include root (self)
-            $q->whereIn('sales_user_id', $visibleSalesUserIds);
+
+            // ✅ Health Planner: hanya order milik dirinya sendiri
+            if ($user->hasRole('Health Planner')) {
+                $q->where('sales_user_id', $user->id);
+            } else {
+                // ✅ selain Admin & bukan HP: diri sendiri + semua downline
+                $visibleSalesUserIds = $this->descendantUserIds($user->id); // include root (self)
+                $q->whereIn('sales_user_id', $visibleSalesUserIds);
+            }
         }
 
         // 🔎 search
@@ -71,9 +77,14 @@ class SalesOrderController extends Controller
         $user = request()->user();
 
         if (!$user->hasAnyRole(['Admin', 'Head Admin'])) {
-            $visibleSalesUserIds = $this->descendantUserIds($user->id);
 
-            abort_unless($visibleSalesUserIds->contains($salesOrder->sales_user_id), 403);
+            // ✅ Health Planner: hanya boleh lihat SO miliknya sendiri
+            if ($user->hasRole('Health Planner')) {
+                abort_unless((int) $salesOrder->sales_user_id === (int) $user->id, 403);
+            } else {
+                $visibleSalesUserIds = $this->descendantUserIds($user->id);
+                abort_unless($visibleSalesUserIds->contains($salesOrder->sales_user_id), 403);
+            }
         }
 
         $salesOrder->load(['customer', 'salesUser', 'items.product', 'items.productPrice']);
