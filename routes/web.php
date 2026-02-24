@@ -99,6 +99,10 @@ Route::middleware('auth', 'active')->group(function () {
 
     Route::get('/performance/team/{user}', [PerformanceController::class, 'teamDetail']);
 
+    // Export Performance Data
+    Route::get('/performance/export', [PerformanceController::class, 'export'])
+        ->name('performance.export');
+
     // Reports
     Route::middleware(['auth'])->group(function () {
         Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])

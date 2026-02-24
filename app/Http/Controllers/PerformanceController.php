@@ -8,6 +8,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
+use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+
 class PerformanceController extends Controller
 {
     public function index(Request $request)
@@ -273,5 +280,340 @@ class PerformanceController extends Controller
             'revenue' => 0,
             'orders' => $orders,
         ]);
+    }
+
+    private function buildPerformanceData(Request $request): array
+    {
+        $authUser = $request->user();
+
+        $authDownlineIds = $authUser->downlineUserIds();
+        $memberId = (int) $request->get('member_id', 0);
+        $allowedIds = $authDownlineIds->push($authUser->id)->unique()->values();
+
+        $baseUser = $authUser;
+        if ($memberId && $allowedIds->contains($memberId)) {
+            $baseUser = User::query()->whereKey($memberId)->first() ?? $authUser;
+        }
+
+        $childIds = $baseUser->downlineUserIds();
+        $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+
+        $from = $request->get('from'); // YYYY-MM-DD
+        $to   = $request->get('to');
+
+        if (!$from && !$to) {
+            $from = Carbon::now()->startOfMonth()->subMonth()->toDateString();
+            $to   = Carbon::now()->endOfMonth()->addMonth()->toDateString();
+        } else {
+            if ($from && !$to) $to = Carbon::parse($from)->endOfMonth()->toDateString();
+            if (!$from && $to) $from = Carbon::parse($to)->startOfMonth()->toDateString();
+        }
+
+        // SUMMARY (sama persis seperti index)
+        $summaryQ = DB::table('sales_orders as so')
+            ->whereNull('so.deleted_at')
+            ->whereIn('so.sales_user_id', $scopeUserIds);
+
+        if ($from) $summaryQ->whereDate('so.key_in_at', '>=', $from);
+        if ($to)   $summaryQ->whereDate('so.key_in_at', '<=', $to);
+        if ($from || $to) $summaryQ->whereNotNull('so.key_in_at');
+
+        $summary = $summaryQ->selectRaw("
+        SUM(
+            CASE
+                WHEN COALESCE(so.is_recurring, 0) = 0
+                 AND so.ccp_status = 'menunggu pengecekan'
+                 AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
+                THEN 1 ELSE 0
+            END
+        ) as total_key_in,
+
+        SUM(
+            CASE
+                WHEN COALESCE(so.is_recurring, 0) = 1
+                 AND so.ccp_status = 'menunggu pengecekan'
+                 AND so.status = 'menunggu verifikasi'
+                THEN 1 ELSE 0
+            END
+        ) as total_recurring,
+
+        SUM(
+            CASE
+                WHEN COALESCE(so.is_recurring, 0) = 1
+                 AND so.ccp_status = 'disetujui'
+                 AND so.status = 'menunggu jadwal'
+                THEN 1 ELSE 0
+            END
+        ) as menunggu_jadwal,
+
+        SUM(
+            CASE
+                WHEN COALESCE(so.is_recurring, 0) = 1
+                 AND so.ccp_status = 'disetujui'
+                 AND so.status IN ('dijadwalkan', 'ditunda', 'gagal penelponan')
+                THEN 1 ELSE 0
+            END
+        ) as task_id,
+
+        SUM(
+            CASE
+                WHEN so.status = 'selesai'
+                THEN 1 ELSE 0
+            END
+        ) as total_sudah_install
+    ")->first();
+
+        // TEAM SHEET (sama persis seperti index)
+        $soiAgg = DB::table('sales_order_items')
+            ->selectRaw('sales_order_id, COALESCE(SUM(qty),0) as ns_units')
+            ->groupBy('sales_order_id');
+
+        $sheetQ = DB::table('sales_orders as so')
+            ->join('users as u', 'u.id', '=', 'so.sales_user_id')
+            ->leftJoin('customers as c', function ($j) {
+                $j->on('c.id', '=', 'so.customer_id')->whereNull('c.deleted_at');
+            })
+            ->leftJoinSub($soiAgg, 'soi', function ($j) {
+                $j->on('soi.sales_order_id', '=', 'so.id');
+            })
+            ->whereNull('so.deleted_at')
+            ->whereIn('so.sales_user_id', $scopeUserIds);
+
+        if ($from) $sheetQ->whereDate('so.key_in_at', '>=', $from);
+        if ($to)   $sheetQ->whereDate('so.key_in_at', '<=', $to);
+        if ($from || $to) $sheetQ->whereNotNull('so.key_in_at');
+
+        $teamSheetRows = $sheetQ
+            ->orderBy('u.name')
+            ->orderBy('so.key_in_at')
+            ->select([
+                'so.id',
+                'so.sales_user_id',
+                DB::raw("COALESCE(NULLIF(u.full_name,''), u.name) as hp_name"),
+                DB::raw("COALESCE(c.full_name, '-') as customer_name"),
+                'so.key_in_at',
+                'so.ccp_status',
+                'so.status',
+                'so.install_date',
+                DB::raw("COALESCE(NULLIF(so.status_reason,''), NULLIF(so.ccp_remarks,''), '-') as remarks"),
+                DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
+                DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
+            ])
+            ->get()
+            ->groupBy('hp_name');
+
+        return [
+            'baseUser' => $baseUser,
+            'from' => $from,
+            'to' => $to,
+            'summary' => $summary,
+            'teamSheetRows' => $teamSheetRows,
+        ];
+    }
+
+    public function export(Request $request)
+    {
+        $data = $this->buildPerformanceData($request);
+
+        /** @var \App\Models\User $baseUser */
+        $baseUser = $data['baseUser'];
+        $from = $data['from'];
+        $to = $data['to'];
+        $summary = $data['summary'];
+        $teamSheetRows = $data['teamSheetRows'];
+
+        // =========================
+        // Title with Role Prefix
+        // =========================
+        $userName = strtoupper($baseUser->full_name ?: $baseUser->name);
+        $roleName = $baseUser->roles->pluck('name')->first();
+
+        // mapping role → prefix
+        $roleMap = [
+            'Health Manager' => 'HM',
+            'Health Planner' => 'HP',
+            'Sales Manager'  => 'SM',
+            'Admin'          => 'Admin',
+            'Head Admin'     => 'Head Admin',
+        ];
+
+        $rolePrefix = $roleMap[$roleName] ?? $roleName ?? '';
+
+        // final title
+        $title = trim("Team {$rolePrefix} {$userName}");
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Performance');
+
+        // Column widths
+        $sheet->getColumnDimension('A')->setWidth(6);   // No
+        $sheet->getColumnDimension('B')->setWidth(28);  // Nama HP
+        $sheet->getColumnDimension('C')->setWidth(38);  // Nama Customer
+        $sheet->getColumnDimension('D')->setWidth(16);  // Tgl Key-in
+        $sheet->getColumnDimension('E')->setWidth(16);  // CCP Disetujui
+        $sheet->getColumnDimension('F')->setWidth(12);  // Key-in (NS)
+        $sheet->getColumnDimension('G')->setWidth(14);  // Install/NS
+        $sheet->getColumnDimension('H')->setWidth(16);  // Tgl Instalasi
+        $sheet->getColumnDimension('I')->setWidth(42);  // Remarks
+
+        // Title row
+        $sheet->mergeCells('A1:I1');
+        $sheet->setCellValue('A1', $title);
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        // Range row
+        $sheet->mergeCells('A2:I2');
+        $sheet->setCellValue('A2', "Range: {$from} s/d {$to}");
+        $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        // Header row
+        $headerRow = 4;
+        $headers = ['No', 'Nama HP', 'Nama Customer', 'Tanggal Key in', 'CCP disetujui', 'Key-in', 'Install/NS', 'Tanggal Instalasi', 'Remarks'];
+        $sheet->fromArray($headers, null, "A{$headerRow}");
+
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->applyFromArray([
+            'font' => ['bold' => true],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['argb' => 'FFBFE3FF'], // biru muda
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['argb' => 'FF1F2937'],
+                ],
+            ],
+        ]);
+
+        $row = $headerRow + 1;
+
+        // data totals (optional tambahan)
+        $totalNsUnits = 0;
+        $totalRows = 0;
+
+        $no = 1;
+        foreach ($teamSheetRows as $hpName => $rows) {
+            $startRowForHp = $row;
+            $count = $rows->count();
+
+            foreach ($rows as $r) {
+                $keyIn = $r->key_in_at ? Carbon::parse($r->key_in_at)->format('d-M') : '-';
+                $ccpAppr = $r->ccp_approved_at ? Carbon::parse($r->ccp_approved_at)->format('d-M') : '';
+                $installDate = $r->install_date ? Carbon::parse($r->install_date)->format('d-M') : '';
+
+                $ns = (int) $r->ns_units;
+                $totalNsUnits += $ns;
+                $totalRows++;
+
+                $sheet->setCellValue("A{$row}", $no);
+                $sheet->setCellValue("B{$row}", $hpName); // nanti di-merge
+                $sheet->setCellValue("C{$row}", $r->customer_name);
+                $sheet->setCellValue("D{$row}", $keyIn);
+                $sheet->setCellValue("E{$row}", $ccpAppr ?: '');
+                $sheet->setCellValue("F{$row}", "{$ns}NS");
+                $sheet->setCellValue("G{$row}", ($r->status ?? '') === 'selesai' ? 'OK' : '');
+                $sheet->setCellValue("H{$row}", $installDate ?: '');
+                $sheet->setCellValue("I{$row}", $r->remarks ?? '-');
+
+                $row++;
+            }
+
+            // merge Nama HP & No (excel-like)
+            if ($count > 1) {
+                $endRowForHp = $row - 1;
+                $sheet->mergeCells("A{$startRowForHp}:A{$endRowForHp}");
+                $sheet->mergeCells("B{$startRowForHp}:B{$endRowForHp}");
+            }
+
+            // align merged cells top
+            $sheet->getStyle("A{$startRowForHp}:B" . ($row - 1))
+                ->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
+
+            $no++;
+        }
+
+        // Borders for data
+        $sheet->getStyle("A" . ($headerRow + 1) . ":I" . ($row - 1))->applyFromArray([
+            'alignment' => ['vertical' => Alignment::VERTICAL_TOP],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['argb' => 'FF9CA3AF'],
+                ],
+            ],
+        ]);
+
+        // =========================
+        // SUMMARY (colored rows only)
+        // =========================
+        $row += 2;
+
+        // Title
+        $sheet->mergeCells("A{$row}:I{$row}");
+        $sheet->setCellValue("A{$row}", "Summary");
+        $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize(12);
+        $row++;
+
+        // Data summary (ONLY 5 sesuai stat card)
+        $summaryRows = [
+            ['Total Key-In', (int)($summary->total_key_in ?? 0), 'FFF9FAFB'],      // gray-50
+            ['Total Recurring', (int)($summary->total_recurring ?? 0), 'FFEFF6FF'], // blue-50
+            ['Dijadwalkan', (int)($summary->menunggu_jadwal ?? 0), 'FFFFFBEB'],   // yellow-50
+            ['Task ID', (int)($summary->task_id ?? 0), 'FFFAF5FF'],               // purple-50
+            ['Total sudah install (OK)', (int)($summary->total_sudah_install ?? 0), 'FFF0FDF4'], // green-50
+        ];
+
+        foreach ($summaryRows as [$label, $value, $bgColor]) {
+
+            // Label
+            $sheet->setCellValue("A{$row}", $label);
+
+            // Value
+            $sheet->setCellValue("I{$row}", $value);
+
+            // Merge label area (A-H)
+            $sheet->mergeCells("A{$row}:H{$row}");
+
+            // Styling
+            $sheet->getStyle("A{$row}:I{$row}")->applyFromArray([
+                'font' => [
+                    'bold' => true,
+                ],
+                'alignment' => [
+                    'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                ],
+                'fill' => [
+                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'startColor' => ['argb' => $bgColor],
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        'color' => ['argb' => 'FFE5E7EB'],
+                    ],
+                ],
+            ]);
+
+            // Value align right
+            $sheet->getStyle("I{$row}")
+                ->getAlignment()
+                ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
+
+            $row++;
+        }
+
+        // Save to temp & download
+        $fileName = 'performance_' . Str::slug($baseUser->full_name ?: $baseUser->name) . "_{$from}_{$to}.xlsx";
+        $tmpPath = storage_path('app/' . Str::uuid()->toString() . '.xlsx');
+
+        (new Xlsx($spreadsheet))->save($tmpPath);
+
+        return response()->download($tmpPath, $fileName)->deleteFileAfterSend(true);
     }
 }
