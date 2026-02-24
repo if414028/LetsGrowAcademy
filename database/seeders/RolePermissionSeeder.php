@@ -200,6 +200,7 @@ class RolePermissionSeeder extends Seeder
                 'password' => bcrypt('letsgrowacademy2026'),
             ]
         );
+        $headAdminUser->syncRoles(['Head Admin']);
 
         // ===== Admin user =====
         $admin = User::updateOrCreate(
@@ -209,11 +210,10 @@ class RolePermissionSeeder extends Seeder
                 'password' => bcrypt('adminletsgrowacademy2026'),
             ]
         );
-
         $admin->syncRoles(['Admin']);
 
         // ===== Sales Manager =====
-        $headAdminUser = User::updateOrCreate(
+        $salesManagerUser = User::updateOrCreate(
             ['email' => 'margaretha.soetedja@dst.coway.id'], 
             [
                 'name' => 'Margaretha Soetedja',
@@ -221,6 +221,6 @@ class RolePermissionSeeder extends Seeder
             ]
         );
 
-        $headAdminUser->syncRoles(['Sales Manager']);
+        $salesManagerUser->syncRoles(['Sales Manager']);
     }
 }

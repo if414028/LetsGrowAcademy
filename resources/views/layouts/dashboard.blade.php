@@ -29,7 +29,7 @@
                     Overview
                 </a>
 
-                <a href="{{ route('performances.index') }}"
+                <a href="{{ route('performance.index') }}"
                     class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                         {{ request()->routeIs('performance.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -141,7 +141,7 @@
                         Overview
                     </a>
 
-                    <a href="{{ route('performances.index') }}" @click="sidebarOpen=false"
+                    <a href="{{ route('performance.index') }}" @click="sidebarOpen=false"
                         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                             {{ request()->routeIs('performance.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

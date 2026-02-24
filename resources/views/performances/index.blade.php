@@ -3,10 +3,50 @@
         window.performanceMemberOptions = @json($memberOptions ?? []);
     </script>
     <div x-data="teamSheet">
+        @if (session('success'))
+            <div class="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                {{ session('success') }}
+            </div>
+        @endif
         <div class="flex items-center justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-semibold text-gray-900">My Performance</h1>
                 <p class="text-sm text-gray-500">Pantau kinerja tim penjualan.</p>
+
+                @hasrole('Head Admin')
+                    <form method="POST" action="{{ route('performance.cutoff.update') }}"
+                        class="mt-4 flex flex-wrap gap-3 items-end">
+                        @csrf
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Cut Off Start</label>
+                            <input type="date" name="cutoff_start" value="{{ $from }}"
+                                class="w-44 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Cut Off End</label>
+                            <input type="date" name="cutoff_end" value="{{ $to }}"
+                                class="w-44 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" />
+                        </div>
+
+                        <button type="submit"
+                            class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                            Save Cut Off
+                        </button>
+                    </form>
+                @else
+                    <div class="mt-4 flex flex-wrap gap-3 items-end">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Cut Off Start</label>
+                            <input type="date" value="{{ $from }}" disabled
+                                class="w-44 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Cut Off End</label>
+                            <input type="date" value="{{ $to }}" disabled
+                                class="w-44 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600" />
+                        </div>
+                    </div>
+                @endhasrole
             </div>
 
             <a href="{{ route('performance.export', request()->query()) }}"

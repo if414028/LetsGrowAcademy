@@ -93,13 +93,16 @@ Route::middleware('auth', 'active')->group(function () {
         ->name('sales-orders.sales-users.search');
 
     // Performances
-    Route::middleware(['auth'])->group(function () {
-        Route::get('/performance', [PerformanceController::class, 'index'])->name('performances.index');
-    });
+    Route::get('/performance', [PerformanceController::class, 'index'])
+        ->name('performance.index'); // ✅ konsisten
 
-    Route::get('/performance/team/{user}', [PerformanceController::class, 'teamDetail']);
+    Route::post('/performance/cutoff', [PerformanceController::class, 'updateCutoff'])
+        ->middleware('role:Head Admin') // ✅ hanya Head Admin
+        ->name('performance.cutoff.update');
 
-    // Export Performance Data
+    Route::get('/performance/team/{user}', [PerformanceController::class, 'teamDetail'])
+        ->name('performance.team-detail');
+
     Route::get('/performance/export', [PerformanceController::class, 'export'])
         ->name('performance.export');
 

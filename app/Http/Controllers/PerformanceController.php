@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PerformanceCutoff;
 use App\Models\SalesOrder;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -44,16 +45,20 @@ class PerformanceController extends Controller
         $q = trim((string) $request->get('q', ''));
 
         // date range dari request
-        $from = $request->get('from'); // YYYY-MM-DD
-        $to   = $request->get('to');
+        [$from, $to, $isManual] = $this->normalizeDateRange(
+            $request->get('from'),
+            $request->get('to')
+        );
 
-        // ✅ default range: bulan ini -1 bulan s/d +1 bulan (kalau user tidak filter)
-        if (!$from && !$to) {
-            $from = Carbon::now()->startOfMonth()->subMonth()->toDateString();
-            $to   = Carbon::now()->endOfMonth()->addMonth()->toDateString();
-        } else {
-            if ($from && !$to) $to = Carbon::parse($from)->endOfMonth()->toDateString();
-            if (!$from && $to) $from = Carbon::parse($to)->startOfMonth()->toDateString();
+        $cutoff = PerformanceCutoff::current();
+
+        $defaultFrom = $cutoff?->start_date ?? Carbon::now()->startOfMonth()->subMonth()->toDateString();
+        $defaultTo   = $cutoff?->end_date   ?? Carbon::now()->endOfMonth()->addMonth()->toDateString();
+
+        // ✅ jika tidak manual, pakai cutoff (default)
+        if (!$isManual) {
+            $from = $defaultFrom;
+            $to   = $defaultTo;
         }
 
         // ✅ dropdown options: auth user + semua downline auth
@@ -130,9 +135,11 @@ class PerformanceController extends Controller
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        if ($from) $summaryQ->whereDate('so.key_in_at', '>=', $from);
-        if ($to)   $summaryQ->whereDate('so.key_in_at', '<=', $to);
-        if ($from || $to) $summaryQ->whereNotNull('so.key_in_at');
+        if ($isManual) {
+            $this->applyManualDateFilter($summaryQ, $from, $to);   // ✅ murni range
+        } else {
+            $this->applyCutoffSoFilter($summaryQ, $from, $to);     // ✅ cutoff + carry-over
+        }
 
         $summary = $summaryQ->selectRaw("
         SUM(
@@ -197,9 +204,11 @@ class PerformanceController extends Controller
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        if ($from) $sheetQ->whereDate('so.key_in_at', '>=', $from);
-        if ($to)   $sheetQ->whereDate('so.key_in_at', '<=', $to);
-        if ($from || $to) $sheetQ->whereNotNull('so.key_in_at');
+        if ($isManual) {
+            $this->applyManualDateFilter($sheetQ, $from, $to);
+        } else {
+            $this->applyCutoffSoFilter($sheetQ, $from, $to);
+        }
 
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
@@ -246,8 +255,20 @@ class PerformanceController extends Controller
         $isChild = $auth->childrenUsers()->where('users.id', $user->id)->exists();
         abort_unless($isChild, 403);
 
-        $from = $request->get('from');
-        $to   = $request->get('to');
+        [$from, $to, $isManual] = $this->normalizeDateRange(
+            $request->get('from'),
+            $request->get('to')
+        );
+
+        $cutoff = PerformanceCutoff::current();
+        $defaultFrom = $cutoff?->start_date ?? Carbon::now()->startOfMonth()->subMonth()->toDateString();
+        $defaultTo   = $cutoff?->end_date   ?? Carbon::now()->endOfMonth()->addMonth()->toDateString();
+
+        if (!$isManual) {
+            $from = $defaultFrom;
+            $to   = $defaultTo;
+        }
+
 
         $totalUnitsQ = DB::table('sales_orders as so')
             ->join('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
@@ -298,15 +319,19 @@ class PerformanceController extends Controller
         $childIds = $baseUser->downlineUserIds();
         $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
 
-        $from = $request->get('from'); // YYYY-MM-DD
-        $to   = $request->get('to');
+        [$from, $to, $isManual] = $this->normalizeDateRange(
+            $request->get('from'),
+            $request->get('to')
+        );
 
-        if (!$from && !$to) {
-            $from = Carbon::now()->startOfMonth()->subMonth()->toDateString();
-            $to   = Carbon::now()->endOfMonth()->addMonth()->toDateString();
-        } else {
-            if ($from && !$to) $to = Carbon::parse($from)->endOfMonth()->toDateString();
-            if (!$from && $to) $from = Carbon::parse($to)->startOfMonth()->toDateString();
+        $cutoff = PerformanceCutoff::current();
+
+        $defaultFrom = $cutoff?->start_date ?? Carbon::now()->startOfMonth()->subMonth()->toDateString();
+        $defaultTo   = $cutoff?->end_date   ?? Carbon::now()->endOfMonth()->addMonth()->toDateString();
+
+        if (!$isManual) {
+            $from = $defaultFrom;
+            $to   = $defaultTo;
         }
 
         // SUMMARY (sama persis seperti index)
@@ -314,9 +339,11 @@ class PerformanceController extends Controller
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        if ($from) $summaryQ->whereDate('so.key_in_at', '>=', $from);
-        if ($to)   $summaryQ->whereDate('so.key_in_at', '<=', $to);
-        if ($from || $to) $summaryQ->whereNotNull('so.key_in_at');
+        if ($isManual) {
+            $this->applyManualDateFilter($summaryQ, $from, $to);
+        } else {
+            $this->applyCutoffSoFilter($summaryQ, $from, $to);
+        }
 
         $summary = $summaryQ->selectRaw("
         SUM(
@@ -379,9 +406,11 @@ class PerformanceController extends Controller
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        if ($from) $sheetQ->whereDate('so.key_in_at', '>=', $from);
-        if ($to)   $sheetQ->whereDate('so.key_in_at', '<=', $to);
-        if ($from || $to) $sheetQ->whereNotNull('so.key_in_at');
+        if ($isManual) {
+            $this->applyManualDateFilter($sheetQ, $from, $to);
+        } else {
+            $this->applyCutoffSoFilter($sheetQ, $from, $to);
+        }
 
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
@@ -615,5 +644,61 @@ class PerformanceController extends Controller
         (new Xlsx($spreadsheet))->save($tmpPath);
 
         return response()->download($tmpPath, $fileName)->deleteFileAfterSend(true);
+    }
+
+    public function updateCutoff(Request $request)
+    {
+        $request->validate([
+            'cutoff_start' => ['required', 'date'],
+            'cutoff_end'   => ['required', 'date', 'after_or_equal:cutoff_start'],
+        ]);
+
+        PerformanceCutoff::create([
+            'start_date' => $request->cutoff_start,
+            'end_date'   => $request->cutoff_end,
+            'updated_by' => $request->user()->id,
+        ]);
+
+        return redirect()->route('performance.index')->with('success', 'Cut off performance berhasil disimpan.');
+    }
+
+    private function applyCutoffSoFilter($q, string $from, string $to): void
+    {
+        $openStatuses = ['menunggu jadwal', 'dijadwalkan', 'ditunda', 'gagal penelponan'];
+
+        $q->where(function ($w) use ($from, $to, $openStatuses) {
+            $w->where(function ($a) use ($from, $to) {
+                $a->whereDate('so.key_in_at', '>=', $from)
+                    ->whereDate('so.key_in_at', '<=', $to);
+            })->orWhere(function ($x) use ($from, $openStatuses) {
+                $x->whereDate('so.key_in_at', '<', $from)
+                    ->whereIn('so.status', $openStatuses);
+            });
+        })->whereNotNull('so.key_in_at');
+    }
+
+    private function normalizeDateRange(?string $from, ?string $to): array
+    {
+        $from = trim((string) $from);
+        $to   = trim((string) $to);
+
+        $from = $from !== '' ? $from : null;
+        $to   = $to !== '' ? $to : null;
+
+        $isManual = (bool) ($from || $to);
+
+        if ($isManual) {
+            if ($from && !$to) $to = Carbon::parse($from)->endOfMonth()->toDateString();
+            if (!$from && $to) $from = Carbon::parse($to)->startOfMonth()->toDateString();
+        }
+
+        return [$from, $to, $isManual];
+    }
+
+    private function applyManualDateFilter($q, string $from, string $to): void
+    {
+        $q->whereDate('so.key_in_at', '>=', $from)
+            ->whereDate('so.key_in_at', '<=', $to)
+            ->whereNotNull('so.key_in_at');
     }
 }
