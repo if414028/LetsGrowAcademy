@@ -354,21 +354,42 @@
                 <a href="{{ route('contests.show', $contest) }}"
                     class="block rounded-xl border p-4 mb-4 hover:bg-gray-50 transition">
 
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="font-semibold text-gray-900">
-                                {{ $contest->title }}
-                            </p>
+                    <div class="flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-3 min-w-0">
+                            {{-- Thumbnail --}}
+                            @php
+                                $img = $contest->banner_url
+                                    ? asset('storage/' . ltrim($contest->banner_url, '/'))
+                                    : null;
+                            @endphp
 
-                            <p class="text-xs text-gray-500 mt-1">
-                                {{ \Carbon\Carbon::parse($contest->start_date)->translatedFormat('d M Y') }}
-                                —
-                                {{ \Carbon\Carbon::parse($contest->end_date)->translatedFormat('d M Y') }}
-                            </p>
+                            <div
+                                class="h-12 w-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                @if ($img)
+                                    <img src="{{ $img }}" alt="{{ $contest->title }}"
+                                        class="h-full w-full object-cover">
+                                @else
+                                    <span class="text-xs font-semibold text-gray-500">
+                                        {{ strtoupper(mb_substr($contest->title ?? 'C', 0, 1)) }}
+                                    </span>
+                                @endif
+                            </div>
+
+                            {{-- Text --}}
+                            <div class="min-w-0">
+                                <p class="font-semibold text-gray-900 truncate">
+                                    {{ $contest->title }}
+                                </p>
+
+                                <p class="text-xs text-gray-500 mt-1">
+                                    {{ \Carbon\Carbon::parse($contest->start_date)->translatedFormat('d M Y') }}
+                                    —
+                                    {{ \Carbon\Carbon::parse($contest->end_date)->translatedFormat('d M Y') }}
+                                </p>
+                            </div>
                         </div>
 
-                        <span class="text-amber-600">
-                            <!-- Trophy icon -->
+                        <span class="text-amber-600 flex-shrink-0">
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M8 21h8M12 17v4M7 4h10v3a5 5 0 01-10 0V4z" />

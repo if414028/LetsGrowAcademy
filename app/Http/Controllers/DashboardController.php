@@ -301,15 +301,64 @@ class DashboardController extends Controller
         }
 
         // =========================================================
-        // ACTIVE CONTEST LIST (yang user ini ikut)
+        // ACTIVE CONTEST LIST (Kontes berlangsung sesuai rules final)
         // =========================================================
-        $activeContests = Contest::query()
+        $now = now();
+
+        $activeContestsQuery = Contest::query()
             ->where('status', 'active')
-            ->whereDate('start_date', '<=', now())
-            ->whereDate('end_date', '>=', now())
-            ->whereHas('participants', function ($q) use ($user) {
+            ->whereDate('start_date', '<=', $now)
+            ->whereDate('end_date', '>=', $now);
+
+        // Admin & Head Admin: lihat semua kontes berlangsung
+        if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
+            // no extra filter
+        }
+        // Sales Manager: lihat kontes berlangsung yang dia buat atau yang target HM-nya bawahannya
+        elseif ($user->hasRole('Sales Manager')) {
+
+            $hmIds = $user->childrenUsers()
+                ->role('Health Manager')
+                ->pluck('users.id')
+                ->map(fn($v) => (int) $v)
+                ->all();
+
+            $activeContestsQuery->where(function ($w) use ($user, $hmIds) {
+                // kontes yang dia buat
+                $w->where('created_by_user_id', $user->id);
+
+                // kontes target HM bawahannya
+                $w->orWhere(function ($w2) use ($hmIds) {
+                    if (empty($hmIds)) {
+                        $w2->whereRaw('1=0');
+                        return;
+                    }
+                    $w2->where(function ($w3) use ($hmIds) {
+                        foreach ($hmIds as $hmId) {
+                            $w3->orWhereJsonContains('rules->target_hm_ids', $hmId);
+                        }
+                    });
+                });
+            });
+        }
+        // Health Manager: lihat kontes berlangsung yang dia buat atau yang menargetkan HM ini
+        elseif ($user->hasRole('Health Manager')) {
+            $activeContestsQuery->where(function ($w) use ($user) {
+                $w->where('created_by_user_id', $user->id)
+                    ->orWhereJsonContains('rules->target_hm_ids', (int) $user->id);
+            });
+        }
+        // Health Planner / role lain: hanya kontes berlangsung yang dia participant
+        else {
+            $activeContestsQuery->whereHas('participants', function ($q) use ($user) {
                 $q->where('users.id', $user->id);
-            })
+            });
+
+            // (opsional) kalau suatu saat HP bisa create kontes:
+            // $activeContestsQuery->orWhere('created_by_user_id', $user->id);
+        }
+
+        $activeContests = $activeContestsQuery
             ->orderBy('end_date') // paling dekat berakhir dulu
             ->get();
 

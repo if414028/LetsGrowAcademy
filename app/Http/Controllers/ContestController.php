@@ -28,13 +28,17 @@ class ContestController extends Controller
 
         $query = Contest::query()->with(['creator', 'creatorRole']);
 
-        /**
-         * RULE:
-         * - Participant = hanya HP
-         * - HM/SM melihat kontes berdasarkan rules.target_hm_ids
-         */
+        // RULE (index):
+        // - Admin/Head Admin: lihat semua kontes (all status)
+        // - Sales Manager: lihat kontes yg dia buat (all status) + kontes timnya yg status=active (published)
+        // - Health Manager: lihat kontes yg dia buat (all status) + kontes yg target HM-nya dia (status=active)
+        // - Health Planner: lihat kontes yg dia participant
 
-        if ($user->hasRole('Sales Manager')) {
+        $query = Contest::query()->with(['creator', 'creatorRole']);
+
+        if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
+            // ✅ lihat semua kontes
+        } elseif ($user->hasRole('Sales Manager')) {
             // HM direct child SM
             $hmIds = User::query()
                 ->whereIn('id', function ($q) use ($user) {
@@ -44,27 +48,50 @@ class ContestController extends Controller
                 })
                 ->whereHas('roles', fn($r) => $r->where('name', 'Health Manager'))
                 ->pluck('id')
-                ->map(fn($v) => (int) $v)
+                ->map(fn($v) => (int)$v)
                 ->all();
 
-            // kontes yang target_hm_ids mengandung salah satu HM-nya SM
-            $query->where(function ($w) use ($hmIds) {
-                if (empty($hmIds)) {
-                    $w->whereRaw('1 = 0');
-                    return;
-                }
-                foreach ($hmIds as $hmId) {
-                    $w->orWhereJsonContains('rules->target_hm_ids', $hmId);
-                }
+            $query->where(function ($w) use ($user, $hmIds) {
+                // ✅ kontes yang dia buat (status apa pun)
+                $w->where('created_by_user_id', $user->id);
+
+                // ✅ kontes active/ended yang target HM-nya ada di bawah dia
+                $w->orWhere(function ($w2) use ($hmIds) {
+                    $w2->whereIn('status', ['active', 'ended']);
+
+                    if (empty($hmIds)) {
+                        $w2->whereRaw('1=0');
+                        return;
+                    }
+
+                    $w2->where(function ($w3) use ($hmIds) {
+                        foreach ($hmIds as $hmId) {
+                            $w3->orWhereJsonContains('rules->target_hm_ids', $hmId);
+                        }
+                    });
+                });
             });
         } elseif ($user->hasRole('Health Manager')) {
-            // kontes yang target_hm_ids mengandung HM ini
-            $query->whereJsonContains('rules->target_hm_ids', (int) $user->id);
-        } else {
-            // HP / role lain: kontes yang dia participant
-            $query->whereHas('participants', function ($p) use ($user) {
-                $p->where('users.id', $user->id);
+
+            $query->where(function ($w) use ($user) {
+                // ✅ kontes yang dia buat
+                $w->where('created_by_user_id', $user->id);
+
+                // ✅ kontes active/ended yang target HM include dia
+                $w->orWhere(function ($w2) use ($user) {
+                    $w2->whereIn('status', ['active', 'ended'])
+                        ->whereJsonContains('rules->target_hm_ids', (int)$user->id);
+                });
             });
+        } else {
+            // ✅ HP / role lain: hanya kontes active/ended yang dia participant
+            $query->whereIn('status', ['active', 'ended'])
+                ->whereHas('participants', function ($p) use ($user) {
+                    $p->where('users.id', $user->id);
+                });
+
+            // (opsional) kalau suatu saat HP bisa bikin kontes:
+            $query->orWhere('created_by_user_id', $user->id);
         }
 
         if ($q !== '') {
