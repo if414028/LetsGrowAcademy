@@ -804,17 +804,15 @@ class SalesOrderController extends Controller
      */
     private function visibleSalesUserIdsFor(User $user)
     {
+        // Admin/Head Admin: no restriction
         if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
-            return null; // no restriction
+            return null;
         }
 
-        if ($user->hasRole('Health Planner')) {
-            return collect([(int) $user->id]);
-        }
-
+        // ✅ Semua non-admin (termasuk Health Planner): diri sendiri + semua downline
         $treeIds = $this->descendantUserIds((int) $user->id); // include self + all descendants
 
-        // ✅ penting: SalesOrder.sales_user_id itu HP, jadi filter hanya HP
+        // sales_user_id di SO itu biasanya Health Planner, jadi filter hanya HP
         return User::query()
             ->role('Health Planner')
             ->whereIn('id', $treeIds)
