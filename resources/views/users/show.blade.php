@@ -140,8 +140,17 @@
 
                     <div>
                         <p class="text-sm text-gray-500">Phone Number</p>
-                        <p class="mt-1 text-base font-semibold text-gray-900">
-                            {{ $user->phone_number ?? '-' }}
+                        <p class="mt-1 text-base font-semibold">
+                            @if ($user->whatsapp_url)
+                                <a href="{{ $user->whatsapp_url }}" target="_blank"
+                                    class="text-blue-600 hover:underline">
+                                    {{ $user->phone_number }}
+                                </a>
+                            @else
+                                <span class="text-gray-900">
+                                    {{ $user->phone_number ?? '-' }}
+                                </span>
+                            @endif
                         </p>
                     </div>
 
@@ -160,11 +169,47 @@
                     </div>
 
                     <div class="md:col-span-2">
-                        <p class="text-sm text-gray-500">City of Domicile</p>
+                        <p class="text-sm text-gray-500">Kelurahan</p>
                         <p class="mt-1 text-base font-semibold text-gray-900">
                             {{ $user->city_of_domicile ?? '-' }}
                         </p>
                     </div>
+
+                    @php
+                        $authUser = request()->user();
+                    @endphp
+
+                    @if ($authUser->hasRole('Health Planner'))
+                        <div class="md:col-span-2 rounded-xl border bg-gray-50 p-4">
+                            <p class="text-sm font-semibold text-gray-900">Health Manager</p>
+
+                            <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <p class="text-sm text-gray-500">HM Name</p>
+                                    <p class="mt-1 text-base font-semibold text-gray-900">
+                                        {{ $hmUser?->name ?? '-' }}
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <p class="text-sm text-gray-500">HM Phone Number</p>
+                                    <p class="mt-1 text-base font-semibold text-gray-900">
+                                    <p class="mt-1 text-base font-semibold">
+                                        @if ($hmUser && $hmUser->whatsapp_url)
+                                            <a href="{{ $user->whatsapp_url }}" target="_blank"
+                                                class="text-blue-600 hover:underline">
+                                                {{ $hmUser->phone_number }}
+                                            </a>
+                                        @else
+                                            <span class="text-gray-900">
+                                                {{ $hmUser->phone_number ?? '-' }}
+                                            </span>
+                                        @endif
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
                 </div>
 
                 <div class="mt-6 border-t pt-6">

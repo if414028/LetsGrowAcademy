@@ -191,4 +191,30 @@ class User extends Authenticatable
 
         return $seen->values();
     }
+
+    public function getWhatsappUrlAttribute(): ?string
+    {
+        if (!$this->phone_number) {
+            return null;
+        }
+
+        // hapus semua selain angka
+        $clean = preg_replace('/[^0-9]/', '', $this->phone_number);
+
+        if (!$clean) {
+            return null;
+        }
+
+        // jika diawali 0 → ubah ke 62
+        if (str_starts_with($clean, '0')) {
+            $clean = '62' . substr($clean, 1);
+        }
+
+        // hanya valid kalau diawali 62
+        if (!str_starts_with($clean, '62')) {
+            return null;
+        }
+
+        return "https://wa.me/{$clean}";
+    }
 }

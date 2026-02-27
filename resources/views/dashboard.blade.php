@@ -115,6 +115,155 @@
         </div>
     @endif
 
+    {{-- Birthday celebration section --}}
+    @php
+        $authUser = request()->user();
+        $isAdminOrHead = $authUser->hasAnyRole(['Admin', 'Head Admin']);
+        $todayBirthdays = $todayBirthdays ?? collect();
+    @endphp
+
+    @if (($isBirthdayToday ?? false) || $todayBirthdays->count() > 0)
+        <div class="mt-8 space-y-6">
+
+            {{-- Self Birthday Mega Card --}}
+            @if ($isBirthdayToday ?? false)
+                <div class="relative overflow-hidden rounded-2xl border shadow-sm">
+                    {{-- background gradient (di bawah semua) --}}
+                    <div class="absolute inset-0 bg-gradient-to-r from-red-600 via-rose-500 to-pink-500 z-0"></div>
+
+                    {{-- confetti canvas (di atas bg) --}}
+                    <canvas id="confettiCanvas"
+                        class="pointer-events-none absolute inset-0 w-full h-full z-10"></canvas>
+
+                    {{-- content (paling atas) --}}
+                    <div class="relative z-20 p-6 text-white">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <div
+                                    class="inline-flex items-center gap-2 rounded-full bg-white/15 border border-white/20 px-3 py-1 text-xs font-semibold">
+                                    <span class="h-2 w-2 rounded-full bg-yellow-300"></span>
+                                    It’s your day!
+                                </div>
+
+                                <h2 class="mt-3 text-2xl md:text-3xl font-extrabold tracking-tight">
+                                    Selamat Ulang Tahun, {{ $authUser->name }}! 🎉
+                                </h2>
+
+                                <p class="mt-2 text-sm text-white/90 max-w-2xl">
+                                    Tuhan memberkati langkahmu hari ini dan seterusnya. Semoga makin sehat, makin
+                                    diberkati,
+                                    dan makin berdampak. 🙌
+                                </p>
+
+                                <div class="mt-4 flex flex-wrap gap-2">
+                                    <span
+                                        class="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-semibold border border-white/20">
+                                        🎂 Happy Birthday
+                                    </span>
+                                    <span
+                                        class="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-semibold border border-white/20">
+                                        ✨ Be blessed
+                                    </span>
+                                    <span
+                                        class="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-semibold border border-white/20">
+                                        🚀 Keep growing
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- subtle decorations --}}
+                        <div class="absolute -right-24 -top-24 h-56 w-56 rounded-full bg-white/10 blur-2xl"></div>
+                        <div class="absolute -left-24 -bottom-24 h-56 w-56 rounded-full bg-white/10 blur-2xl"></div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- Team Birthdays Celebration --}}
+            @if ($todayBirthdays->count() > 0)
+                {{-- IMPORTANT: overflow-visible so glow/badge won't be clipped --}}
+                <div class="rounded-2xl bg-white shadow-sm border">
+                    <div class="p-6 pb-4 flex items-start justify-between gap-4">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-xl font-bold">Ulang Tahun Hari Ini</h2>
+
+                                <span
+                                    class="inline-flex items-center gap-2 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-3 py-1 text-xs font-semibold">
+                                    🎉 {{ $todayBirthdays->count() }} orang
+                                </span>
+                            </div>
+
+                            <p class="mt-2 text-sm text-gray-500">
+                                Jangan lupa kirim ucapan — kecil tapi berkesan 🙂
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="px-6 pb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            @foreach ($todayBirthdays as $u)
+                                <a href="{{ route('users.show', $u->id) }}"
+                                    class="block relative rounded-2xl border p-4 bg-white transition
+          shadow-sm hover:shadow-md hover:-translate-y-0.5 overflow-hidden
+          focus:outline-none focus:ring-2 focus:ring-indigo-500">
+
+                                    {{-- GLOW INSIDE CARD --}}
+                                    <div class="pointer-events-none absolute inset-0">
+                                        <div
+                                            class="absolute -left-16 -top-16 h-36 w-36 rounded-full bg-pink-200/25 blur-2xl">
+                                        </div>
+                                        <div
+                                            class="absolute -right-16 -bottom-16 h-36 w-36 rounded-full bg-amber-200/25 blur-2xl">
+                                        </div>
+                                    </div>
+
+                                    {{-- ALWAYS-ON badge --}}
+                                    <div class="absolute right-3 top-3 rotate-12 z-10">
+                                        <div
+                                            class="rounded-full bg-gradient-to-r from-pink-500 to-amber-400 text-white text-[10px]
+                   font-extrabold px-3 py-1 shadow-sm border border-white/30">
+                                            BIRTHDAY
+                                        </div>
+                                    </div>
+
+                                    <div class="relative flex items-start justify-between gap-3">
+                                        <div class="min-w-0">
+                                            <div class="font-semibold text-gray-900 truncate">
+                                                {{ $u->name }}
+                                            </div>
+
+                                            <div class="mt-1 text-xs text-gray-500">
+                                                {{ $u->role_name }} • DST: {{ $u->dst_code ?? '-' }}
+                                            </div>
+
+                                            <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                                                <span
+                                                    class="inline-flex items-center gap-2 rounded-full bg-pink-50 text-pink-700 border border-pink-100 px-3 py-1 font-semibold">
+                                                    🎂 {{ $u->dob_fmt }}
+                                                </span>
+                                                <span
+                                                    class="inline-flex items-center gap-2 rounded-full bg-gray-50 text-gray-700 border border-gray-100 px-3 py-1">
+                                                    {{ $u->age }} tahun
+                                                </span>
+                                            </div>
+
+                                            <div class="mt-3 text-xs text-gray-500">
+                                                Email: <span
+                                                    class="font-semibold text-gray-700">{{ $u->email }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+        </div>
+    @endif
+
     {{-- Stat cards --}}
     <div class="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
@@ -503,6 +652,119 @@
                     }
                 });
             })();
+
+            (function() {
+                // --- tiny confetti engine (no deps) ---
+                window.burstConfetti = function burstConfetti(canvasId, durationMs = 2000) {
+                    const canvas = document.getElementById(canvasId);
+                    if (!canvas) return;
+
+                    const ctx = canvas.getContext('2d');
+                    const rect = canvas.getBoundingClientRect();
+
+                    const dpr = window.devicePixelRatio || 1;
+                    canvas.width = Math.floor(rect.width * dpr);
+                    canvas.height = Math.floor(rect.height * dpr);
+                    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                    const W = rect.width;
+                    const H = rect.height;
+
+                    const rand = (min, max) => Math.random() * (max - min) + min;
+
+                    const pieces = [];
+                    const count = Math.min(140, Math.floor(W * 0.22));
+
+                    for (let i = 0; i < count; i++) {
+                        pieces.push({
+                            x: rand(0, W),
+                            y: rand(-H * 0.2, 0),
+                            vy: rand(1.6, 2.8),
+                            vx: rand(-1.1, 1.1),
+                            g: rand(0.02, 0.045),
+                            r: rand(3, 6),
+                            a: rand(0, Math.PI * 2),
+                            va: rand(-0.12, 0.12),
+                            color: `hsl(${Math.floor(rand(0, 360))} 90% 60%)`
+                        });
+                    }
+
+                    let start = performance.now();
+                    let raf;
+
+                    function frame(now) {
+                        const elapsed = now - start;
+                        ctx.clearRect(0, 0, W, H);
+
+                        for (const p of pieces) {
+                            p.vy += p.g;
+                            p.y += p.vy;
+                            p.x += p.vx;
+                            p.a += p.va;
+
+                            ctx.save();
+                            ctx.translate(p.x, p.y);
+                            ctx.rotate(p.a);
+                            ctx.fillStyle = p.color;
+                            ctx.fillRect(-p.r, -p.r / 2, p.r * 2, p.r);
+                            ctx.restore();
+                        }
+
+                        if (elapsed < durationMs) raf = requestAnimationFrame(frame);
+                        else {
+                            ctx.clearRect(0, 0, W, H);
+                            cancelAnimationFrame(raf);
+                        }
+                    }
+
+                    requestAnimationFrame(frame);
+                };
+
+                // Auto burst if self birthday
+                const canvas = document.getElementById('confettiCanvas');
+                if (canvas) {
+                    // slight delay biar keliatan “pop”
+                    setTimeout(() => burstConfetti('confettiCanvas', 6000), 250);
+
+                    const btn = document.getElementById('confettiBtn');
+                    if (btn) btn.addEventListener('click', () => burstConfetti('confettiCanvas', 6000));
+                }
+
+                const teamBtn = document.getElementById('confettiTeamBtn');
+                if (teamBtn) {
+                    teamBtn.addEventListener('click', () => {
+                        // if self canvas exists, burst there; else make a temporary overlay canvas
+                        const c = document.getElementById('confettiCanvas');
+                        if (c) return burstConfetti('confettiCanvas', 6000);
+
+                        // fallback: create overlay canvas on body
+                        const tmp = document.createElement('canvas');
+                        tmp.id = '__confettiTmp';
+                        tmp.className = 'pointer-events-none fixed inset-0 w-full h-full z-[60]';
+                        document.body.appendChild(tmp);
+
+                        burstConfetti('__confettiTmp', 1200);
+                        setTimeout(() => tmp.remove(), 1300);
+                    });
+                }
+
+                // Refit canvas on resize (only if exists)
+                window.addEventListener('resize', () => {
+                    const c = document.getElementById('confettiCanvas');
+                    if (!c) return;
+                    // next burst will resize; no need to do heavy work here
+                });
+            })();
+
+            document.addEventListener('DOMContentLoaded', () => {
+                const canvas = document.getElementById('confettiCanvas');
+                if (canvas) {
+                    setTimeout(() => window.burstConfetti('confettiCanvas', 6000), 250);
+
+                    const btn = document.getElementById('confettiBtn');
+                    if (btn) btn.addEventListener('click', () => window.burstConfetti('confettiCanvas', 6000));
+                }
+            });
         </script>
     @endpush
 </x-dashboard-layout>

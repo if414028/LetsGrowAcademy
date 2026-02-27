@@ -73,6 +73,11 @@ class UserController extends Controller
 
         $parentUser = $parentHierarchy?->parentUser;
 
+        $hmUser = null;
+        if ($authUser->hasRole('Health Planner')) {
+            $hmUser = $this->findHealthManagerForUser($user->id);
+        }
+
         // Direct reports (bawahan langsung)
         $childHierarchies = \App\Models\UserHierarchy::with('childUser.roles')
             ->where('parent_user_id', $user->id)
@@ -92,7 +97,8 @@ class UserController extends Controller
             'parentUser',
             'childrenCount',
             'directReports',
-            'downlineTree'
+            'downlineTree',
+            'hmUser'
         ));
     }
 
@@ -791,5 +797,35 @@ class UserController extends Controller
     ", [$rootUserId, $targetUserId]);
 
         return !is_null($exists);
+    }
+
+    private function findHealthManagerForUser(int $userId): ?User
+    {
+        // naik ke atas hierarchy sampai ketemu role Health Manager
+        $currentId = $userId;
+
+        for ($i = 0; $i < 20; $i++) {
+            $parentId = UserHierarchy::query()
+                ->where('child_user_id', $currentId)
+                ->value('parent_user_id');
+
+            if (!$parentId) {
+                return null; // sudah mentok (ga punya parent)
+            }
+
+            $parent = User::query()->with('roles')->find($parentId);
+            if (!$parent) {
+                return null;
+            }
+
+            if ($parent->hasRole('Health Manager')) {
+                return $parent;
+            }
+
+            // kalau belum HM, lanjut naik ke parent-nya lagi
+            $currentId = $parentId;
+        }
+
+        return null;
     }
 }

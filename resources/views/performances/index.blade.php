@@ -18,30 +18,30 @@
                         class="mt-4 flex flex-wrap gap-3 items-end">
                         @csrf
                         <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Cut Off Start</label>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Start Closing Date</label>
                             <input type="date" name="cutoff_start" value="{{ $from }}"
                                 class="w-44 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" />
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Cut Off End</label>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">End Closing Date</label>
                             <input type="date" name="cutoff_end" value="{{ $to }}"
                                 class="w-44 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm" />
                         </div>
 
                         <button type="submit"
                             class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                            Save Cut Off
+                            Save Closing Date
                         </button>
                     </form>
                 @else
                     <div class="mt-4 flex flex-wrap gap-3 items-end">
                         <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Cut Off Start</label>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Start Closing Date</label>
                             <input type="date" value="{{ $from }}" disabled
                                 class="w-44 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600" />
                         </div>
                         <div>
-                            <label class="block text-xs font-medium text-gray-500 mb-1">Cut Off End</label>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">End Closing Date</label>
                             <input type="date" value="{{ $to }}" disabled
                                 class="w-44 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600" />
                         </div>
@@ -144,7 +144,7 @@
 
             <div class="rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
                 <div class="text-xs font-semibold text-green-700 uppercase tracking-wider">
-                    Total sudah install (OK)
+                    Total NS
                 </div>
                 <div class="mt-2 text-3xl font-bold text-green-900">
                     {{ (int) ($summary->total_sudah_install ?? 0) }}

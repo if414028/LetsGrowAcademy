@@ -497,8 +497,9 @@
                 },
 
                 get showInstallDate() {
-                    return !this.disabledAll &&
-                        this.normalizeStatus(this.status) !== 'menunggu verifikasi';
+                    if (this.disabledAll) return false;
+                    const st = this.normalizeStatus(this.status);
+                    return !['menunggu verifikasi', 'menunggu jadwal'].includes(st);
                 },
 
                 get requiredInstallDate() {
@@ -558,7 +559,7 @@
                         if (this.disabledAll) return;
 
                         const st = this.normalizeStatus(val);
-                        if (st === 'menunggu verifikasi') this.installDate = '';
+                        if (['menunggu verifikasi', 'menunggu jadwal'].includes(st)) this.installDate = '';
                         if (!['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st)) this.reason = '';
                     });
 

@@ -9,6 +9,7 @@ use App\Models\UserHierarchy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Contest;
+use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
@@ -362,6 +363,54 @@ class DashboardController extends Controller
             ->orderBy('end_date') // paling dekat berakhir dulu
             ->get();
 
+        // =========================================================
+        // BIRTHDAY TODAY (Overview)
+        // Rules:
+        // 1) Admin & Head Admin: semua user yang ulang tahun hari ini
+        // 2) SM / HM / HP: hanya downline (multi-level) yang ulang tahun hari ini
+        // + jika user login ulang tahun, tampilkan greeting card khusus
+        // =========================================================
+
+        $todayMd = now()->format('m-d');
+
+        $isBirthdayToday = false;
+        if (!empty($user->date_of_birth)) {
+            $isBirthdayToday = Carbon::parse($user->date_of_birth)->isBirthday();
+        }
+
+        $todayBirthdaysQuery = User::query()
+            ->whereNotNull('date_of_birth')
+            ->where('status', 'Active')
+            ->whereRaw("DATE_FORMAT(date_of_birth, '%m-%d') = ?", [$todayMd])
+            ->with('roles') // Spatie roles
+            ->select('id', 'name', 'email', 'dst_code', 'date_of_birth');
+
+        // scope sesuai role
+        if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
+            // no filter, lihat semua
+        } else {
+            // SM / HM / HP: hanya downline multi-level
+            $downlineIds = $this->getAllDescendantUserIds((int) $user->id);
+
+            if (empty($downlineIds)) {
+                $todayBirthdaysQuery->whereRaw('1=0');
+            } else {
+                $todayBirthdaysQuery->whereIn('id', $downlineIds);
+            }
+        }
+
+        // optional: urutkan nama
+        $todayBirthdays = $todayBirthdaysQuery
+            ->orderBy('name')
+            ->get()
+            ->map(function ($u) {
+                $dob = Carbon::parse($u->date_of_birth);
+                $u->dob_fmt = $dob->translatedFormat('d M'); // contoh: 27 Feb
+                $u->age = $dob->age; // umur saat ini
+                $u->role_name = $u->roles->pluck('name')->first() ?? '-';
+                return $u;
+            });
+
         return view('dashboard', compact(
             'soDeactivationWarnings',
             'selfWarning',
@@ -378,6 +427,8 @@ class DashboardController extends Controller
             'salesTrendLabels',
             'salesTrendUnits',
             'activeContests',
+            'todayBirthdays',
+            'isBirthdayToday',
         ));
     }
 

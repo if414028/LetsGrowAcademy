@@ -20,7 +20,7 @@ class SalesOrderController extends Controller
         'outright' => 'POA',
     ];
 
-    private array $statuses = ['menunggu verifikasi', 'dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'];
+    private array $statuses = ['menunggu verifikasi', 'menunggu jadwal', 'dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'];
     private array $ccpStatuses = ['menunggu pengecekan', 'dibatalkan', 'ditolak', 'disetujui'];
     private array $customerTypes = ['individu', 'corporate'];
 
@@ -158,7 +158,10 @@ class SalesOrderController extends Controller
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
                 Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)),
-                Rule::prohibitedIf(fn() => ($request->input('status') === 'menunggu verifikasi')),
+                Rule::prohibitedIf(fn() => in_array($request->input('status'), [
+                    'menunggu verifikasi',
+                    'menunggu jadwal',
+                ], true)),
                 'nullable',
                 'date',
             ],
@@ -334,11 +337,23 @@ class SalesOrderController extends Controller
             ->orderBy('name')
             ->limit(12)
             ->get(['id', 'name', 'full_name', 'email', 'dst_code'])
-            ->map(fn($u) => [
-                'id' => $u->id,
-                'label' => $u->name . ($u->email ? " ({$u->email})" : ''),
-                'dst_code' => $u->dst_code,
-            ]);
+            ->map(function ($u) {
+                $display = trim((string) $u->name);
+                $full = trim((string) ($u->full_name ?? ''));
+                $labelName = $display;
+
+                if ($full !== '' && mb_strtolower($full) !== mb_strtolower($display)) {
+                    $labelName .= " • {$full}";
+                }
+
+                $label = $labelName . ($u->email ? " ({$u->email})" : '');
+
+                return [
+                    'id' => $u->id,
+                    'label' => $label,
+                    'dst_code' => $u->dst_code,
+                ];
+            });
 
         return response()->json($users);
     }
@@ -414,7 +429,7 @@ class SalesOrderController extends Controller
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
                 Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)),
-                Rule::prohibitedIf(fn() => ($request->input('status') === 'menunggu verifikasi')),
+                Rule::prohibitedIf(fn() => in_array($request->input('status'), ['menunggu verifikasi', 'menunggu jadwal'], true)),
                 'nullable',
                 'date',
             ],
@@ -621,10 +636,22 @@ class SalesOrderController extends Controller
             ->orderBy('name')
             ->limit(12)
             ->get(['id', 'name', 'full_name', 'email'])
-            ->map(fn($u) => [
-                'id' => $u->id,
-                'label' => $u->name . ($u->email ? " ({$u->email})" : ''),
-            ]);
+            ->map(function ($u) {
+                $display = trim((string) $u->name);
+                $full = trim((string) ($u->full_name ?? ''));
+
+                $labelName = $display;
+                if ($full !== '' && mb_strtolower($full) !== mb_strtolower($display)) {
+                    $labelName .= " • {$full}";
+                }
+
+                $label = $labelName . ($u->email ? " ({$u->email})" : '');
+
+                return [
+                    'id' => $u->id,
+                    'label' => $label,
+                ];
+            });
 
         return response()->json($users);
     }
@@ -661,11 +688,23 @@ class SalesOrderController extends Controller
             ->orderBy('name')
             ->limit(12)
             ->get(['id', 'name', 'full_name', 'email', 'dst_code'])
-            ->map(fn($u) => [
-                'id' => $u->id,
-                'label' => $u->name . ($u->email ? " ({$u->email})" : ''),
-                'dst_code' => $u->dst_code,
-            ]);
+            ->map(function ($u) {
+                $display = trim((string) $u->name);
+                $full = trim((string) ($u->full_name ?? ''));
+                $labelName = $display;
+
+                if ($full !== '' && mb_strtolower($full) !== mb_strtolower($display)) {
+                    $labelName .= " • {$full}";
+                }
+
+                $label = $labelName . ($u->email ? " ({$u->email})" : '');
+
+                return [
+                    'id' => $u->id,
+                    'label' => $label,
+                    'dst_code' => $u->dst_code,
+                ];
+            });
 
         return response()->json($users);
     }
@@ -721,12 +760,25 @@ class SalesOrderController extends Controller
             ->role('Health Planner')
             ->whereIn('id', $downlineIds)
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'dst_code'])
-            ->map(fn($u) => [
-                'id' => $u->id,
-                'label' => $u->name . ($u->email ? " ({$u->email})" : ''),
-                'dst_code' => $u->dst_code,
-            ])
+            ->get(['id', 'name', 'full_name', 'email', 'dst_code'])
+            ->map(function ($u) {
+                $display = trim((string) $u->name);
+                $full = trim((string) ($u->full_name ?? ''));
+
+                $labelName = $display;
+                if ($full !== '' && mb_strtolower($full) !== mb_strtolower($display)) {
+                    $labelName .= " • {$full}";
+                }
+
+                $label = $labelName . ($u->email ? " ({$u->email})" : '');
+
+                return [
+                    'id' => $u->id,
+                    'label' => $label,
+                    'dst_code' => $u->dst_code,
+                ];
+            })
+
             ->values();
 
         return response()->json($users);

@@ -372,7 +372,8 @@
                         <div class="mt-4 space-y-4">
                             <div>
                                 <label class="text-xs font-medium text-gray-600">CCP Status</label>
-                                <input type="hidden" name="ccp_status" x-bind:value="ccpStatus" x-show="disabledAll">
+                                <input type="hidden" name="ccp_status" x-bind:value="ccpStatus"
+                                    x-show="disabledAll">
                                 <select name="ccp_status" x-model="ccpStatus" :disabled="disabledAll"
                                     :disabled="disabledAll"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
@@ -411,7 +412,8 @@
 
                             <div>
                                 <label class="text-xs font-medium text-gray-600">Status Instalasi</label>
-                                <input type="hidden" name="status" x-bind:value="status" x-show="disabledAll">
+                                <input type="hidden" name="status" x-bind:value="status"
+                                    x-show="disabledAll">
                                 <select name="status" x-model="status" :disabled="disabledAll"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     @foreach ($statuses as $s)
@@ -841,8 +843,9 @@
                 // =============================
 
                 get showInstallDate() {
-                    return !this.disabledAll &&
-                        this.normalizeStatus(this.status) !== 'menunggu verifikasi';
+                    if (this.disabledAll) return false;
+                    const st = this.normalizeStatus(this.status);
+                    return !['menunggu verifikasi', 'menunggu jadwal'].includes(st);
                 },
 
                 get requiredInstallDate() {
@@ -909,7 +912,7 @@
 
                         const st = this.normalizeStatus(val);
 
-                        if (st === 'menunggu verifikasi') {
+                        if (['menunggu verifikasi', 'menunggu jadwal'].includes(st)) {
                             this.installDate = '';
                         }
 
@@ -939,7 +942,7 @@
                 // =============================
 
                 resetAll() {
-                    this.status = 'menunggu verifikasi';
+                    this.status = 'menunggu jadwal';
                     this.installDate = '';
                     this.reason = '';
 
