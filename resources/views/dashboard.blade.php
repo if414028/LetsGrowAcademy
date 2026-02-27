@@ -320,9 +320,9 @@
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">Total Produk Satuan</p>
-                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalRegularProducts ?? 0) }} Unit</p>
-                    <p class="mt-1 text-xs text-gray-500">Total produk reguler yang aktif.</p>
+                    <p class="text-sm text-gray-500">Total Penjualan Produk Satuan</p>
+                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalSalesProductSatuan ?? 0) }} Unit</p>
+                    <p class="mt-1 text-xs text-gray-500">Total qty terjual untuk produk satuan.</p>
                 </div>
                 <span class="text-green-600">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -336,9 +336,11 @@
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">Total Bundling</p>
-                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalBundlings ?? 0) }} Bundling</p>
-                    <p class="mt-1 text-xs text-gray-500">Total bundling yang aktif.</p>
+                    <p class="text-sm text-gray-500">Total Penjualan Produk Bundling</p>
+                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalSalesProductBundling ?? 0) }} Bundling
+                    </p>
+                    <p class="mt-1 text-xs text-gray-500">Total bundling terjual.
+                    </p>
                 </div>
                 <span class="text-purple-600">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

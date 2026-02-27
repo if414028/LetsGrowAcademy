@@ -21,15 +21,16 @@ class PerformanceController extends Controller
     public function index(Request $request)
     {
         $authUser = $request->user();
+        $isAdminOrHead = $authUser->hasAnyRole(['Admin', 'Head Admin']);
 
-        // semua downline auth (untuk list dropdown)
         $authDownlineIds = $authUser->downlineUserIds();
+
+        $allowedIds = $isAdminOrHead
+            ? User::query()->pluck('id') // semua user
+            : $authDownlineIds->push($authUser->id)->unique()->values();
 
         // ✅ member_id terpilih (optional)
         $memberId = (int) $request->get('member_id', 0);
-
-        // allowed ids = auth + downline auth
-        $allowedIds = $authDownlineIds->push($authUser->id)->unique()->values();
 
         // ✅ base user = auth user (default), atau user terpilih (jika valid)
         $baseUser = $authUser;
@@ -63,7 +64,8 @@ class PerformanceController extends Controller
 
         // ✅ dropdown options: auth user + semua downline auth
         $memberOptions = User::query()
-            ->whereIn('id', $allowedIds)
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('id', $allowedIds))
+            ->when($isAdminOrHead, fn($q) => $q->where('status', 'Active')) // optional: hanya active
             ->orderByRaw("COALESCE(NULLIF(full_name,''), name) asc")
             ->get(['id', 'name', 'full_name'])
             ->map(fn($u) => [
@@ -76,7 +78,8 @@ class PerformanceController extends Controller
         // TEAM PERFORMANCE (units selesai) -> scope: downline baseUser
         // =========================
         $teamPerformance = User::query()
-            ->whereIn('users.id', $childIds) // ranking untuk downline-nya saja
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('users.id', $childIds)) // non-admin: downline
+            ->when($isAdminOrHead, fn($q) => $q->role('Health Planner'))          // admin/head: semua HP (biar masuk akal)
             ->leftJoin('sales_orders', function ($join) use ($from, $to) {
                 $join->on('sales_orders.sales_user_id', '=', 'users.id')
                     ->whereNull('sales_orders.deleted_at')
@@ -94,23 +97,7 @@ class PerformanceController extends Controller
             ->groupBy('users.id', 'users.name')
             ->orderByDesc('units')
             ->get()
-            ->map(function ($u) use ($from, $to) {
-                $lastOrderQ = SalesOrder::where('sales_user_id', $u->id)
-                    ->whereNull('deleted_at')
-                    ->where('status', 'selesai');
-
-                if ($from) $lastOrderQ->whereDate('install_date', '>=', $from);
-                if ($to)   $lastOrderQ->whereDate('install_date', '<=', $to);
-
-                $lastOrder = $lastOrderQ->latest('install_date')->first();
-
-                return [
-                    'id'            => $u->id,
-                    'name'          => $u->name,
-                    'units'         => (int) $u->units,
-                    'last_activity' => $lastOrder?->order_no ?? 'N/A',
-                ];
-            });
+            ->map(...);
 
         // =========================
         // MY TOTAL UNITS -> sekarang mengikuti baseUser (biar konsisten saat pilih member)
@@ -133,7 +120,7 @@ class PerformanceController extends Controller
         // =========================
         $summaryQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
-            ->whereIn('so.sales_user_id', $scopeUserIds);
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('so.sales_user_id', $scopeUserIds));
 
         if ($isManual) {
             $this->applyManualDateFilter($summaryQ, $from, $to);   // ✅ murni range
@@ -202,7 +189,7 @@ class PerformanceController extends Controller
                 $j->on('soi.sales_order_id', '=', 'so.id');
             })
             ->whereNull('so.deleted_at')
-            ->whereIn('so.sales_user_id', $scopeUserIds);
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('so.sales_user_id', $scopeUserIds));
 
         if ($isManual) {
             $this->applyManualDateFilter($sheetQ, $from, $to);
@@ -224,7 +211,15 @@ class PerformanceController extends Controller
                 'so.install_date',
                 'so.status_reason',
                 'so.ccp_remarks',
-                DB::raw("COALESCE(NULLIF(so.status_reason,''), NULLIF(so.ccp_remarks,''), '-') as remarks"),
+                'so.payment_method_remarks',
+                DB::raw("
+                    COALESCE(
+                        NULLIF(so.payment_method_remarks,''),
+                        NULLIF(so.ccp_remarks,''),
+                        NULLIF(so.status_reason,''),
+                        '-'
+                    ) as remarks
+                "),
                 DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
                 DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])
@@ -233,7 +228,9 @@ class PerformanceController extends Controller
 
         return view('performances.index', [
             'teamPerformance' => $teamPerformance,
-            'teamMemberCount' => $childIds->count(),     // direct reports dari baseUser
+            'teamMemberCount' => $isAdminOrHead
+                ? User::query()->role('Health Planner')->where('status', 'Active')->count()
+                : $childIds->count(),
             'myTotalUnits'    => $myTotalUnits,          // total units baseUser
             'q'               => $q,                     // tidak dipakai untuk query, tapi boleh tetap dipassing
             'from'            => $from,
@@ -306,18 +303,19 @@ class PerformanceController extends Controller
     private function buildPerformanceData(Request $request): array
     {
         $authUser = $request->user();
+        $isAdminOrHead = $authUser->hasAnyRole(['Admin', 'Head Admin']);
 
         $authDownlineIds = $authUser->downlineUserIds();
         $memberId = (int) $request->get('member_id', 0);
-        $allowedIds = $authDownlineIds->push($authUser->id)->unique()->values();
+        $allowedIds = $isAdminOrHead ? User::query()->pluck('id') : $authDownlineIds->push($authUser->id)->unique()->values();
 
         $baseUser = $authUser;
         if ($memberId && $allowedIds->contains($memberId)) {
             $baseUser = User::query()->whereKey($memberId)->first() ?? $authUser;
         }
 
-        $childIds = $baseUser->downlineUserIds();
-        $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+        $childIds = $isAdminOrHead ? collect() : $baseUser->downlineUserIds();
+        $scopeUserIds = $isAdminOrHead ? null : $childIds->push($baseUser->id)->unique()->values();
 
         [$from, $to, $isManual] = $this->normalizeDateRange(
             $request->get('from'),
@@ -337,7 +335,7 @@ class PerformanceController extends Controller
         // SUMMARY (sama persis seperti index)
         $summaryQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
-            ->whereIn('so.sales_user_id', $scopeUserIds);
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('so.sales_user_id', $scopeUserIds));
 
         if ($isManual) {
             $this->applyManualDateFilter($summaryQ, $from, $to);
@@ -404,7 +402,7 @@ class PerformanceController extends Controller
                 $j->on('soi.sales_order_id', '=', 'so.id');
             })
             ->whereNull('so.deleted_at')
-            ->whereIn('so.sales_user_id', $scopeUserIds);
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('so.sales_user_id', $scopeUserIds));
 
         if ($isManual) {
             $this->applyManualDateFilter($sheetQ, $from, $to);
@@ -424,7 +422,14 @@ class PerformanceController extends Controller
                 'so.ccp_status',
                 'so.status',
                 'so.install_date',
-                DB::raw("COALESCE(NULLIF(so.status_reason,''), NULLIF(so.ccp_remarks,''), '-') as remarks"),
+                DB::raw("
+                    COALESCE(
+                        NULLIF(so.payment_method_remarks,''),
+                        NULLIF(so.ccp_remarks,''),
+                        NULLIF(so.status_reason,''),
+                        '-'
+                    ) as remarks
+                "),
                 DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
                 DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])

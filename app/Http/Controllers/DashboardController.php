@@ -95,20 +95,24 @@ class DashboardController extends Controller
         // STAT CARDS (Overview)
         // =========================================================
 
+        $isAdminOrHead = $user->hasAnyRole(['Admin', 'Head Admin']);
+        $descendantIds = $this->getAllDescendantUserIds((int) $user->id);
+        $scopeUserIds = array_values(array_unique(array_merge([(int) $user->id], $descendantIds)));
+
         // ambil semua bawahan multi-level + diri sendiri
         $descendantIds = $this->getAllDescendantUserIds((int) $user->id);
         $scopeUserIds = array_values(array_unique(array_merge([(int) $user->id], $descendantIds)));
 
         // 1) Total unit terjual (SO selesai)
         $totalUnitsSold = (int) SalesOrder::query()
-            ->whereIn('sales_orders.sales_user_id', $scopeUserIds)
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
             ->sum('sales_order_items.qty');
 
         // 1a) Total Penjualan Individu (units) - SO selesai
         $totalSalesIndividu = (int) SalesOrder::query()
-            ->whereIn('sales_orders.sales_user_id', $scopeUserIds)
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
             ->where('sales_orders.customer_type', 'individu')
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
@@ -116,11 +120,30 @@ class DashboardController extends Controller
 
         // 1b) Total Penjualan Corporate (units) - SO selesai
         $totalSalesCorporate = (int) SalesOrder::query()
-            ->whereIn('sales_orders.sales_user_id', $scopeUserIds)
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
             ->where('sales_orders.customer_type', 'corporate')
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
             ->sum('sales_order_items.qty');
+
+        // 1c) Total Penjualan Produk Satuan (units) - SO selesai
+        $totalSalesProductSatuan = (int) SalesOrder::query()
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
+            ->where('sales_orders.status', 'selesai')
+            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+            ->join('products', 'products.id', '=', 'sales_order_items.product_id')
+            ->where('products.type', 'regular')
+            ->sum('sales_order_items.qty');
+
+        // 1d) Total Penjualan Produk Bundling - SO selesai
+        // NOTE: sesuai request: "bundling itung 1 saja untuk 1 bundling" => hitung per item bundling, bukan qty
+        $totalSalesProductBundling = (int) SalesOrder::query()
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
+            ->where('sales_orders.status', 'selesai')
+            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+            ->join('products', 'products.id', '=', 'sales_order_items.product_id')
+            ->where('products.type', 'bundle')
+            ->count('sales_order_items.id');
 
         // 2) Total produk reguler aktif
         $totalRegularProducts = (int) Product::query()
@@ -164,35 +187,33 @@ class DashboardController extends Controller
             }
         }
 
-        // 6) Total Health Planner aktif melakukan minimal 1 SO di bulan ini
-        $totalActiveHealthPlannersThisMonth = 0;
-
+        // 6) Total Health Planner (Aktif Bulan Ini)
         $monthStart = now()->startOfMonth();
-        $monthEnd = now()->endOfMonth();
+        $monthEnd   = now()->endOfMonth();
 
-        // Scope HP yang dihitung:
-        // - Admin/Head Admin: seluruh HP yang punya >= 1 SO bulan ini
-        // - selain itu: hanya HP di bawah user login (multi-level) yang punya >= 1 SO bulan ini
-        $hpScopeUserIds = $user->hasAnyRole(['Admin', 'Head Admin'])
-            ? null
-            : $scopeUserIds; // ini sudah include diri sendiri + downline
-
-        $totalActiveHealthPlannersThisMonth = User::query()
-            ->role('Health Planner')
-            ->where('users.status', 'Active')
-            ->when(!$user->hasAnyRole(['Admin', 'Head Admin']), function ($q) use ($hpScopeUserIds) {
-                $q->whereIn('users.id', $hpScopeUserIds);
-            })
-            ->whereExists(function ($sub) use ($monthStart, $monthEnd) {
-                $sub->select(DB::raw(1))
-                    ->from('sales_orders')
-                    ->whereColumn('sales_orders.sales_user_id', 'users.id')
-                    ->whereBetween('sales_orders.key_in_at', [$monthStart, $monthEnd]);
-                // kalau kamu mau hanya SO status tertentu, tinggal tambah:
-                // ->where('sales_orders.status', 'selesai');
-            })
-            ->distinct()
-            ->count();
+        if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
+            // ✅ Admin/Head Admin: tampilkan total semua HP aktif (tanpa filter downline & tanpa syarat SO)
+            $totalActiveHealthPlannersThisMonth = (int) User::query()
+                ->role('Health Planner')
+                ->where('users.status', 'Active')
+                ->count();
+        } else {
+            // ✅ selain Admin/Head: hanya HP di bawah user (multi-level) yang membuat minimal 1 SO bulan ini
+            $totalActiveHealthPlannersThisMonth = (int) User::query()
+                ->role('Health Planner')
+                ->where('users.status', 'Active')
+                ->whereIn('users.id', $scopeUserIds) // scope sudah include diri sendiri + downline
+                ->whereExists(function ($sub) use ($monthStart, $monthEnd) {
+                    $sub->select(DB::raw(1))
+                        ->from('sales_orders')
+                        ->whereColumn('sales_orders.sales_user_id', 'users.id')
+                        ->whereBetween('sales_orders.key_in_at', [$monthStart, $monthEnd]);
+                    // kalau mau hanya SO selesai, tambahkan:
+                    // ->where('sales_orders.status', 'selesai');
+                })
+                ->distinct()
+                ->count();
+        }
 
         // =========================================================
         // HM PERFORMANCE TABLE (HM + Team Units)
@@ -417,6 +438,8 @@ class DashboardController extends Controller
             'totalUnitsSold',
             'totalSalesIndividu',
             'totalSalesCorporate',
+            'totalSalesProductSatuan',
+            'totalSalesProductBundling',
             'totalRegularProducts',
             'totalBundlings',
             'totalActiveDownline',

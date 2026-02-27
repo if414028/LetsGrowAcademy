@@ -134,20 +134,47 @@
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
                             </div>
 
-                            <div>
-                                <label class="text-xs font-medium text-gray-600">Payment Method</label>
-                                <select name="payment_method"
-                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                                    <option value="">-</option>
+                            @if ($authUser->hasAnyRole(['Admin', 'Head Admin']))
+                                <div x-data="{ pm: @js(old('payment_method', $salesOrder->payment_method ?? '')) }">
+                                    <label class="text-xs font-medium text-gray-600">Payment Method</label>
 
-                                    @foreach ($paymentMethods as $value => $label)
-                                        <option value="{{ $value }}" @selected(old('payment_method', $salesOrder->payment_method ?? null) === $value)>
-                                            {{ $label }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                                    <select name="payment_method" x-model="pm"
+                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                                        <option value="">-</option>
 
-                            </div>
+                                        @foreach ($paymentMethods as $value => $label)
+                                            <option value="{{ $value }}">{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+
+                                    {{-- ✅ Remarks POA --}}
+                                    <div class="mt-4" x-show="pm === 'outright'" x-transition>
+                                        <label class="text-xs font-medium text-gray-600">Remarks (POA)</label>
+
+                                        <textarea name="payment_method_remarks" rows="3" :disabled="pm !== 'outright'"
+                                            class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                            placeholder="Optional, khusus POA...">{{ old('payment_method_remarks', $salesOrder->payment_method_remarks ?? '') }}</textarea>
+
+                                        <div class="mt-1 text-xs text-gray-400">
+                                            Hanya muncul jika Payment Method = POA.
+                                        </div>
+                                    </div>
+                                </div>
+                            @else
+                                {{-- non Admin/Head Admin tetap lihat dropdown (kalau kamu memang izinkan), tapi tanpa remarks --}}
+                                <div>
+                                    <label class="text-xs font-medium text-gray-600">Payment Method</label>
+                                    <select name="payment_method"
+                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                                        <option value="">-</option>
+                                        @foreach ($paymentMethods as $value => $label)
+                                            <option value="{{ $value }}" @selected(old('payment_method', $salesOrder->payment_method ?? null) === $value)>
+                                                {{ $label }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            @endif
 
                             <div class="flex items-center gap-2 pt-2">
                                 <input id="is_recurring" type="checkbox" name="is_recurring" value="1"
