@@ -386,7 +386,7 @@
                         @if (auth()->user()->hasAnyRole(['Admin', 'Head Admin']))
                             Seluruh Health Planner yang membuat minimal 1 SO di bulan ini.
                         @else
-                            Health Planner di bawah Anda (multi-level) yang membuat minimal 1 SO di bulan ini.
+                            Health Planner di bawah Anda yang membuat minimal 1 SO di bulan ini.
                         @endif
                     </p>
                 </div>
