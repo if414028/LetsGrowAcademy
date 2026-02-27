@@ -74,9 +74,7 @@ class UserController extends Controller
         $parentUser = $parentHierarchy?->parentUser;
 
         $hmUser = null;
-        if ($authUser->hasRole('Health Planner')) {
-            $hmUser = $this->findHealthManagerForUser($user->id);
-        }
+        $hmUser = $this->findHealthManagerForUser($user->id);
 
         // Direct reports (bawahan langsung)
         $childHierarchies = \App\Models\UserHierarchy::with('childUser.roles')
