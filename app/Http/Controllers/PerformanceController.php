@@ -157,6 +157,16 @@ class PerformanceController extends Controller
         ) as menunggu_jadwal,
 
         SUM(
+
+        CASE
+            WHEN COALESCE(so.is_recurring, 0) = 1
+             AND so.ccp_status = 'disetujui'
+             AND so.status = 'dijadwalkan'
+            THEN 1 ELSE 0
+        END
+        ) as dijadwalkan,
+
+        SUM(
             CASE
                 WHEN COALESCE(so.is_recurring, 0) = 1
                  AND so.ccp_status = 'disetujui'
@@ -598,7 +608,8 @@ class PerformanceController extends Controller
         $summaryRows = [
             ['Total Key-In', (int)($summary->total_key_in ?? 0), 'FFF9FAFB'],      // gray-50
             ['Total Recurring', (int)($summary->total_recurring ?? 0), 'FFEFF6FF'], // blue-50
-            ['Dijadwalkan', (int)($summary->menunggu_jadwal ?? 0), 'FFFFFBEB'],   // yellow-50
+            ['Dijadwalkan', (int)($summary->dijadwalkan ?? 0), 'FFFFFBEB'],   // yellow-50
+            ['Menunggu Jadwal', (int)($summary->menunggu_jadwal ?? 0), 'FFFFFBEB'],    // yellow-50
             ['Task ID', (int)($summary->task_id ?? 0), 'FFFAF5FF'],               // purple-50
             ['Total sudah install (OK)', (int)($summary->total_sudah_install ?? 0), 'FFF0FDF4'], // green-50
         ];

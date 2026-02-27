@@ -67,15 +67,16 @@
                         class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500">
                         <option value="leaderboard"
                             {{ old('type', 'leaderboard') === 'leaderboard' ? 'selected' : '' }}>
-                            Leaderboard (Ranking berdasarkan Total Qty)
+                            Kontes Pribadi
                         </option>
                         <option value="qualifier" {{ old('type') === 'qualifier' ? 'selected' : '' }}>
-                            Qualifier 133 (Pemenang bisa banyak)
+                            Kontes Team
                         </option>
                     </select>
+
                     <p class="mt-2 text-xs text-gray-500">
                         Semua kontes dihitung dari total qty (SUM qty) Sales Order “selesai”.
-                        Qualifier 133 punya syarat bulanan (personal qty + direct active partner).
+                        Kontes Team punya syarat bulanan (personal qty + direct active partner).
                     </p>
                 </div>
 

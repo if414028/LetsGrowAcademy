@@ -105,7 +105,6 @@
                 </div>
             </div>
 
-            {{-- Total Key-In --}}
             <div class="rounded-2xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
                 <div class="text-xs font-semibold text-blue-700 uppercase tracking-wider">
                     Total Recurring
@@ -118,12 +117,25 @@
                 </div>
             </div>
 
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+                <div class="text-xs font-semibold text-amber-700 uppercase tracking-wider">
+                    Menunggu Jadwal
+                </div>
+                <div class="mt-2 text-3xl font-bold text-amber-900">
+                    {{ (int) ($summary->menunggu_jadwal ?? 0) }}
+                </div>
+                <div class="mt-1 text-sm text-amber-600">
+                    Status: menunggu jadwal
+                </div>
+            </div>
+
+
             <div class="rounded-2xl border border-yellow-200 bg-yellow-50 p-5 shadow-sm">
                 <div class="text-xs font-semibold text-yellow-700 uppercase tracking-wider">
                     Dijadwalkan
                 </div>
                 <div class="mt-2 text-3xl font-bold text-yellow-900">
-                    {{ (int) ($summary->menunggu_jadwal ?? 0) }}
+                    {{ (int) ($summary->dijadwalkan ?? 0) }}
                 </div>
                 <div class="mt-1 text-sm text-yellow-600">
                     Status: dijadwalkan
