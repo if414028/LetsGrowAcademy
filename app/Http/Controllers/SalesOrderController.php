@@ -30,17 +30,10 @@ class SalesOrderController extends Controller
 
         $q = SalesOrder::query()->with(['customer', 'salesUser']);
 
-        // ✅ Admin & Head Admin: lihat semua
-        if (!$user->hasAnyRole(['Admin', 'Head Admin'])) {
+        $visibleSalesUserIds = $this->visibleSalesUserIdsFor($user);
 
-            // ✅ Health Planner: hanya order milik dirinya sendiri
-            if ($user->hasRole('Health Planner')) {
-                $q->where('sales_user_id', $user->id);
-            } else {
-                // ✅ selain Admin & bukan HP: diri sendiri + semua downline
-                $visibleSalesUserIds = $this->descendantUserIds($user->id); // include root (self)
-                $q->whereIn('sales_user_id', $visibleSalesUserIds);
-            }
+        if ($visibleSalesUserIds !== null) {
+            $q->whereIn('sales_user_id', $visibleSalesUserIds);
         }
 
         // 🔎 search
@@ -76,15 +69,10 @@ class SalesOrderController extends Controller
     {
         $user = request()->user();
 
-        if (!$user->hasAnyRole(['Admin', 'Head Admin'])) {
+        $visibleSalesUserIds = $this->visibleSalesUserIdsFor($user);
 
-            // ✅ Health Planner: hanya boleh lihat SO miliknya sendiri
-            if ($user->hasRole('Health Planner')) {
-                abort_unless((int) $salesOrder->sales_user_id === (int) $user->id, 403);
-            } else {
-                $visibleSalesUserIds = $this->descendantUserIds($user->id);
-                abort_unless($visibleSalesUserIds->contains($salesOrder->sales_user_id), 403);
-            }
+        if ($visibleSalesUserIds !== null) {
+            abort_unless($visibleSalesUserIds->contains((int) $salesOrder->sales_user_id), 403);
         }
 
         $salesOrder->load(['customer', 'salesUser', 'items.product', 'items.productPrice']);
@@ -806,5 +794,32 @@ class SalesOrderController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * IDs user yang boleh terlihat di Sales Orders (yang relevan: Health Planner saja).
+     * - Admin/Head Admin: handled di index/show (return null berarti no restriction)
+     * - HP: hanya diri sendiri
+     * - Selain itu: semua downline tapi difilter hanya role HP
+     */
+    private function visibleSalesUserIdsFor(User $user)
+    {
+        if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
+            return null; // no restriction
+        }
+
+        if ($user->hasRole('Health Planner')) {
+            return collect([(int) $user->id]);
+        }
+
+        $treeIds = $this->descendantUserIds((int) $user->id); // include self + all descendants
+
+        // ✅ penting: SalesOrder.sales_user_id itu HP, jadi filter hanya HP
+        return User::query()
+            ->role('Health Planner')
+            ->whereIn('id', $treeIds)
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->values();
     }
 }
