@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Contest;
 use Carbon\Carbon;
+use App\Models\PerformanceCutoff;
 
 class DashboardController extends Controller
 {
@@ -92,6 +93,21 @@ class DashboardController extends Controller
             : null;
 
         // =========================================================
+        // CUTOFF WINDOW (untuk semua stat card berbasis Sales Order)
+        // =========================================================
+        $cutoff = PerformanceCutoff::query()
+            ->orderByDesc('start_date')   // atau kolom lain yang kamu pakai
+            ->first();
+
+        $cutoffStart = $cutoff
+            ? Carbon::parse($cutoff->start_date)->startOfDay()
+            : now()->startOfMonth()->startOfDay();
+
+        $cutoffEnd = $cutoff
+            ? Carbon::parse($cutoff->end_date)->endOfDay()
+            : now()->endOfMonth()->endOfDay();
+
+        // =========================================================
         // STAT CARDS (Overview)
         // =========================================================
 
@@ -107,6 +123,7 @@ class DashboardController extends Controller
         $totalUnitsSold = (int) SalesOrder::query()
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
+            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
             ->sum('sales_order_items.qty');
 
@@ -115,6 +132,7 @@ class DashboardController extends Controller
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
             ->where('sales_orders.customer_type', 'individu')
+            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
             ->sum('sales_order_items.qty');
 
@@ -123,6 +141,7 @@ class DashboardController extends Controller
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
             ->where('sales_orders.customer_type', 'corporate')
+            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
             ->sum('sales_order_items.qty');
 
@@ -130,6 +149,7 @@ class DashboardController extends Controller
         $totalSalesProductSatuan = (int) SalesOrder::query()
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
+            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
             ->join('products', 'products.id', '=', 'sales_order_items.product_id')
             ->where('products.type', 'regular')
@@ -140,6 +160,7 @@ class DashboardController extends Controller
         $totalSalesProductBundling = (int) SalesOrder::query()
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
+            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
             ->join('products', 'products.id', '=', 'sales_order_items.product_id')
             ->where('products.type', 'bundle')
@@ -241,7 +262,7 @@ class DashboardController extends Controller
             }
 
             // hitung total units (SO selesai) untuk tiap HM + tim multi-level
-            $healthManagerPerformance = $healthManagers->map(function ($hm) {
+            $healthManagerPerformance = $healthManagers->map(function ($hm) use ($cutoffStart, $cutoffEnd) {
 
                 $descendantIds = $this->getAllDescendantUserIds((int) $hm->id);
                 $scopeIds = array_values(array_unique(array_merge([(int) $hm->id], $descendantIds)));
@@ -249,6 +270,7 @@ class DashboardController extends Controller
                 $units = (int) SalesOrder::query()
                     ->whereIn('sales_orders.sales_user_id', $scopeIds)
                     ->where('sales_orders.status', 'selesai')
+                    ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
                     ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
                     ->sum('sales_order_items.qty');
 
