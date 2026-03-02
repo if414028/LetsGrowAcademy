@@ -240,6 +240,7 @@
                             <th class="px-4 py-3 w-[240px]">Nama HP</th>
                             <th class="px-4 py-3 w-[320px]">Nama Customer</th>
                             <th class="px-4 py-3">Tanggal Key-in</th>
+                            <th class="px-4 py-3">Carry Over</th>
                             <th class="px-4 py-3">CCP Disetujui</th>
                             <th class="px-4 py-3">Key-in</th>
                             <th class="px-4 py-3">Install/NS</th>
@@ -268,6 +269,16 @@
 
                                     <td class="px-4 py-3 text-sm text-gray-900">{{ $r->customer_name }}</td>
                                     <td class="px-4 py-3 text-sm text-gray-700">{{ $fmt($r->key_in_at) }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-700">
+                                        @if (($r->is_carry_over ?? 0) == 1)
+                                            <span
+                                                class="inline-flex items-center rounded-full bg-orange-50 px-2 py-1 text-xs font-semibold text-orange-700">
+                                                Carry Over
+                                            </span>
+                                        @else
+                                            <span class="text-gray-400 text-xs">-</span>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-3 text-sm text-gray-700">
                                         {{ $r->ccp_approved_at ? $fmt($r->ccp_approved_at) : '-' }}
                                     </td>

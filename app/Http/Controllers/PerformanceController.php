@@ -233,6 +233,7 @@ class PerformanceController extends Controller
                 DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
                 DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])
+            ->selectRaw("CASE WHEN DATE(so.key_in_at) < DATE(?) THEN 1 ELSE 0 END as is_carry_over", [$from])
             ->get()
             ->groupBy('hp_name');
 
@@ -682,13 +683,29 @@ class PerformanceController extends Controller
     {
         $openStatuses = ['menunggu jadwal', 'dijadwalkan', 'ditunda', 'gagal penelponan'];
 
-        $q->where(function ($w) use ($from, $to, $openStatuses) {
-            $w->where(function ($a) use ($from, $to) {
-                $a->whereDate('so.key_in_at', '>=', $from)
-                    ->whereDate('so.key_in_at', '<=', $to);
-            })->orWhere(function ($x) use ($from, $openStatuses) {
-                $x->whereDate('so.key_in_at', '<', $from)
-                    ->whereIn('so.status', $openStatuses);
+        // window carry over = 1 bulan sebelum from (kalender)
+        $carryFrom = Carbon::parse($from)->subMonthNoOverflow()->toDateString();
+
+        $q->where(function ($w) use ($from, $to, $carryFrom, $openStatuses) {
+
+            // A) Normal: semua SO yang key_in masuk window
+            $w->whereDate('so.key_in_at', '>=', $from)
+                ->whereDate('so.key_in_at', '<=', $to);
+
+            // B) Carry-over: SO open (yang belum selesai) TAPI cuma max 1 bulan & non-recurring
+            // $w->orWhere(function ($x) use ($carryFrom, $from, $openStatuses) {
+            //     $x->whereRaw('COALESCE(so.is_recurring,0) = 0')
+            //         ->whereDate('so.key_in_at', '>=', $carryFrom)
+            //         ->whereDate('so.key_in_at', '<', $from)
+            //         ->whereIn('so.status', $openStatuses);
+            // });
+
+            // C) Carry-over: key-in yang belum diverifikasi (Total Key-In) max 1 bulan & non-recurring
+            $w->orWhere(function ($x) use ($carryFrom, $from) {
+                $x->whereRaw('COALESCE(so.is_recurring,0) = 0')
+                    ->whereDate('so.key_in_at', '>=', $carryFrom)
+                    ->whereDate('so.key_in_at', '<', $from)
+                    ->where('so.ccp_status', 'menunggu pengecekan');
             });
         })->whereNotNull('so.key_in_at');
     }
