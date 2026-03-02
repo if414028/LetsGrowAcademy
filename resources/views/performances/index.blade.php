@@ -144,13 +144,13 @@
 
             <div class="rounded-2xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
                 <div class="text-xs font-semibold text-purple-700 uppercase tracking-wider">
-                    Task ID
+                    Pending
                 </div>
                 <div class="mt-2 text-3xl font-bold text-purple-900">
-                    {{ (int) ($summary->task_id ?? 0) }}
+                    {{ (int) ($summary->pending ?? 0) }}
                 </div>
                 <div class="mt-1 text-sm text-purple-600">
-                    CCP disetujui + menunggu verifikasi
+                    Status: ditunda / gagal penelponan
                 </div>
             </div>
 

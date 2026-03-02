@@ -168,12 +168,12 @@ class PerformanceController extends Controller
 
         SUM(
             CASE
-                WHEN COALESCE(so.is_recurring, 0) = 1
-                 AND so.ccp_status = 'disetujui'
-                 AND so.status IN ('dijadwalkan', 'ditunda', 'gagal penelponan')
+            WHEN COALESCE(so.is_recurring, 0) = 1
+                AND so.ccp_status = 'disetujui'
+                AND so.status IN ('ditunda', 'gagal penelponan')
                 THEN 1 ELSE 0
             END
-        ) as task_id,
+        ) as pending,
 
         SUM(
             CASE
@@ -610,7 +610,7 @@ class PerformanceController extends Controller
             ['Total Recurring', (int)($summary->total_recurring ?? 0), 'FFEFF6FF'], // blue-50
             ['Dijadwalkan', (int)($summary->dijadwalkan ?? 0), 'FFFFFBEB'],   // yellow-50
             ['Menunggu Jadwal', (int)($summary->menunggu_jadwal ?? 0), 'FFFFFBEB'],    // yellow-50
-            ['Task ID', (int)($summary->task_id ?? 0), 'FFFAF5FF'],               // purple-50
+            ['Pending', (int)($summary->pending ?? 0), 'FFFAF5FF'],               // purple-50
             ['Total sudah install (OK)', (int)($summary->total_sudah_install ?? 0), 'FFF0FDF4'], // green-50
         ];
 

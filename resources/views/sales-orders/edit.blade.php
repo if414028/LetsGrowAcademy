@@ -6,8 +6,9 @@
                 <p class="text-sm text-gray-500">Ubah data sales order.</p>
             </div>
 
-            <a href="{{ route('sales-orders.show', $salesOrder) }}" class="text-sm text-blue-600 hover:underline">
-                ← Back
+            <a href="{{ route('sales-orders.show', $salesOrder) }}"
+                class="rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
+                Back
             </a>
         </div>
 
@@ -28,61 +29,66 @@
             </div>
         @endif
 
+        @php
+            /** @var \App\Models\User $authUser */
+            $authUser = auth()->user();
+            $isPrivileged = $authUser->hasAnyRole(['Admin', 'Head Admin']);
+        @endphp
+
         <form method="POST" action="{{ route('sales-orders.update', $salesOrder) }}" class="mt-6">
             @csrf
             @method('PUT')
 
-            <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-12 items-stretch">
                 {{-- Left --}}
-                <div class="lg:col-span-8 space-y-6">
+                <div class="lg:col-span-8 space-y-6 h-full">
                     {{-- Order Info --}}
-                    <div class="rounded-2xl border bg-white p-5">
+                    <div class="rounded-2xl border bg-white p-5 h-full">
                         <h2 class="text-sm font-semibold text-gray-900">Order Info</h2>
 
-                        @php
-                            /** @var \App\Models\User $authUser */
-                            $authUser = auth()->user();
-                        @endphp
-
-                        @if ($authUser->hasAnyRole(['Admin', 'Head Admin']))
+                        {{-- HM/HP (samakan seperti create) --}}
+                        @if ($isPrivileged)
                             <div class="mt-4" x-data="hmHpPickerEdit()" x-init="init()" data-hmhp-picker>
-                                {{-- hidden to backend --}}
-                                <input type="hidden" name="health_manager_id" :value="hmSelectedId">
-                                <input type="hidden" name="sales_user_id" :value="hpSelectedId">
+                                <label class="text-xs font-medium text-gray-600">
+                                    Health Manager <span class="text-red-500">*</span>
+                                </label>
 
-                                {{-- HEALTH MANAGER --}}
-                                <label class="text-xs font-medium text-gray-600">Health Manager</label>
+                                <input type="hidden" name="health_manager_id" :value="selectedHmId">
+
                                 <div class="relative mt-1">
-                                    <input type="text" x-model="hmQuery" @input.debounce.250ms="searchHM()"
+                                    <input type="text" x-model="hmQuery" @input.debounce.250ms="searchHm()"
                                         @focus="hmOpen = true" @keydown.escape="hmOpen = false"
-                                        placeholder="Ketik nama HM..."
+                                        placeholder="Ketik nama Health Manager..."
                                         class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
 
                                     <div x-show="hmOpen && hmItems.length > 0" x-transition
-                                        class="absolute z-40 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                                        class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
                                         <template x-for="u in hmItems" :key="u.id">
                                             <button type="button" class="w-full text-left px-4 py-3 hover:bg-gray-50"
-                                                @click="chooseHM(u)">
+                                                @click="chooseHm(u)">
                                                 <div class="text-sm font-semibold text-gray-900" x-text="u.label"></div>
                                             </button>
                                         </template>
                                     </div>
                                 </div>
 
-                                <div class="mt-1 text-xs" :class="hmSelectedId ? 'text-green-700' : 'text-gray-400'">
-                                    <span x-show="hmSelectedId">Health Manager terpilih.</span>
-                                    <span x-show="!hmSelectedId">Wajib pilih HM dari dropdown.</span>
+                                <div class="mt-2 text-xs" :class="selectedHmId ? 'text-green-700' : 'text-gray-400'">
+                                    <span x-show="selectedHmId">Health Manager terpilih.</span>
+                                    <span x-show="!selectedHmId">Wajib pilih Health Manager dari dropdown.</span>
                                 </div>
 
-                                {{-- HEALTH PLANNER --}}
                                 <div class="mt-4">
-                                    <label class="text-xs font-medium text-gray-600">Health Planner (Sales)</label>
+                                    <label class="text-xs font-medium text-gray-600">
+                                        Health Planner <span class="text-red-500">*</span>
+                                    </label>
+
+                                    <input type="hidden" name="sales_user_id" :value="selectedHpId">
 
                                     <div class="relative mt-1">
                                         <input type="text" x-model="hpQuery" @focus="hpOpen = true; ensureHpLoaded()"
                                             @input="filterHp()" @keydown.escape="hpOpen = false"
-                                            :disabled="!hmSelectedId"
-                                            :class="!hmSelectedId ? 'bg-gray-50 cursor-not-allowed' : ''"
+                                            :disabled="!selectedHmId"
+                                            :class="!selectedHmId ? 'bg-gray-50 cursor-not-allowed' : ''"
                                             placeholder="Pilih / ketik Health Planner..."
                                             class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
 
@@ -91,7 +97,7 @@
                                             <template x-for="u in filteredHp" :key="u.id">
                                                 <button type="button"
                                                     class="w-full text-left px-4 py-3 hover:bg-gray-50"
-                                                    @click="chooseHP(u)">
+                                                    @click="chooseHp(u)">
                                                     <div class="text-sm font-semibold text-gray-900" x-text="u.label">
                                                     </div>
                                                     <div class="text-xs text-gray-500"
@@ -99,82 +105,73 @@
                                                 </button>
                                             </template>
                                         </div>
-
                                     </div>
 
-                                    <div class="mt-1 text-xs"
-                                        :class="hpSelectedId ? 'text-green-700' : 'text-gray-400'">
-                                        <span x-show="hpSelectedId">Health Planner terpilih.</span>
-                                        <span x-show="!hpSelectedId">Wajib pilih HP dari dropdown.</span>
+                                    <div class="mt-2 text-xs"
+                                        :class="selectedHpId ? 'text-green-700' : 'text-gray-400'">
+                                        <span x-show="selectedHpId">Health Planner terpilih.</span>
+                                        <span x-show="!selectedHpId">Wajib pilih Health Planner dari dropdown.</span>
                                     </div>
                                 </div>
                             </div>
                         @else
+                            {{-- Non-privileged: sales_user_id fixed ke user login --}}
                             <input type="hidden" name="sales_user_id" value="{{ $authUser->id }}">
                             <div class="mt-4 text-xs text-gray-500">
                                 Sales User: <span class="font-semibold text-gray-900">{{ $authUser->name }}</span>
                             </div>
                         @endif
 
-
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
-                                <label class="text-xs font-medium text-gray-600">Order No</label>
+                                <label class="text-xs font-medium text-gray-600">
+                                    Order No <span class="text-red-500">*</span>
+                                </label>
                                 <input id="order_no" name="order_no"
                                     value="{{ old('order_no', $salesOrder->order_no) }}"
                                     class="mt-1 w-full rounded-xl border-gray-200 bg-gray-50 focus:border-blue-500 focus:ring-blue-500"
-                                    readonly />
+                                    placeholder="Order no" readonly />
                                 <div class="mt-1 text-xs text-gray-400">Order No tidak diubah saat edit.</div>
                             </div>
 
                             <div>
-                                <label class="text-xs font-medium text-gray-600">Key In At</label>
+                                <label class="text-xs font-medium text-gray-600">
+                                    Key In At <span class="text-red-500">*</span>
+                                </label>
                                 <input type="datetime-local" name="key_in_at"
                                     value="{{ old('key_in_at', optional($salesOrder->key_in_at)->format('Y-m-d\TH:i')) }}"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
+                                <div class="mt-1 text-xs text-gray-400">Kosongkan untuk otomatis: sekarang.</div>
                             </div>
 
-                            @if ($authUser->hasAnyRole(['Admin', 'Head Admin']))
-                                <div x-data="{ pm: @js(old('payment_method', $salesOrder->payment_method ?? '')) }">
-                                    <label class="text-xs font-medium text-gray-600">Payment Method</label>
+                            {{-- Payment Method + remarks (samakan create) --}}
+                            <div x-data="paymentMethodRemarksEdit()" x-init="init()">
+                                <label class="text-xs font-medium text-gray-600">
+                                    Payment Method <span class="text-red-500">*</span>
+                                </label>
 
-                                    <select name="payment_method" x-model="pm"
-                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                                        <option value="">-</option>
+                                <select name="payment_method" x-model="paymentMethod"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="">-</option>
+                                    @foreach ($paymentMethods as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
 
-                                        @foreach ($paymentMethods as $value => $label)
-                                            <option value="{{ $value }}">{{ $label }}</option>
-                                        @endforeach
-                                    </select>
-
-                                    {{-- ✅ Remarks POA --}}
-                                    <div class="mt-4" x-show="pm === 'outright'" x-transition>
+                                {{-- ✅ Remarks POA - privileged only --}}
+                                @if ($isPrivileged)
+                                    <div class="mt-4" x-show="showRemarks" x-transition>
                                         <label class="text-xs font-medium text-gray-600">Remarks (POA)</label>
-
-                                        <textarea name="payment_method_remarks" rows="3" :disabled="pm !== 'outright'"
+                                        <textarea name="payment_method_remarks" rows="3" x-model="remarks"
                                             class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                                            placeholder="Optional, khusus POA...">{{ old('payment_method_remarks', $salesOrder->payment_method_remarks ?? '') }}</textarea>
+                                            placeholder="Opsional, khusus POA...">{{ old('payment_method_remarks', $salesOrder->payment_method_remarks ?? '') }}</textarea>
 
                                         <div class="mt-1 text-xs text-gray-400">
                                             Hanya muncul jika Payment Method = POA.
                                         </div>
                                     </div>
-                                </div>
-                            @else
-                                {{-- non Admin/Head Admin tetap lihat dropdown (kalau kamu memang izinkan), tapi tanpa remarks --}}
-                                <div>
-                                    <label class="text-xs font-medium text-gray-600">Payment Method</label>
-                                    <select name="payment_method"
-                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                                        <option value="">-</option>
-                                        @foreach ($paymentMethods as $value => $label)
-                                            <option value="{{ $value }}" @selected(old('payment_method', $salesOrder->payment_method ?? null) === $value)>
-                                                {{ $label }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            @endif
+                                @endif
+                            </div>
 
                             <div class="flex items-center gap-2 pt-2">
                                 <input id="is_recurring" type="checkbox" name="is_recurring" value="1"
@@ -196,34 +193,185 @@
                                 </option>
                             </select>
                         </div>
+                    </div>
+                </div>
 
+                {{-- Right --}}
+                <div class="lg:col-span-4 space-y-6">
+                    {{-- Customer --}}
+                    <div class="rounded-2xl border bg-white p-5" x-data="customerPickerEdit()" x-init="init()">
+                        <h2 class="text-sm font-semibold text-gray-900">Customer</h2>
+
+                        <input type="hidden" name="customer_id" :value="selectedId">
+
+                        <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div class="relative md:col-span-2">
+                                <label class="text-xs font-medium text-gray-600">
+                                    Customer Name <span class="text-red-500">*</span>
+                                </label>
+                                <input name="customer_name" x-model="query" @input.debounce.250ms="search()"
+                                    @focus="open = true" @keydown.escape="open = false"
+                                    placeholder="Ketik nama customer..."
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
+
+                                <div x-show="open && items.length > 0" x-transition
+                                    class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
+                                    <template x-for="c in items" :key="c.id">
+                                        <button type="button" class="w-full text-left px-4 py-3 hover:bg-gray-50"
+                                            @click="choose(c)">
+                                            <div class="text-sm font-semibold text-gray-900" x-text="c.full_name">
+                                            </div>
+                                            <div class="text-xs text-gray-500">
+                                                <span x-text="c.phone_number ?? '-'"></span>
+                                                <span x-show="c.address"> • </span>
+                                                <span x-text="c.address ?? ''"></span>
+                                            </div>
+                                        </button>
+                                    </template>
+                                </div>
+
+                                <div class="mt-2 text-xs" :class="selectedId ? 'text-green-700' : 'text-gray-400'">
+                                    <span x-show="selectedId">Selected existing customer.</span>
+                                    <span x-show="!selectedId">Jika tidak ada di dropdown, customer akan dibuat
+                                        otomatis saat submit.</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="text-xs font-medium text-gray-600">
+                                    Phone Number <span class="text-red-500">*</span>
+                                </label>
+                                <input name="customer_phone" x-model="phone"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                    placeholder="08xxxx" />
+                            </div>
+
+                            <div>
+                                <label class="text-xs font-medium text-gray-600">
+                                    Address <span class="text-red-500">*</span>
+                                </label>
+                                <input name="customer_address" x-model="address" required
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                    placeholder="Alamat customer..." />
+                            </div>
+                        </div>
                     </div>
 
-                    {{-- Items / Products --}}
-                    @php
-                        $initialItems = old('items');
+                    {{-- Status --}}
+                    <div class="rounded-2xl border bg-white p-5" x-data="statusInstallFormEdit()" x-init="init();
+                    bindWatchers()">
+                        <h2 class="text-sm font-semibold text-gray-900">Status</h2>
 
-                        if (!$initialItems) {
-                            $initialItems = $salesOrder->items
-                                ->map(
-                                    fn($it) => [
-                                        'product_id' => $it->product_id,
-                                        'product_price_id' => $it->product_price_id,
-                                        'qty' => $it->qty,
-                                    ],
-                                )
-                                ->values()
-                                ->all();
+                        <div class="mt-4 space-y-4">
+                            <div>
+                                <label class="text-xs font-medium text-gray-600">CCP Status</label>
+                                <input type="hidden" name="ccp_status" x-bind:value="ccpStatus"
+                                    x-show="disabledAll">
+                                <select name="ccp_status" x-model="ccpStatus" :disabled="disabledAll"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                                    @foreach ($ccpStatuses as $s)
+                                        <option value="{{ $s }}" @selected(old('ccp_status', $salesOrder->ccp_status ?? 'menunggu pengecekan') === $s)>
+                                            {{ ucfirst($s) }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
 
-                            if (empty($initialItems)) {
-                                $initialItems = [['product_id' => '', 'product_price_id' => '', 'qty' => 1]];
-                            }
+                            <div class="mt-4" x-show="showCcpRemarks" x-transition>
+                                <label class="text-xs font-medium text-gray-600">Remarks (CCP Ditolak)</label>
+                                <textarea name="ccp_remarks" :disabled="disabledAll" rows="3" x-model="ccpRemarks"
+                                    :required="requiredCcpRemarks"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                    placeholder="Masukkan alasan kenapa ditolak..."></textarea>
+
+                                <div class="mt-1 text-xs text-gray-400" x-show="requiredCcpRemarks">
+                                    Wajib diisi jika CCP status: ditolak.
+                                </div>
+                            </div>
+
+                            <div class="mt-4" x-show="showCcpApprovedAt" x-transition>
+                                <label class="text-xs font-medium text-gray-600">Tanggal CCP Disetujui</label>
+                                <input type="datetime-local" name="ccp_approved_at" :disabled="disabledAll"
+                                    x-model="ccpApprovedAt" :required="requiredCcpApprovedAt"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
+
+                                <div class="mt-1 text-xs text-gray-400" x-show="requiredCcpApprovedAt">
+                                    Wajib diisi jika CCP status: disetujui.
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="text-xs font-medium text-gray-600">Status Instalasi</label>
+                                <input type="hidden" name="status" x-bind:value="status"
+                                    x-show="disabledAll">
+                                <select name="status" x-model="status" :disabled="disabledAll"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                                    @foreach ($statuses as $s)
+                                        <option value="{{ $s }}" @selected(old('status', $salesOrder->status ?? 'menunggu verifikasi') === $s)>
+                                            {{ ucfirst($s) }}
+                                        </option>
+                                    @endforeach
+                                </select>
+
+                                <div class="mt-4" x-show="showInstallDate" x-transition>
+                                    <label class="text-xs font-medium text-gray-600">Installation Date</label>
+                                    <input type="date" name="install_date" :disabled="disabledAll"
+                                        x-model="installDate" :required="requiredInstallDate"
+                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
+
+                                    <div class="mt-1 text-xs text-gray-400" x-show="requiredInstallDate">
+                                        Wajib diisi jika status instalasi membutuhkan tanggal instalasi.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4" x-show="showReason" x-transition>
+                                <label class="text-xs font-medium text-gray-600">Alasan</label>
+                                <textarea name="status_reason" :disabled="disabledAll" rows="3" x-model="reason" :required="requiredReason"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                    placeholder="Masukkan alasan..."></textarea>
+
+                                <div class="mt-1 text-xs text-gray-400" x-show="requiredReason">
+                                    Wajib diisi untuk status: dibatalkan / ditunda / gagal penelponan.
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit"
+                            class="mt-6 w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                            Update Sales Order
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Products (full width seperti create) --}}
+                @php
+                    $initialItems = old('items');
+
+                    if (!$initialItems) {
+                        $initialItems = $salesOrder->items
+                            ->map(
+                                fn($it) => [
+                                    'product_id' => $it->product_id,
+                                    'product_price_id' => $it->product_price_id,
+                                    'qty' => $it->qty,
+                                ],
+                            )
+                            ->values()
+                            ->all();
+
+                        if (empty($initialItems)) {
+                            $initialItems = [['product_id' => '', 'product_price_id' => '', 'qty' => 1]];
                         }
-                    @endphp
+                    }
+                @endphp
 
+                <div class="lg:col-span-12">
                     <div class="rounded-2xl border bg-white p-5" x-data="salesOrderItems(@js($products), @js($initialItems))" x-init="init()">
                         <div class="flex items-center justify-between">
-                            <h2 class="text-sm font-semibold text-gray-900">Products</h2>
+                            <h2 class="text-sm font-semibold text-gray-900">
+                                Products <span class="text-red-500">*</span>
+                            </h2>
 
                             <button type="button" @click="addRow()"
                                 class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -245,14 +393,11 @@
                                 <tbody class="divide-y">
                                     <template x-for="(row, idx) in rows" :key="row._key">
                                         <tr class="align-top">
-                                            {{-- PRODUCT PICKER (searchable dropdown) --}}
                                             <td class="px-4 py-3 align-top" data-product-cell>
                                                 <div class="flex flex-col gap-1">
-                                                    {{-- hidden product_id --}}
                                                     <input type="hidden" :name="`items[${idx}][product_id]`"
                                                         :value="row.product_id" required>
 
-                                                    {{-- input product --}}
                                                     <div class="relative">
                                                         <input type="text"
                                                             class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
@@ -262,7 +407,6 @@
                                                             @focus="row.open = true; searchProduct(idx)"
                                                             @keydown.escape="row.open = false" />
 
-                                                        {{-- dropdown --}}
                                                         <div x-show="row.open && row.items.length > 0" x-transition
                                                             class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
                                                             <template x-for="p in row.items" :key="p.id">
@@ -276,7 +420,6 @@
                                                         </div>
                                                     </div>
 
-                                                    {{-- helper text (tingginya konsisten) --}}
                                                     <div class="text-xs min-h-[16px]"
                                                         :class="row.product_id ? 'text-green-700' : 'text-gray-400'">
                                                         <span x-show="row.product_id">Product terpilih.</span>
@@ -297,7 +440,7 @@
                                                     class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                                     :name="`items[${idx}][product_price_id]`"
                                                     x-model="row.product_price_id" :disabled="!row.product_id"
-                                                    x-init="$nextTick(() => { if (row.product_price_id) $el.value = String(row.product_price_id) })" required>
+                                                    x-init="$nextTick(() => { $el.value = String(row.product_price_id || '') })" required>
                                                     <option value="">-- Select Price --</option>
 
                                                     <template x-for="pr in row.prices" :key="pr.id">
@@ -330,191 +473,57 @@
                         </div>
                     </div>
                 </div>
-
-                {{-- Right --}}
-                <div class="lg:col-span-4 space-y-6">
-                    {{-- Customer --}}
-                    <div class="rounded-2xl border bg-white p-5" x-data="customerPickerEdit()" x-init="init()">
-                        <h2 class="text-sm font-semibold text-gray-900">Customer</h2>
-
-                        <input type="hidden" name="customer_id" :value="selectedId">
-
-                        <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                            <div class="relative md:col-span-2">
-                                <label class="text-xs font-medium text-gray-600">Customer Name</label>
-                                <input name="customer_name"
-                                    value="{{ old('customer_name', $salesOrder->customer?->full_name) }}"
-                                    x-model="query" @input.debounce.250ms="search()" @focus="open = true"
-                                    @keydown.escape="open = false" placeholder="Ketik nama customer..."
-                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
-
-                                {{-- dropdown --}}
-                                <div x-show="open && items.length > 0" x-transition
-                                    class="absolute z-30 mt-2 w-full rounded-xl border bg-white shadow-lg overflow-hidden">
-                                    <template x-for="c in items" :key="c.id">
-                                        <button type="button" class="w-full text-left px-4 py-3 hover:bg-gray-50"
-                                            @click="choose(c)">
-                                            <div class="text-sm font-semibold text-gray-900" x-text="c.full_name">
-                                            </div>
-                                            <div class="text-xs text-gray-500">
-                                                <span x-text="c.phone_number ?? '-'"></span>
-                                                <span x-show="c.address"> • </span>
-                                                <span x-text="c.address ?? ''"></span>
-                                            </div>
-                                        </button>
-                                    </template>
-                                </div>
-
-                                <div class="mt-2 text-xs" :class="selectedId ? 'text-green-700' : 'text-gray-400'">
-                                    <span x-show="selectedId">Selected existing customer.</span>
-                                    <span x-show="!selectedId">Jika tidak ada di dropdown, customer akan dibuat
-                                        otomatis saat submit.</span>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="text-xs font-medium text-gray-600">Phone Number</label>
-                                <input name="customer_phone"
-                                    value="{{ old('customer_phone', $salesOrder->customer?->phone_number) }}"
-                                    x-model="phone"
-                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                                    placeholder="08xxxx" />
-                            </div>
-
-                            <div>
-                                <label class="text-xs font-medium text-gray-600">Address</label>
-                                <input name="customer_address"
-                                    value="{{ old('customer_address', $salesOrder->customer?->address) }}"
-                                    x-model="address"
-                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                                    placeholder="Alamat (optional)" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="rounded-2xl border bg-white p-5" x-data="statusInstallFormEdit()" x-init="init();
-                    bindWatchers()">
-                        <h2 class="text-sm font-semibold text-gray-900">Status</h2>
-
-                        <div class="mt-4 space-y-4">
-                            <div>
-                                <label class="text-xs font-medium text-gray-600">CCP Status</label>
-                                <input type="hidden" name="ccp_status" x-bind:value="ccpStatus"
-                                    x-show="disabledAll">
-                                <select name="ccp_status" x-model="ccpStatus" :disabled="disabledAll"
-                                    :disabled="disabledAll"
-                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                                    @foreach ($ccpStatuses as $s)
-                                        <option value="{{ $s }}" @selected(old('ccp_status', $salesOrder->ccp_status) === $s)>
-                                            {{ ucfirst($s) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            {{-- CCP Remarks (when ditolak) --}}
-                            <div class="mt-4" x-show="showCcpRemarks" x-transition>
-                                <label class="text-xs font-medium text-gray-600">Remarks (CCP Ditolak)</label>
-                                <textarea name="ccp_remarks" :disabled="disabledAll" rows="3" x-model="ccpRemarks"
-                                    :required="requiredCcpRemarks"
-                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                                    placeholder="Masukkan alasan kenapa ditolak..."></textarea>
-
-                                <div class="mt-1 text-xs text-gray-400" x-show="requiredCcpRemarks">
-                                    Wajib diisi jika CCP status: ditolak.
-                                </div>
-                            </div>
-
-                            {{-- CCP Approved At (when disetujui) --}}
-                            <div class="mt-4" x-show="showCcpApprovedAt" x-transition>
-                                <label class="text-xs font-medium text-gray-600">Tanggal CCP Disetujui</label>
-                                <input type="datetime-local" name="ccp_approved_at" :disabled="disabledAll"
-                                    x-model="ccpApprovedAt" :required="requiredCcpApprovedAt"
-                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
-
-                                <div class="mt-1 text-xs text-gray-400" x-show="requiredCcpApprovedAt">
-                                    Wajib diisi jika CCP status: disetujui.
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="text-xs font-medium text-gray-600">Status Instalasi</label>
-                                <input type="hidden" name="status" x-bind:value="status"
-                                    x-show="disabledAll">
-                                <select name="status" x-model="status" :disabled="disabledAll"
-                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                                    @foreach ($statuses as $s)
-                                        <option value="{{ $s }}" @selected(old('status', $salesOrder->status) === $s)>
-                                            {{ ucfirst($s) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-
-                                {{-- Installation Date --}}
-                                <div class="mt-4" x-show="showInstallDate" x-transition>
-                                    <label class="text-xs font-medium text-gray-600">Installation Date</label>
-                                    <input type="date" name="install_date" :disabled="disabledAll"
-                                        x-model="installDate" :required="requiredInstallDate"
-                                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
-
-                                    <div class="mt-1 text-xs text-gray-400" x-show="requiredInstallDate">
-                                        Wajib diisi jika status instalasi "dijadwalkan".
-                                    </div>
-                                </div>
-                            </div>
-
-                            {{-- Status Reason --}}
-                            <div class="mt-4" x-show="showReason" x-transition>
-                                <label class="text-xs font-medium text-gray-600">Alasan</label>
-                                <textarea name="status_reason" :disabled="disabledAll" rows="3" x-model="reason" :required="requiredReason"
-                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                                    placeholder="Masukkan alasan..."></textarea>
-
-                                <div class="mt-1 text-xs text-gray-400" x-show="requiredReason">
-                                    Wajib diisi untuk status: dibatalkan / ditunda / gagal penelponan.
-                                </div>
-                            </div>
-                        </div>
-
-                        <button type="submit"
-                            class="mt-6 w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                            Update Sales Order
-                        </button>
-                    </div>
-                </div>
             </div>
         </form>
     </div>
 
     <script>
+        function paymentMethodRemarksEdit() {
+            return {
+                paymentMethod: @json(old('payment_method', $salesOrder->payment_method ?? '')),
+                remarks: @json(old('payment_method_remarks', $salesOrder->payment_method_remarks ?? '')),
+
+                normalize(v) {
+                    return (v || '').toString().trim().toLowerCase();
+                },
+
+                get showRemarks() {
+                    return this.normalize(this.paymentMethod) === 'outright';
+                },
+
+                init() {
+                    if (!this.showRemarks) this.remarks = '';
+
+                    this.$watch('paymentMethod', () => {
+                        if (!this.showRemarks) this.remarks = '';
+                    });
+                },
+            };
+        }
+
         function hmHpPickerEdit() {
             return {
-                // HM
-                hmQuery: @json(old('health_manager_label')
-                        ? old('health_manager_label')
-                        : ($oldHealthManager?->name
-                            ? $oldHealthManager->name . ($oldHealthManager->email ? " ({$oldHealthManager->email})" : '')
-                            : '')),
+                hmQuery: @json(
+                    $oldHealthManager
+                        ? $oldHealthManager->name . ($oldHealthManager->email ? " ({$oldHealthManager->email})" : '')
+                        : old('health_manager_label', '')),
                 hmOpen: false,
                 hmItems: [],
-                hmSelectedId: @json(old('health_manager_id', $oldHealthManager?->id)),
+                selectedHmId: @json(old('health_manager_id', $oldHealthManager?->id)),
                 hmLastFetch: '',
 
-                // HP (list + filter seperti create)
-                hpQuery: @json(old('sales_user_label')
-                        ? old('sales_user_label')
-                        : ($oldSalesUser?->name
-                            ? $oldSalesUser->name . ($oldSalesUser->email ? " ({$oldSalesUser->email})" : '')
-                            : '')),
-                hpSelectedId: @json(old('sales_user_id', $oldSalesUser?->id)),
+                hpQuery: @json(
+                    $oldSalesUser
+                        ? $oldSalesUser->name . ($oldSalesUser->email ? " ({$oldSalesUser->email})" : '')
+                        : old('sales_user_label', '')),
+                selectedHpId: @json(old('sales_user_id', $oldSalesUser?->id)),
                 hpAll: [],
                 filteredHp: [],
                 hpOpen: false,
                 hpLoadedForHmId: @json(old('health_manager_id', $oldHealthManager?->id) ?? null),
 
                 init() {
-                    // kalau HM sudah ada saat edit, auto load list HP supaya bisa langsung dropdown
-                    if (this.hmSelectedId) {
+                    if (this.selectedHmId) {
                         this.ensureHpLoaded().then(() => this.filterHp());
                     }
 
@@ -525,9 +534,10 @@
                     });
                 },
 
-                async searchHM() {
-                    // ⚠️ jangan null-in hmSelectedId di sini (biar HP gak jadi disabled mendadak)
-                    // reset HP hanya kalau user memang mengganti HM via chooseHM()
+                async searchHm() {
+                    this.selectedHmId = null;
+                    this.resetHp();
+
                     const q = (this.hmQuery || '').trim();
                     if (q.length < 2) {
                         this.hmItems = [];
@@ -541,21 +551,21 @@
                             headers: {
                                 'Accept': 'application/json'
                             }
-                        });
-                    if (!res.ok) return;
+                        }
+                    );
 
+                    if (!res.ok) return;
                     const data = await res.json();
                     this.hmItems = Array.isArray(data) ? data : [];
                     this.hmOpen = true;
                 },
 
-                async chooseHM(u) {
-                    this.hmSelectedId = u.id;
+                async chooseHm(u) {
+                    this.selectedHmId = u.id;
                     this.hmQuery = u.label;
                     this.hmOpen = false;
                     this.hmItems = [];
 
-                    // reset HP karena HM beneran berubah
                     this.resetHp();
 
                     await this.ensureHpLoaded();
@@ -563,7 +573,7 @@
                 },
 
                 resetHp() {
-                    this.hpSelectedId = null;
+                    this.selectedHpId = null;
                     this.hpQuery = '';
                     this.hpAll = [];
                     this.filteredHp = [];
@@ -572,12 +582,12 @@
                 },
 
                 async ensureHpLoaded() {
-                    if (!this.hmSelectedId) return;
+                    if (!this.selectedHmId) return;
 
-                    if (String(this.hpLoadedForHmId) === String(this.hmSelectedId) && this.hpAll.length) return;
+                    if (String(this.hpLoadedForHmId) === String(this.selectedHmId) && this.hpAll.length) return;
 
                     const res = await fetch(
-                        `{{ route('sales-orders.health-planners.list') }}?health_manager_id=${encodeURIComponent(this.hmSelectedId)}`, {
+                        `{{ route('sales-orders.health-planners.list') }}?health_manager_id=${encodeURIComponent(this.selectedHmId)}`, {
                             headers: {
                                 'Accept': 'application/json'
                             }
@@ -587,14 +597,14 @@
                     if (!res.ok) {
                         this.hpAll = [];
                         this.filteredHp = [];
-                        this.hpLoadedForHmId = this.hmSelectedId;
+                        this.hpLoadedForHmId = this.selectedHmId;
                         return;
                     }
 
                     const data = await res.json();
                     this.hpAll = Array.isArray(data) ? data : [];
                     this.filteredHp = this.hpAll;
-                    this.hpLoadedForHmId = this.hmSelectedId;
+                    this.hpLoadedForHmId = this.selectedHmId;
                 },
 
                 filterHp() {
@@ -603,15 +613,17 @@
                         this.filteredHp = this.hpAll;
                         return;
                     }
-                    this.filteredHp = this.hpAll.filter(u => (u.label || '').toLowerCase().includes(q));
+                    this.filteredHp = this.hpAll.filter(u =>
+                        (u.label || '').toLowerCase().includes(q)
+                    );
                 },
 
-                chooseHP(u) {
-                    this.hpSelectedId = u.id;
+                chooseHp(u) {
+                    this.selectedHpId = u.id;
                     this.hpQuery = u.label;
                     this.hpOpen = false;
                 },
-            }
+            };
         }
 
         function customerPickerEdit() {
@@ -657,7 +669,7 @@
                     this.open = false;
                     this.items = [];
                 }
-            }
+            };
         }
 
         function salesOrderItems(products, initialRows) {
@@ -688,18 +700,16 @@
             const rows = (Array.isArray(initialRows) && initialRows.length) ?
                 initialRows.map((r, i) => {
                     const pid = r.product_id ? String(r.product_id) : '';
-                    const chosen = r.product_price_id ? String(r.product_price_id) : '';
-
                     const p = pid ? byId(pid) : null;
                     const prices = p ? (p.prices || []) : [];
 
+                    const chosen = r.product_price_id ? String(r.product_price_id) : '';
                     const exists = chosen && prices.some(x => x.id === chosen);
-                    const safeChosen = exists ? chosen : (prices.length ? prices[0].id : '');
 
                     return {
-                        _key: `${Date.now()}-${i}-${Math.random().toString(16).slice(2)}`, // ✅ penting
+                        _key: `${Date.now()}-${i}-${Math.random().toString(16).slice(2)}`,
                         product_id: pid,
-                        product_price_id: safeChosen,
+                        product_price_id: exists ? chosen : (prices.length ? prices[0].id : ''),
                         qty: r.qty ?? 1,
                         query: pid ? labelById(pid) : '',
                         open: false,
@@ -707,7 +717,8 @@
                         lastFetch: '',
                         prices,
                     };
-                }) : [{
+                }) :
+                [{
                     _key: `${Date.now()}-0-${Math.random().toString(16).slice(2)}`,
                     product_id: '',
                     product_price_id: '',
@@ -727,10 +738,18 @@
                         if (e.target.closest('[data-product-cell]')) return;
                         this.rows.forEach(r => r.open = false);
                     });
+
+                    // ✅ pastikan select ke-set setelah render
+                    this.$nextTick(() => {
+                        this.rows = this.rows.map(r => ({
+                            ...r
+                        })); // trigger reactivity kecil
+                    });
                 },
 
                 addRow() {
                     this.rows.push({
+                        _key: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
                         product_id: '',
                         product_price_id: '',
                         qty: 1,
@@ -773,79 +792,30 @@
                     const row = this.rows[idx];
                     if (!row) return;
 
-                    row.product_id = p.id;
+                    row.product_id = String(p.id);
                     row.query = p.label;
                     row.items = [];
                     row.open = false;
 
-                    row.prices = p.prices || [];
+                    row.prices = (p.prices || []).map(pr => ({
+                        ...pr,
+                        id: String(pr.id)
+                    }));
                     row.product_price_id = row.prices.length ? row.prices[0].id : '';
                 },
             }
         }
 
-        // Versi edit: searchable sales user, tanpa generate order_no
-        function salesUserPickerEdit() {
-            return {
-                query: @json(old('sales_user_label')
-                        ? old('sales_user_label')
-                        : ($salesOrder->salesUser?->name
-                            ? $salesOrder->salesUser->name . ($salesOrder->salesUser->email ? " ({$salesOrder->salesUser->email})" : '')
-                            : '')),
-                open: false,
-                items: [],
-                selectedId: @json(old('sales_user_id', $salesOrder->sales_user_id)),
-                lastFetch: '',
-
-                init() {},
-
-                async search() {
-                    this.selectedId = null;
-
-                    const q = (this.query || '').trim();
-                    if (q.length < 2) {
-                        this.items = [];
-                        return;
-                    }
-                    if (this.lastFetch === q) return;
-                    this.lastFetch = q;
-
-                    const res = await fetch(
-                        `{{ route('sales-orders.sales-users.search') }}?q=${encodeURIComponent(q)}`, {
-                            headers: {
-                                'Accept': 'application/json'
-                            }
-                        });
-                    if (!res.ok) return;
-
-                    const data = await res.json();
-                    this.items = Array.isArray(data) ? data : [];
-                    this.open = true;
-                },
-
-                choose(u) {
-                    this.selectedId = u.id;
-                    this.query = u.label;
-                    this.open = false;
-                    this.items = [];
-                }
-            }
-        }
-
         function statusInstallFormEdit() {
             return {
-
-                // 🔹 recurring state
                 isRecurring: @json(old('is_recurring', $salesOrder->is_recurring) ? true : false),
 
-                // 🔹 status instalasi
-                status: @json(old('status', $salesOrder->status)),
+                status: @json(old('status', $salesOrder->status ?? 'menunggu verifikasi')),
                 installDate: @json(old(
                         'install_date',
                         $salesOrder->install_date ? \Carbon\Carbon::parse($salesOrder->install_date)->format('Y-m-d') : '')),
                 reason: @json(old('status_reason', $salesOrder->status_reason ?? '')),
 
-                // 🔹 CCP
                 ccpStatus: @json(old('ccp_status', $salesOrder->ccp_status ?? 'menunggu pengecekan')),
                 ccpRemarks: @json(old('ccp_remarks', $salesOrder->ccp_remarks ?? '')),
                 ccpApprovedAt: @json(old(
@@ -855,30 +825,24 @@
                 normalizeStatus(v) {
                     return (v || '').toString().trim().toLowerCase();
                 },
-
                 normalizeCcp(v) {
                     return (v || '').toString().trim().toLowerCase();
                 },
 
-                // 🔹 DISABLE SECTION jika tidak recurring
                 get disabledAll() {
                     return !this.isRecurring;
                 },
 
-                // =============================
-                // COMPUTED LOGIC
-                // =============================
-
                 get showInstallDate() {
                     if (this.disabledAll) return false;
                     const st = this.normalizeStatus(this.status);
-                    return !['menunggu verifikasi', 'menunggu jadwal'].includes(st);
+                    return !['menunggu verifikasi', 'menunggu jadwal', 'gagal penelponan'].includes(st);
                 },
 
                 get requiredInstallDate() {
                     if (this.disabledAll) return false;
                     const st = this.normalizeStatus(this.status);
-                    return ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'].includes(st);
+                    return ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'].includes(st);
                 },
 
                 get showReason() {
@@ -892,84 +856,50 @@
                 },
 
                 get showCcpRemarks() {
-                    return !this.disabledAll &&
-                        this.normalizeCcp(this.ccpStatus) === 'ditolak';
+                    return !this.disabledAll && this.normalizeCcp(this.ccpStatus) === 'ditolak';
                 },
-
                 get requiredCcpRemarks() {
                     return this.showCcpRemarks;
                 },
 
                 get showCcpApprovedAt() {
-                    return !this.disabledAll &&
-                        this.normalizeCcp(this.ccpStatus) === 'disetujui';
+                    return !this.disabledAll && this.normalizeCcp(this.ccpStatus) === 'disetujui';
                 },
-
                 get requiredCcpApprovedAt() {
                     return this.showCcpApprovedAt;
                 },
 
-                // =============================
-                // INIT
-                // =============================
-
                 init() {
                     this.syncCheckbox();
-
-                    if (!this.isRecurring) {
-                        this.resetAll();
-                    }
+                    if (!this.isRecurring) this.resetAll();
                 },
 
                 bindWatchers() {
-
-                    // 🔹 listen recurring checkbox
                     document.getElementById('is_recurring')
                         ?.addEventListener('change', (e) => {
                             this.isRecurring = e.target.checked;
-
-                            if (!this.isRecurring) {
-                                this.resetAll();
-                            }
+                            if (!this.isRecurring) this.resetAll();
                         });
 
-                    // 🔹 status watcher
                     this.$watch('status', (val) => {
                         if (this.disabledAll) return;
-
                         const st = this.normalizeStatus(val);
-
-                        if (['menunggu verifikasi', 'menunggu jadwal'].includes(st)) {
-                            this.installDate = '';
-                        }
-
-                        if (!['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st)) {
-                            this.reason = '';
-                        }
+                        if (['menunggu verifikasi', 'menunggu jadwal', 'gagal penelponan'].includes(st)) this
+                            .installDate = '';
+                        if (!['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st)) this.reason = '';
                     });
 
-                    // 🔹 CCP watcher
                     this.$watch('ccpStatus', (val) => {
                         if (this.disabledAll) return;
-
                         const c = this.normalizeCcp(val);
-
-                        if (c !== 'ditolak') {
-                            this.ccpRemarks = '';
-                        }
-
-                        if (c !== 'disetujui') {
-                            this.ccpApprovedAt = '';
-                        }
+                        if (c !== 'ditolak') this.ccpRemarks = '';
+                        if (c !== 'disetujui') this.ccpApprovedAt = '';
                     });
                 },
 
-                // =============================
-                // HELPERS
-                // =============================
-
                 resetAll() {
-                    this.status = 'menunggu jadwal';
+                    // samakan create
+                    this.status = 'menunggu verifikasi';
                     this.installDate = '';
                     this.reason = '';
 
@@ -982,7 +912,7 @@
                     const el = document.getElementById('is_recurring');
                     if (el) el.checked = this.isRecurring;
                 }
-            }
+            };
         }
     </script>
 </x-dashboard-layout>

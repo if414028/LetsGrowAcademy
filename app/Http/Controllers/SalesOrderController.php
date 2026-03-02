@@ -145,10 +145,11 @@ class SalesOrderController extends Controller
             // order fields
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
-                Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)),
+                Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'], true)),
                 Rule::prohibitedIf(fn() => in_array($request->input('status'), [
                     'menunggu verifikasi',
                     'menunggu jadwal',
+                    'gagal penelponan'
                 ], true)),
                 'nullable',
                 'date',
@@ -265,7 +266,7 @@ class SalesOrderController extends Controller
 
             // install_date: simplify by status
             $installDate = null;
-            if (in_array($validated['status'] ?? null, ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)) {
+            if (in_array($validated['status'] ?? null, ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'], true)) {
                 $installDate = $validated['install_date'] ?? null;
             }
 
@@ -416,8 +417,8 @@ class SalesOrderController extends Controller
 
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
-                Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)),
-                Rule::prohibitedIf(fn() => in_array($request->input('status'), ['menunggu verifikasi', 'menunggu jadwal'], true)),
+                Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'], true)),
+                Rule::prohibitedIf(fn() => in_array($request->input('status'), ['menunggu verifikasi', 'menunggu jadwal', 'gagal penelponan'], true)),
                 'nullable',
                 'date',
             ],
@@ -523,7 +524,7 @@ class SalesOrderController extends Controller
 
             // install_date: simple by status
             $installDate = null;
-            if (in_array($validated['status'] ?? null, ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'], true)) {
+            if (in_array($validated['status'] ?? null, ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'], true)) {
                 $installDate = $validated['install_date'] ?? null;
             }
 

@@ -499,13 +499,13 @@
                 get showInstallDate() {
                     if (this.disabledAll) return false;
                     const st = this.normalizeStatus(this.status);
-                    return !['menunggu verifikasi', 'menunggu jadwal'].includes(st);
+                    return !['menunggu verifikasi', 'menunggu jadwal', 'gagal penelponan'].includes(st);
                 },
 
                 get requiredInstallDate() {
                     if (this.disabledAll) return false;
                     const st = this.normalizeStatus(this.status);
-                    return ['dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'].includes(st);
+                    return ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'].includes(st);
                 },
 
                 get showReason() {
@@ -559,7 +559,8 @@
                         if (this.disabledAll) return;
 
                         const st = this.normalizeStatus(val);
-                        if (['menunggu verifikasi', 'menunggu jadwal'].includes(st)) this.installDate = '';
+                        if (['menunggu verifikasi', 'menunggu jadwal', 'gagal penelponan'].includes(st)) this
+                            .installDate = '';
                         if (!['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st)) this.reason = '';
                     });
 

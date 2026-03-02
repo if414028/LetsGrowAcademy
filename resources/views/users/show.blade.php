@@ -252,7 +252,7 @@
         </div>
     </div>
 
-    {{-- Full Width: Downline Tree --}}
+    {{-- Partner Tree --}}
     <div class="mt-6">
         <div class="rounded-2xl bg-white shadow-sm border p-6">
             <div class="flex items-center justify-between gap-4">
@@ -261,8 +261,19 @@
                     <p class="mt-1 text-sm text-gray-500">Semua partner dari user ini.</p>
                 </div>
 
-                <div class="text-xs text-gray-500">
-                    Total: {{ $childrenCount ?? 0 }} direct report
+                <div class="flex items-center gap-2">
+                    <button type="button" id="treeZoomOut"
+                        class="rounded-lg border px-3 py-1 text-sm font-semibold hover:bg-gray-50">−</button>
+
+                    <button type="button" id="treeZoomReset"
+                        class="rounded-lg border px-3 py-1 text-sm font-semibold hover:bg-gray-50">Reset</button>
+
+                    <button type="button" id="treeZoomIn"
+                        class="rounded-lg border px-3 py-1 text-sm font-semibold hover:bg-gray-50">+</button>
+
+                    <div class="ml-2 text-xs text-gray-500">
+                        Total: {{ $childrenCount ?? 0 }} direct report
+                    </div>
                 </div>
             </div>
 
@@ -273,16 +284,63 @@
             @if (!$hasAnyDownline)
                 <p class="mt-4 text-sm text-gray-500">Belum ada partner.</p>
             @else
-                <div class="mt-5 overflow-x-auto">
-                    {{-- track: bikin ada “ruang” kiri-kanan agar node kiri tidak kepotong --}}
-                    <div class="inline-block min-w-full px-10 py-6">
+                {{-- outer: scroll horizontal/vertical --}}
+                <div id="treeScroll" class="mt-5 overflow-auto">
+                    {{-- inner: area yang di-scale --}}
+                    <div id="treeScale" class="inline-block min-w-full px-10 py-6 origin-top"
+                        style="transform: scale(0.85);">
                         @include('users.partials.downline-node', ['node' => $downlineTree])
                     </div>
                 </div>
 
                 <p class="mt-2 text-xs text-gray-500">
-                    Tips: scroll horizontal jika tree lebar.
+                    Tips: scroll jika tree lebar. (Ctrl + scroll untuk zoom)
                 </p>
+
+                <script>
+                    (function() {
+                        const scaleEl = document.getElementById('treeScale');
+                        const scrollEl = document.getElementById('treeScroll');
+
+                        let scale = 0.85; // default zoom-out biar muat
+                        const MIN = 0.4;
+                        const MAX = 1.2;
+                        const STEP = 0.1;
+
+                        const apply = () => {
+                            scaleEl.style.transform = `scale(${scale})`;
+                        };
+
+                        document.getElementById('treeZoomIn').addEventListener('click', () => {
+                            scale = Math.min(MAX, +(scale + STEP).toFixed(2));
+                            apply();
+                        });
+
+                        document.getElementById('treeZoomOut').addEventListener('click', () => {
+                            scale = Math.max(MIN, +(scale - STEP).toFixed(2));
+                            apply();
+                        });
+
+                        document.getElementById('treeZoomReset').addEventListener('click', () => {
+                            scale = 0.85;
+                            apply();
+                            scrollEl.scrollTop = 0;
+                            scrollEl.scrollLeft = 0;
+                        });
+
+                        // Ctrl/Cmd + scroll untuk zoom
+                        scrollEl.addEventListener('wheel', (e) => {
+                            if (!(e.ctrlKey || e.metaKey)) return;
+                            e.preventDefault();
+
+                            const dir = e.deltaY > 0 ? -1 : 1; // scroll up => zoom in
+                            scale = Math.min(MAX, Math.max(MIN, +(scale + dir * 0.05).toFixed(2)));
+                            apply();
+                        }, {
+                            passive: false
+                        });
+                    })();
+                </script>
             @endif
         </div>
     </div>
