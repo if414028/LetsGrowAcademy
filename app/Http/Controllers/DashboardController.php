@@ -162,9 +162,11 @@ class DashboardController extends Controller
             ->where('sales_orders.status', 'selesai')
             ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-            ->join('products', 'products.id', '=', 'sales_order_items.product_id')
-            ->where('products.type', 'bundle')
-            ->count('sales_order_items.id');
+            ->join('products as bundle', 'bundle.id', '=', 'sales_order_items.product_id')
+            ->where('bundle.type', 'bundle')
+            ->join('bundle_items as bi', 'bi.bundle_id', '=', 'bundle.id')
+            ->selectRaw('COALESCE(SUM(sales_order_items.qty * bi.qty), 0) as total_units')
+            ->value('total_units');
 
         // 2) Total produk reguler aktif
         $totalRegularProducts = (int) Product::query()

@@ -11,15 +11,20 @@
 
     $type = $contest->type ?? 'leaderboard';
     $rules = (array) ($contest->rules ?? []);
-    $isQualifier = ($type === 'qualifier') || !empty($rules);
+    $isQualifier = $type === 'qualifier' || !empty($rules);
 
     // data dari controller
     $months = $months ?? [];
     $winners = $winners ?? [];
 
     // rules
-    $minPersonal = (int) ($rules['monthly_min_personal_ns'] ?? 3);
-    $minDirect = (int) ($rules['monthly_min_direct_active_partner'] ?? 3);
+    $minPersonal = array_key_exists('monthly_min_personal_ns', $rules) ? (int) $rules['monthly_min_personal_ns'] : null;
+
+    $minDirect = array_key_exists('monthly_min_direct_active_partner', $rules)
+        ? (int) $rules['monthly_min_direct_active_partner']
+        : null;
+
+    // definisi active partner cuma relevan kalau minDirect dipakai
     $minPartnerActive = (int) ($rules['direct_partner_active_min_personal_ns'] ?? 1);
     $basis = $contest->date_basis ?? 'install_date';
 @endphp
@@ -29,7 +34,7 @@
         <div>
             <h1 class="text-2xl font-semibold text-gray-900">{{ $contest->title }}</h1>
             <p class="text-sm text-gray-500">
-                {{ $isQualifier ? 'Detail kontes dan evaluasi Qualifier (133).' : 'Detail kontes dan ranking Health Planner.' }}
+                {{ $isQualifier ? 'Detail kontes dan evaluasi Qualifier.' : 'Detail kontes dan ranking Health Planner.' }}
             </p>
         </div>
 
@@ -90,7 +95,7 @@
                 <div class="mt-4 rounded-2xl border bg-purple-50 p-5">
                     <div class="flex items-start justify-between gap-4">
                         <div>
-                            <div class="text-sm font-semibold text-gray-900">Rules Qualifier (133)</div>
+                            <div class="text-sm font-semibold text-gray-900">Rules Qualifier</div>
                             <div class="mt-1 text-xs text-gray-600">
                                 Pemenang adalah HP yang <span class="font-semibold">lolos di semua bulan</span> selama
                                 periode kontes.
@@ -102,27 +107,46 @@
                         </span>
                     </div>
 
-                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-4 gap-3">
-                        <div class="rounded-xl border bg-white p-4">
-                            <div class="text-xs text-gray-500">Personal / Bulan</div>
-                            <div class="mt-1 text-sm font-semibold text-gray-900">
-                                ≥ {{ $minPersonal }} unit
-                            </div>
-                        </div>
+                    @php
+                        $ruleCards = 1; // basis tanggal selalu ada
+                        if ($minPersonal !== null) {
+                            $ruleCards++;
+                        }
+                        if ($minDirect !== null) {
+                            $ruleCards++;
+                        } // direct active
+                        if ($minDirect !== null) {
+                            $ruleCards++;
+                        } // definisi active partner
+                    @endphp
 
-                        <div class="rounded-xl border bg-white p-4">
-                            <div class="text-xs text-gray-500">Direct Active / Bulan</div>
-                            <div class="mt-1 text-sm font-semibold text-gray-900">
-                                ≥ {{ $minDirect }} org
+                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-{{ $ruleCards }} gap-3">
+                        @if ($minPersonal !== null)
+                            <div class="rounded-xl border bg-white p-4">
+                                <div class="text-xs text-gray-500">Personal / Bulan</div>
+                                <div class="mt-1 text-sm font-semibold text-gray-900">
+                                    ≥ {{ $minPersonal }} unit
+                                </div>
                             </div>
-                        </div>
+                        @endif
 
-                        <div class="rounded-xl border bg-white p-4">
-                            <div class="text-xs text-gray-500">Definisi Active Partner</div>
-                            <div class="mt-1 text-sm font-semibold text-gray-900">
-                                Partner qty ≥ {{ $minPartnerActive }} unit / bulan
+                        @if ($minDirect !== null)
+                            <div class="rounded-xl border bg-white p-4">
+                                <div class="text-xs text-gray-500">Direct Active / Bulan</div>
+                                <div class="mt-1 text-sm font-semibold text-gray-900">
+                                    ≥ {{ $minDirect }} org
+                                </div>
                             </div>
-                        </div>
+                        @endif
+
+                        @if ($minDirect !== null)
+                            <div class="rounded-xl border bg-white p-4">
+                                <div class="text-xs text-gray-500">Definisi Active Partner</div>
+                                <div class="mt-1 text-sm font-semibold text-gray-900">
+                                    Partner qty ≥ {{ $minPartnerActive }} unit / bulan
+                                </div>
+                            </div>
+                        @endif
 
                         <div class="rounded-xl border bg-white p-4">
                             <div class="text-xs text-gray-500">Basis Tanggal</div>
@@ -163,7 +187,7 @@
         <div class="mt-6 rounded-2xl border bg-white overflow-hidden">
             <div class="border-b p-4">
                 <div class="text-lg font-semibold text-gray-900">
-                    {{ $isQualifier ? 'Evaluasi Qualifier (133)' : 'Ranking Health Planner' }}
+                    {{ $isQualifier ? 'Evaluasi Kontes' : 'Ranking Health Planner' }}
                 </div>
                 <div class="text-sm text-gray-500">
                     {{ $isQualifier
@@ -224,14 +248,15 @@
                                             $activePartner = (int) ($cell['active_partner'] ?? 0);
                                             $ok = (bool) ($cell['eligible'] ?? false);
 
-                                            $personalOk = $personal >= $minPersonal;
-                                            $partnerOk = $activePartner >= $minDirect;
+                                            $personalOk = $minPersonal === null ? true : $personal >= $minPersonal;
+                                            $partnerOk = $minDirect === null ? true : $activePartner >= $minDirect;
                                         @endphp
 
                                         <td class="px-4 py-3 whitespace-nowrap">
                                             <div class="flex flex-col gap-1">
                                                 <div class="text-sm font-semibold text-gray-900">
-                                                    {{ $personal }} <span class="text-xs font-semibold text-gray-500">unit</span>
+                                                    {{ $personal }} <span
+                                                        class="text-xs font-semibold text-gray-500">unit</span>
                                                 </div>
 
                                                 <div class="text-xs text-gray-600">
@@ -240,14 +265,19 @@
                                                 </div>
 
                                                 <div class="flex flex-wrap items-center gap-1">
-                                                    <span
-                                                        class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold {{ $personalOk ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
-                                                        Personal {{ $personalOk ? '✅' : '❌' }}
-                                                    </span>
-                                                    <span
-                                                        class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold {{ $partnerOk ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
-                                                        Partner {{ $partnerOk ? '✅' : '❌' }}
-                                                    </span>
+                                                    @if ($minPersonal !== null)
+                                                        <span
+                                                            class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold {{ $personalOk ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
+                                                            Personal {{ $personalOk ? '✅' : '❌' }}
+                                                        </span>
+                                                    @endif
+
+                                                    @if ($minDirect !== null)
+                                                        <span
+                                                            class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold {{ $partnerOk ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
+                                                            Partner {{ $partnerOk ? '✅' : '❌' }}
+                                                        </span>
+                                                    @endif
                                                     <span
                                                         class="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold {{ $ok ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700' }}">
                                                         {{ $ok ? 'Lolos' : 'Tidak' }}
@@ -282,9 +312,9 @@
                         </tbody>
                     </table>
 
-                {{-- ========================= --}}
-                {{-- ✅ MODE: LEADERBOARD --}}
-                {{-- ========================= --}}
+                    {{-- ========================= --}}
+                    {{-- ✅ MODE: LEADERBOARD --}}
+                    {{-- ========================= --}}
                 @else
                     <table class="min-w-full text-sm">
                         <thead class="bg-gray-50 text-gray-600">
@@ -314,9 +344,11 @@
                                     <td class="px-4 py-3">
                                         <div class="w-48 max-w-full">
                                             <div class="h-2 rounded-full bg-gray-200 overflow-hidden">
-                                                <div class="h-2 bg-blue-600" style="width: {{ (int)($r['pct'] ?? 0) }}%"></div>
+                                                <div class="h-2 bg-blue-600"
+                                                    style="width: {{ (int) ($r['pct'] ?? 0) }}%"></div>
                                             </div>
-                                            <div class="mt-1 text-xs text-gray-500">{{ (int)($r['pct'] ?? 0) }}%</div>
+                                            <div class="mt-1 text-xs text-gray-500">{{ (int) ($r['pct'] ?? 0) }}%
+                                            </div>
                                         </div>
                                     </td>
 

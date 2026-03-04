@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Role;
+use Illuminate\Validation\Rule;
 
 class ContestController extends Controller
 {
@@ -174,12 +175,23 @@ class ContestController extends Controller
             'reward' => ['nullable', 'string', 'max:255'],
             'banner' => ['nullable', 'image', 'max:2048'],
 
-            'date_basis' => ['nullable', 'in:install_date,key_in_at'],
             'type' => ['nullable', 'in:leaderboard,qualifier'],
 
-            // qualifier rules
-            'monthly_min_personal_ns' => ['nullable', 'integer', 'min:1'],
-            'monthly_min_direct_active_partner' => ['nullable', 'integer', 'min:0'],
+            // ✅ hanya berlaku kalau type=qualifier, dan minimal salah satu wajib diisi
+            'monthly_min_personal_ns' => [
+                'nullable',
+                'integer',
+                'min:1',
+                'exclude_unless:type,qualifier',
+                'required_without:monthly_min_direct_active_partner',
+            ],
+            'monthly_min_direct_active_partner' => [
+                'nullable',
+                'integer',
+                'min:0',
+                'exclude_unless:type,qualifier',
+                'required_without:monthly_min_personal_ns',
+            ],
         ];
 
         // HM/Admin/Head Admin: wajib pilih HM minimal 1
@@ -221,7 +233,6 @@ class ContestController extends Controller
             // ✅ Participants = HP ONLY
             $participantIds = array_values(array_unique($hpIds));
 
-            $dateBasis = $data['date_basis'] ?? 'install_date';
             $type = $data['type'] ?? 'leaderboard';
 
             $isQualifier = ($type === 'qualifier')
@@ -238,13 +249,26 @@ class ContestController extends Controller
             $baseRules['target_hm_ids'] = $selectedHmIds;
 
             if ($isQualifier) {
-                $baseRules = array_merge($baseRules, [
-                    'monthly_min_personal_ns' => (int) ($data['monthly_min_personal_ns'] ?? 3), // qty personal min
-                    'monthly_min_direct_active_partner' => (int) ($data['monthly_min_direct_active_partner'] ?? 3),
-                    'direct_partner_active_min_personal_ns' => 1, // partner active minimal qty >= 1
+                $qualifierRules = [
+                    // simpan hanya kalau user isi
+                    'monthly_min_personal_ns' => isset($data['monthly_min_personal_ns'])
+                        ? (int) $data['monthly_min_personal_ns']
+                        : null,
+
+                    'monthly_min_direct_active_partner' => isset($data['monthly_min_direct_active_partner'])
+                        ? (int) $data['monthly_min_direct_active_partner']
+                        : null,
+
+                    // tetap ada buat definisi active partner
+                    'direct_partner_active_min_personal_ns' => 1,
                     'active_partner_definition' => 'partner_personal_qty_min_1',
                     'partner_relation' => 'direct',
-                ]);
+                ];
+
+                // buang key yang null biar tidak dianggap syarat
+                $qualifierRules = array_filter($qualifierRules, fn($v) => $v !== null);
+
+                $baseRules = array_merge($baseRules, $qualifierRules);
             }
 
             $contest = Contest::create([
@@ -259,7 +283,6 @@ class ContestController extends Controller
                 'created_by_role_id' => $user->roles()->first()?->id,
                 'status' => 'draft',
 
-                'date_basis' => $dateBasis,
                 'type' => $type,
                 'rules' => !empty($baseRules) ? $baseRules : null,
             ]);
@@ -358,6 +381,27 @@ class ContestController extends Controller
 
         $hpIds = $hpParticipants->pluck('id')->all();
 
+        $authUser = request()->user();
+
+        $allParticipantHpIds = $hpIds;
+
+        // Admin/Head Admin: lihat semua peserta
+        if ($authUser->hasAnyRole(['Admin', 'Head Admin'])) {
+            $visibleHpIds = $allParticipantHpIds;
+        } else {
+            // SM/HM/HP: hanya self (kalau HP) + semua downline HP
+            $downlineHpIds = $this->getDescendantsByRole([(int) $authUser->id], 'Health Planner');
+
+            $candidateIds = array_values(array_unique(array_merge([(int) $authUser->id], $downlineHpIds)));
+
+            // tampilkan hanya yang memang participant kontes ini
+            $visibleHpIds = array_values(array_intersect($allParticipantHpIds, $candidateIds));
+        }
+
+        // filter collection peserta yg dipakai buat evaluasi
+        $hpParticipants = $hpParticipants->whereIn('id', $visibleHpIds)->values();
+        $hpIds = $visibleHpIds;
+
         $rows = [];
         $months = [];
         $winners = [];
@@ -378,8 +422,14 @@ class ContestController extends Controller
         // ✅ MODE: QUALIFIER 133
         // =========================
         if ($isQualifier) {
-            $minPersonal = (int) ($rules['monthly_min_personal_ns'] ?? 3);
-            $minDirectActive = (int) ($rules['monthly_min_direct_active_partner'] ?? 3);
+            $minPersonal = isset($rules['monthly_min_personal_ns'])
+                ? (int) $rules['monthly_min_personal_ns']
+                : null;
+
+            $minDirectActive = isset($rules['monthly_min_direct_active_partner'])
+                ? (int) $rules['monthly_min_direct_active_partner']
+                : null;
+
             $minPartnerActive = (int) ($rules['direct_partner_active_min_personal_ns'] ?? 1);
 
             $months = $this->buildMonthRanges($start, $end);
@@ -391,7 +441,8 @@ class ContestController extends Controller
                     ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
                     ->whereIn('sales_orders.sales_user_id', $hpIds)
                     ->where('sales_orders.status', 'selesai')
-                    ->whereBetween("sales_orders.$dateBasis", [$m['from'], $m['to']])
+                    ->whereBetween('sales_orders.key_in_at', [$m['from'], $m['to']])
+                    ->whereBetween('sales_orders.install_date', [$m['from'], $m['to']])
                     ->groupBy('sales_orders.sales_user_id')
                     ->selectRaw('sales_orders.sales_user_id, COALESCE(SUM(sales_order_items.qty),0) as total_qty')
                     ->pluck('total_qty', 'sales_orders.sales_user_id')
@@ -428,7 +479,10 @@ class ContestController extends Controller
                         }
                     }
 
-                    $eligibleMonth = ($personal >= $minPersonal) && ($activePartnerCount >= $minDirectActive);
+                    $passPersonal = ($minPersonal === null) ? true : ($personal >= $minPersonal);
+                    $passPartner  = ($minDirectActive === null) ? true : ($activePartnerCount >= $minDirectActive);
+
+                    $eligibleMonth = $passPersonal && $passPartner;
                     if (!$eligibleMonth) $allEligible = false;
 
                     $perMonth[] = [
@@ -460,9 +514,8 @@ class ContestController extends Controller
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
             ->whereIn('sales_orders.sales_user_id', $hpIds)
             ->where('sales_orders.status', 'selesai')
-            ->when($start && $end, function ($q) use ($start, $end, $dateBasis) {
-                $q->whereBetween("sales_orders.$dateBasis", [$start, $end]);
-            })
+            ->whereBetween('sales_orders.key_in_at', [$start, $end])
+            ->whereBetween('sales_orders.install_date', [$start, $end])
             ->groupBy('sales_orders.sales_user_id')
             ->selectRaw('sales_orders.sales_user_id, COALESCE(SUM(sales_order_items.qty),0) as total_unit')
             ->pluck('total_unit', 'sales_orders.sales_user_id');
@@ -610,11 +663,22 @@ class ContestController extends Controller
             'banner' => ['nullable', 'image', 'max:2048'],
             'remove_banner' => ['nullable', 'boolean'],
 
-            'date_basis' => ['nullable', 'in:install_date,key_in_at'],
             'type' => ['nullable', 'in:leaderboard,qualifier'],
 
-            'monthly_min_personal_ns' => ['nullable', 'integer', 'min:1'],
-            'monthly_min_direct_active_partner' => ['nullable', 'integer', 'min:0'],
+            'monthly_min_personal_ns' => [
+                'nullable',
+                'integer',
+                'min:1',
+                'exclude_unless:type,qualifier',
+                'required_without:monthly_min_direct_active_partner',
+            ],
+            'monthly_min_direct_active_partner' => [
+                'nullable',
+                'integer',
+                'min:0',
+                'exclude_unless:type,qualifier',
+                'required_without:monthly_min_personal_ns',
+            ],
         ];
 
         // HM/Admin/Head Admin: boleh ubah target HM (minimal 1)
@@ -680,19 +744,23 @@ class ContestController extends Controller
             $newRules['target_hm_ids'] = $selectedHmIds;
 
             if ($isQualifier) {
-                $newRules = array_merge($newRules, [
-                    'monthly_min_personal_ns' => (int) ($data['monthly_min_personal_ns'] ?? 3),
-                    'monthly_min_direct_active_partner' => (int) ($data['monthly_min_direct_active_partner'] ?? 3),
+                $qualifierRules = [
+                    'monthly_min_personal_ns' => isset($data['monthly_min_personal_ns'])
+                        ? (int) $data['monthly_min_personal_ns']
+                        : null,
+
+                    'monthly_min_direct_active_partner' => isset($data['monthly_min_direct_active_partner'])
+                        ? (int) $data['monthly_min_direct_active_partner']
+                        : null,
+
                     'direct_partner_active_min_personal_ns' => 1,
                     'active_partner_definition' => 'partner_personal_qty_min_1',
                     'partner_relation' => 'direct',
-                ]);
-            } else {
-                // kalau bukan qualifier, kamu bisa pilih mau keep rules atau set null
-                // tapi kita keep target_hm_ids biar index HM/SM tetap jalan
-                $newRules = [
-                    'target_hm_ids' => $selectedHmIds,
                 ];
+
+                $qualifierRules = array_filter($qualifierRules, fn($v) => $v !== null);
+
+                $newRules = array_merge($newRules, $qualifierRules);
             }
 
             $contest->update([

@@ -337,9 +337,9 @@
             <div class="flex items-start justify-between">
                 <div>
                     <p class="text-sm text-gray-500">Total Penjualan Produk Bundling</p>
-                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalSalesProductBundling ?? 0) }} Bundling
+                    <p class="mt-2 text-3xl font-bold">{{ number_format($totalSalesProductBundling ?? 0) }} Unit
                     </p>
-                    <p class="mt-1 text-xs text-gray-500">Total bundling terjual.
+                    <p class="mt-1 text-xs text-gray-500">Total unit terjual.
                     </p>
                 </div>
                 <span class="text-purple-600">
