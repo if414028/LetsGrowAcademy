@@ -42,6 +42,25 @@ class PerformanceController extends Controller
         $childIds = $baseUser->downlineUserIds(); // downline dari yang dipilih
         $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
 
+        // ======================================
+        // UNITS (expand bundling) helper for Performance
+        // ======================================
+        $joinUnits = function ($q, string $soAlias = 'so') {
+            return $q
+                ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
+                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
+        };
+
+        $unitsExpr = "
+        COALESCE(SUM(
+            CASE
+                WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                ELSE soi.qty
+            END
+        ), 0)
+        ";
+
         // keyword (kita tidak pakai lagi untuk filtering di query, karena sudah pakai dropdown)
         $q = trim((string) $request->get('q', ''));
 
@@ -77,118 +96,145 @@ class PerformanceController extends Controller
         // =========================
         // TEAM PERFORMANCE (units selesai) -> scope: downline baseUser
         // =========================
-        $teamPerformance = User::query()
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('users.id', $childIds)) // non-admin: downline
-            ->when($isAdminOrHead, fn($q) => $q->role('Health Planner'))          // admin/head: semua HP (biar masuk akal)
-            ->leftJoin('sales_orders', function ($join) use ($from, $to) {
-                $join->on('sales_orders.sales_user_id', '=', 'users.id')
-                    ->whereNull('sales_orders.deleted_at')
-                    ->where('sales_orders.status', 'selesai');
+        $teamPerformanceQ = User::query()
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('users.id', $childIds))
+            ->when($isAdminOrHead, fn($q) => $q->role('Health Planner'))
+            ->leftJoin('sales_orders as so', function ($join) use ($from, $to) {
+                $join->on('so.sales_user_id', '=', 'users.id')
+                    ->whereNull('so.deleted_at')
+                    ->where('so.status', 'selesai');
 
-                if ($from) $join->whereDate('sales_orders.install_date', '>=', $from);
-                if ($to)   $join->whereDate('sales_orders.install_date', '<=', $to);
-            })
-            ->leftJoin('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+                if ($from) $join->whereDate('so.install_date', '>=', $from);
+                if ($to)   $join->whereDate('so.install_date', '<=', $to);
+            });
+
+        $teamPerformanceQ = $joinUnits($teamPerformanceQ, 'so')
             ->select(
                 'users.id',
                 'users.name',
-                DB::raw('COALESCE(SUM(sales_order_items.qty), 0) as units')
+                DB::raw("{$unitsExpr} as units")
             )
             ->groupBy('users.id', 'users.name')
-            ->orderByDesc('units')
+            ->orderByDesc('units');
+
+        $teamPerformance = $teamPerformanceQ
             ->get()
             ->map(...);
 
         // =========================
         // MY TOTAL UNITS -> sekarang mengikuti baseUser (biar konsisten saat pilih member)
         // =========================
-        $myTotalUnitsQ = DB::table('sales_orders')
-            ->whereNull('sales_orders.deleted_at')
-            ->where('sales_orders.sales_user_id', $baseUser->id)
-            ->where('sales_orders.status', 'selesai')
-            ->leftJoin('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id');
+        $myTotalUnitsQ = DB::table('sales_orders as so')
+            ->whereNull('so.deleted_at')
+            ->where('so.sales_user_id', $baseUser->id)
+            ->where('so.status', 'selesai');
 
-        if ($from) $myTotalUnitsQ->whereDate('sales_orders.install_date', '>=', $from);
-        if ($to)   $myTotalUnitsQ->whereDate('sales_orders.install_date', '<=', $to);
+        if ($from) $myTotalUnitsQ->whereDate('so.install_date', '>=', $from);
+        if ($to)   $myTotalUnitsQ->whereDate('so.install_date', '<=', $to);
 
-        $myTotalUnits = (int) $myTotalUnitsQ
-            ->selectRaw('COALESCE(SUM(sales_order_items.qty), 0) as units')
+        $myTotalUnits = (int) $joinUnits($myTotalUnitsQ, 'so')
+            ->selectRaw("{$unitsExpr} as units")
             ->value('units');
 
         // =========================
         // SUMMARY CARDS -> scope: baseUser + downline baseUser
         // =========================
+        // helper
+        $joinUnits = function ($q, string $soAlias = 'so') {
+            return $q
+                ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
+                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
+        };
+
+        $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
+
         $summaryQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('so.sales_user_id', $scopeUserIds));
 
         if ($isManual) {
-            $this->applyManualDateFilter($summaryQ, $from, $to);   // ✅ murni range
+            $this->applyManualDateFilter($summaryQ, $from, $to);
         } else {
-            $this->applyCutoffSoFilter($summaryQ, $from, $to);     // ✅ cutoff + carry-over
+            $this->applyCutoffSoFilter($summaryQ, $from, $to);
         }
 
+        // JOIN untuk units (expand bundling)
+        $summaryQ = $joinUnits($summaryQ, 'so');
+
+        // expression unit per row item
+        $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
+
         $summary = $summaryQ->selectRaw("
-        SUM(
-            CASE
-                WHEN COALESCE(so.is_recurring, 0) = 0
-                 AND so.ccp_status = 'menunggu pengecekan'
-                 AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
-                THEN 1 ELSE 0
-            END
-        ) as total_key_in,
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 0
+                    AND so.ccp_status = 'menunggu pengecekan'
+                    AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as total_key_in,
 
-        SUM(
-            CASE
-                WHEN COALESCE(so.is_recurring, 0) = 1
-                 AND so.ccp_status = 'menunggu pengecekan'
-                 AND so.status = 'menunggu verifikasi'
-                THEN 1 ELSE 0
-            END
-        ) as total_recurring,
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 1
+                    AND so.ccp_status = 'menunggu pengecekan'
+                    AND so.status = 'menunggu verifikasi'
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as total_recurring,
 
-        SUM(
-            CASE
-                WHEN COALESCE(so.is_recurring, 0) = 1
-                 AND so.ccp_status = 'disetujui'
-                 AND so.status = 'menunggu jadwal'
-                THEN 1 ELSE 0
-            END
-        ) as menunggu_jadwal,
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 1
+                    AND so.ccp_status = 'disetujui'
+                    AND so.status = 'menunggu jadwal'
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as menunggu_jadwal,
 
-        SUM(
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 1
+                    AND so.ccp_status = 'disetujui'
+                    AND so.status = 'dijadwalkan'
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as dijadwalkan,
 
-        CASE
-            WHEN COALESCE(so.is_recurring, 0) = 1
-             AND so.ccp_status = 'disetujui'
-             AND so.status = 'dijadwalkan'
-            THEN 1 ELSE 0
-        END
-        ) as dijadwalkan,
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 1
+                    AND so.ccp_status = 'disetujui'
+                    AND so.status IN ('ditunda', 'gagal penelponan')
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as pending,
 
-        SUM(
-            CASE
-            WHEN COALESCE(so.is_recurring, 0) = 1
-                AND so.ccp_status = 'disetujui'
-                AND so.status IN ('ditunda', 'gagal penelponan')
-                THEN 1 ELSE 0
-            END
-        ) as pending,
-
-        SUM(
-            CASE
-                WHEN so.status = 'selesai'
-                THEN 1 ELSE 0
-            END
-        ) as total_sudah_install
-    ")->first();
+            COALESCE(SUM(
+                CASE
+                    WHEN so.status = 'selesai'
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as total_sudah_install
+        ")->first();
 
         // =========================
         // TEAM SHEET -> scope: baseUser + downline baseUser (bukan cuma downline)
         // =========================
-        $soiAgg = DB::table('sales_order_items')
-            ->selectRaw('sales_order_id, COALESCE(SUM(qty),0) as ns_units')
-            ->groupBy('sales_order_id');
+        $soiAgg = DB::table('sales_order_items as soi')
+            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
+            ->selectRaw("
+                soi.sales_order_id,
+                COALESCE(SUM(
+                    CASE
+                        WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                        ELSE soi.qty
+                    END
+                ),0) as ns_units
+            ")
+            ->groupBy('soi.sales_order_id');
 
         $sheetQ = DB::table('sales_orders as so')
             ->join('users as u', 'u.id', '=', 'so.sales_user_id')
@@ -279,15 +325,26 @@ class PerformanceController extends Controller
 
 
         $totalUnitsQ = DB::table('sales_orders as so')
-            ->join('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
             ->whereNull('so.deleted_at')
             ->where('so.sales_user_id', $user->id)
-            ->where('so.status', 'selesai'); // ✅
+            ->where('so.status', 'selesai');
 
         if ($from) $totalUnitsQ->whereDate('so.install_date', '>=', $from);
         if ($to)   $totalUnitsQ->whereDate('so.install_date', '<=', $to);
 
-        $totalUnits = $totalUnitsQ->sum('soi.qty');
+        $totalUnits = (int) $totalUnitsQ
+            ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
+            ->selectRaw("
+                COALESCE(SUM(
+                    CASE
+                        WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                        ELSE soi.qty
+                    END
+                ),0) as units
+            ")
+            ->value('units');
 
         $ordersQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
@@ -318,7 +375,9 @@ class PerformanceController extends Controller
 
         $authDownlineIds = $authUser->downlineUserIds();
         $memberId = (int) $request->get('member_id', 0);
-        $allowedIds = $isAdminOrHead ? User::query()->pluck('id') : $authDownlineIds->push($authUser->id)->unique()->values();
+        $allowedIds = $isAdminOrHead
+            ? User::query()->pluck('id')
+            : $authDownlineIds->push($authUser->id)->unique()->values();
 
         $baseUser = $authUser;
         if ($memberId && $allowedIds->contains($memberId)) {
@@ -343,7 +402,22 @@ class PerformanceController extends Controller
             $to   = $defaultTo;
         }
 
-        // SUMMARY (sama persis seperti index)
+        // =========================================================
+        // Helper units (expand bundling)
+        // =========================================================
+        $joinUnits = function ($q, string $soAlias = 'so') {
+            return $q
+                ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
+                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
+        };
+
+        // unit per row item
+        $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
+
+        // =========================================================
+        // SUMMARY (UNITS, bukan count SO)
+        // =========================================================
         $summaryQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('so.sales_user_id', $scopeUserIds));
@@ -354,55 +428,79 @@ class PerformanceController extends Controller
             $this->applyCutoffSoFilter($summaryQ, $from, $to);
         }
 
+        // join untuk hitung units
+        $summaryQ = $joinUnits($summaryQ, 'so');
+
         $summary = $summaryQ->selectRaw("
-        SUM(
-            CASE
-                WHEN COALESCE(so.is_recurring, 0) = 0
-                 AND so.ccp_status = 'menunggu pengecekan'
-                 AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
-                THEN 1 ELSE 0
-            END
-        ) as total_key_in,
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 0
+                    AND so.ccp_status = 'menunggu pengecekan'
+                    AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as total_key_in,
 
-        SUM(
-            CASE
-                WHEN COALESCE(so.is_recurring, 0) = 1
-                 AND so.ccp_status = 'menunggu pengecekan'
-                 AND so.status = 'menunggu verifikasi'
-                THEN 1 ELSE 0
-            END
-        ) as total_recurring,
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 1
+                    AND so.ccp_status = 'menunggu pengecekan'
+                    AND so.status = 'menunggu verifikasi'
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as total_recurring,
 
-        SUM(
-            CASE
-                WHEN COALESCE(so.is_recurring, 0) = 1
-                 AND so.ccp_status = 'disetujui'
-                 AND so.status = 'menunggu jadwal'
-                THEN 1 ELSE 0
-            END
-        ) as menunggu_jadwal,
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 1
+                    AND so.ccp_status = 'disetujui'
+                    AND so.status = 'menunggu jadwal'
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as menunggu_jadwal,
 
-        SUM(
-            CASE
-                WHEN COALESCE(so.is_recurring, 0) = 1
-                 AND so.ccp_status = 'disetujui'
-                 AND so.status IN ('dijadwalkan', 'ditunda', 'gagal penelponan')
-                THEN 1 ELSE 0
-            END
-        ) as task_id,
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 1
+                    AND so.ccp_status = 'disetujui'
+                    AND so.status = 'dijadwalkan'
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as dijadwalkan,
 
-        SUM(
-            CASE
-                WHEN so.status = 'selesai'
-                THEN 1 ELSE 0
-            END
-        ) as total_sudah_install
-    ")->first();
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 1
+                    AND so.ccp_status = 'disetujui'
+                    AND so.status IN ('ditunda', 'gagal penelponan')
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as pending,
 
-        // TEAM SHEET (sama persis seperti index)
-        $soiAgg = DB::table('sales_order_items')
-            ->selectRaw('sales_order_id, COALESCE(SUM(qty),0) as ns_units')
-            ->groupBy('sales_order_id');
+            COALESCE(SUM(
+                CASE
+                    WHEN so.status = 'selesai'
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ),0) as total_sudah_install
+        ")->first();
+
+        // =========================================================
+        // TEAM SHEET (ns_units: UNITS expanded bundling)
+        // =========================================================
+        $soiAgg = DB::table('sales_order_items as soi')
+            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
+            ->selectRaw("
+            soi.sales_order_id,
+            COALESCE(SUM(
+                CASE
+                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                    ELSE soi.qty
+                END
+            ),0) as ns_units
+        ")
+            ->groupBy('soi.sales_order_id');
 
         $sheetQ = DB::table('sales_orders as so')
             ->join('users as u', 'u.id', '=', 'so.sales_user_id')
@@ -434,13 +532,13 @@ class PerformanceController extends Controller
                 'so.status',
                 'so.install_date',
                 DB::raw("
-                    COALESCE(
-                        NULLIF(so.payment_method_remarks,''),
-                        NULLIF(so.ccp_remarks,''),
-                        NULLIF(so.status_reason,''),
-                        '-'
-                    ) as remarks
-                "),
+                COALESCE(
+                    NULLIF(so.payment_method_remarks,''),
+                    NULLIF(so.ccp_remarks,''),
+                    NULLIF(so.status_reason,''),
+                    '-'
+                ) as remarks
+            "),
                 DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
                 DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])

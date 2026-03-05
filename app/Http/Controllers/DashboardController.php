@@ -115,35 +115,49 @@ class DashboardController extends Controller
         $descendantIds = $this->getAllDescendantUserIds((int) $user->id);
         $scopeUserIds = array_values(array_unique(array_merge([(int) $user->id], $descendantIds)));
 
-        // ambil semua bawahan multi-level + diri sendiri
-        $descendantIds = $this->getAllDescendantUserIds((int) $user->id);
-        $scopeUserIds = array_values(array_unique(array_merge([(int) $user->id], $descendantIds)));
+        // ======================================
+        // HELPER HITUNG UNITS (expand bundling)
+        // ======================================
+        $applyUnitsJoinsAndSelect = function ($q) {
+            return $q
+                ->join('sales_order_items as soi', 'soi.sales_order_id', '=', 'sales_orders.id')
+                ->join('products as p', 'p.id', '=', 'soi.product_id')
+                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
+        };
+
+        $unitsSelectExpr = "
+            COALESCE(SUM(
+                CASE
+                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                    ELSE soi.qty
+                END
+            ), 0) as units
+        ";
+
+        $calcUnits = function ($q) use ($applyUnitsJoinsAndSelect, $unitsSelectExpr) {
+            return (int) $applyUnitsJoinsAndSelect($q)
+                ->selectRaw($unitsSelectExpr)
+                ->value('units');
+        };
+
+        // base query untuk scope + cutoff + status
+        $baseSoQuery = SalesOrder::query()
+            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
+            ->where('sales_orders.status', 'selesai')
+            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd]);
 
         // 1) Total unit terjual (SO selesai)
-        $totalUnitsSold = (int) SalesOrder::query()
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
-            ->where('sales_orders.status', 'selesai')
-            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
-            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-            ->sum('sales_order_items.qty');
+        $totalUnitsSold = $calcUnits(clone $baseSoQuery);
 
         // 1a) Total Penjualan Individu (units) - SO selesai
-        $totalSalesIndividu = (int) SalesOrder::query()
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
-            ->where('sales_orders.status', 'selesai')
-            ->where('sales_orders.customer_type', 'individu')
-            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
-            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-            ->sum('sales_order_items.qty');
+        $totalSalesIndividu = $calcUnits(
+            (clone $baseSoQuery)->where('sales_orders.customer_type', 'individu')
+        );
 
         // 1b) Total Penjualan Corporate (units) - SO selesai
-        $totalSalesCorporate = (int) SalesOrder::query()
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
-            ->where('sales_orders.status', 'selesai')
-            ->where('sales_orders.customer_type', 'corporate')
-            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
-            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-            ->sum('sales_order_items.qty');
+        $totalSalesCorporate = $calcUnits(
+            (clone $baseSoQuery)->where('sales_orders.customer_type', 'corporate')
+        );
 
         // 1c) Total Penjualan Produk Satuan (units) - SO selesai
         $totalSalesProductSatuan = (int) SalesOrder::query()
@@ -264,17 +278,16 @@ class DashboardController extends Controller
             }
 
             // hitung total units (SO selesai) untuk tiap HM + tim multi-level
-            $healthManagerPerformance = $healthManagers->map(function ($hm) use ($cutoffStart, $cutoffEnd) {
-
+            $healthManagerPerformance = $healthManagers->map(function ($hm) use ($cutoffStart, $cutoffEnd, $calcUnits) {
                 $descendantIds = $this->getAllDescendantUserIds((int) $hm->id);
                 $scopeIds = array_values(array_unique(array_merge([(int) $hm->id], $descendantIds)));
 
-                $units = (int) SalesOrder::query()
-                    ->whereIn('sales_orders.sales_user_id', $scopeIds)
-                    ->where('sales_orders.status', 'selesai')
-                    ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
-                    ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-                    ->sum('sales_order_items.qty');
+                $units = $calcUnits(
+                    SalesOrder::query()
+                        ->whereIn('sales_orders.sales_user_id', $scopeIds)
+                        ->where('sales_orders.status', 'selesai')
+                        ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
+                );
 
                 return (object) [
                     'id' => (int) $hm->id,
@@ -308,9 +321,10 @@ class DashboardController extends Controller
             $rawWeekly = SalesOrder::query()
                 ->whereIn('sales_orders.sales_user_id', $scopeUserIds)
                 ->where('sales_orders.status', 'selesai')
-                ->whereBetween('sales_orders.key_in_at', [$start, $end])
-                ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-                ->selectRaw('YEARWEEK(sales_orders.key_in_at, 3) as yw, SUM(sales_order_items.qty) as units')
+                ->whereBetween('sales_orders.key_in_at', [$start, $end]);
+
+            $rawWeekly = $applyUnitsJoinsAndSelect($rawWeekly)
+                ->selectRaw("YEARWEEK(sales_orders.key_in_at, 3) as yw, $unitsSelectExpr")
                 ->groupBy('yw')
                 ->pluck('units', 'yw'); // [yw => units]
 
@@ -331,9 +345,10 @@ class DashboardController extends Controller
             $rawMonthly = SalesOrder::query()
                 ->whereIn('sales_orders.sales_user_id', $scopeUserIds)
                 ->where('sales_orders.status', 'selesai')
-                ->whereBetween('sales_orders.key_in_at', [$start, $end])
-                ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-                ->selectRaw("DATE_FORMAT(sales_orders.key_in_at, '%Y-%m') as ym, SUM(sales_order_items.qty) as units")
+                ->whereBetween('sales_orders.key_in_at', [$start, $end]);
+
+            $rawMonthly = $applyUnitsJoinsAndSelect($rawMonthly)
+                ->selectRaw("DATE_FORMAT(sales_orders.key_in_at, '%Y-%m') as ym, $unitsSelectExpr")
                 ->groupBy('ym')
                 ->pluck('units', 'ym'); // [ym => units]
 
