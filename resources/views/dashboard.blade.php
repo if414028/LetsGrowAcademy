@@ -435,7 +435,7 @@
                 <div>
                     <h2 class="text-xl font-bold">Health Manager Performance</h2>
                     <p class="mt-1 text-sm text-gray-500">
-                        Total unit terjual (SO selesai) oleh Health Manager + tim nya (multi-level).
+                        Total unit terjual (SO selesai) oleh Health Manager + partners nya.
                     </p>
                 </div>
             </div>
