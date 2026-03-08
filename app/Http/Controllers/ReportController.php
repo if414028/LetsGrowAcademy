@@ -36,11 +36,11 @@ class ReportController extends Controller
         $rangeLabel = $isManual ? 'Custom Range' : 'Closing Date';
 
         $isAdminLike = $user->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']);
-        $isHM = $user->hasRole('Health Manager');
 
         // =========================================================
         // LEADERBOARD HEALTH MANAGER
         // hanya untuk Sales Manager / Admin / Head Admin
+        // HM = HM + semua bawahannya
         // =========================================================
         $hmLeaderboard = collect();
 
@@ -57,7 +57,8 @@ class ReportController extends Controller
         // =========================================================
         // LEADERBOARD HEALTH PLANNER
         // - Admin-like: semua Health Planner
-        // - HM / HP: semua bawahan user login
+        // - HM / HP: semua bawahan langsung user login
+        // HP = HP + semua bawahannya
         // =========================================================
         if ($isAdminLike) {
             $hpTargets = User::query()
@@ -66,16 +67,14 @@ class ReportController extends Controller
                 ->select('users.id', 'users.name', 'users.full_name')
                 ->get();
 
-            // HP leaderboard = per HP sendiri, tanpa descendants
-            $hpLeaderboard = $this->buildSelfLeaderboard($hpTargets, $from, $to);
+            $hpLeaderboard = $this->buildLeaderboardWithDescendants($hpTargets, $from, $to);
         } else {
             $hpTargets = User::query()
                 ->whereIn('users.id', $user->childrenUsers()->pluck('users.id'))
                 ->select('users.id', 'users.name', 'users.full_name')
                 ->get();
 
-            // untuk HM / HP, tampilkan bawahan langsung saja
-            $hpLeaderboard = $this->buildSelfLeaderboard($hpTargets, $from, $to);
+            $hpLeaderboard = $this->buildLeaderboardWithDescendants($hpTargets, $from, $to);
         }
 
         return view('reports.index', [
@@ -97,7 +96,7 @@ class ReportController extends Controller
 
     /**
      * Leaderboard untuk target + semua descendants.
-     * Cocok untuk Health Manager.
+     * Cocok untuk Health Manager dan Health Planner.
      */
     private function buildLeaderboardWithDescendants($targets, string $from, string $to)
     {
@@ -161,71 +160,6 @@ class ReportController extends Controller
 
         $unitsMap = collect($rows)
             ->mapWithKeys(fn($r) => [(int) $r->ancestor_id => (int) $r->units]);
-
-        return $targets
-            ->map(function ($t) use ($unitsMap) {
-                $id = (int) $t->id;
-
-                return [
-                    'id' => $id,
-                    'name' => (string) ($t->full_name ?: $t->name),
-                    'units' => (int) ($unitsMap[$id] ?? 0),
-                ];
-            })
-            ->sortBy([
-                ['units', 'desc'],
-                ['name', 'asc'],
-            ])
-            ->values()
-            ->take(10)
-            ->values()
-            ->map(fn($row, $idx) => [
-                'rank' => $idx + 1,
-                'id' => $row['id'],
-                'name' => $row['name'],
-                'units' => $row['units'],
-            ]);
-    }
-
-    /**
-     * Leaderboard per user sendiri.
-     * Cocok untuk Health Planner.
-     */
-    private function buildSelfLeaderboard($targets, string $from, string $to)
-    {
-        $targetIds = $targets->pluck('id')->map(fn($v) => (int) $v)->values();
-
-        if ($targetIds->isEmpty()) {
-            return collect();
-        }
-
-        $unitsExpr = "
-            COALESCE(SUM(
-                CASE
-                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                    ELSE soi.qty
-                END
-            ), 0)
-        ";
-
-        $rows = DB::table('sales_orders as so')
-            ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
-            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
-            ->whereNull('so.deleted_at')
-            ->where('so.status', 'selesai')
-            ->whereNotNull('so.install_date')
-            ->whereDate('so.key_in_at', '>=', $from)
-            ->whereDate('so.key_in_at', '<=', $to)
-            ->whereIn('so.sales_user_id', $targetIds)
-            ->groupBy('so.sales_user_id')
-            ->select(
-                'so.sales_user_id',
-                DB::raw("{$unitsExpr} as units")
-            )
-            ->get();
-
-        $unitsMap = $rows->mapWithKeys(fn($r) => [(int) $r->sales_user_id => (int) $r->units]);
 
         return $targets
             ->map(function ($t) use ($unitsMap) {
