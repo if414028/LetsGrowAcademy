@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\PerformanceCutoff;
-use App\Models\SalesOrder;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,48 +22,40 @@ class PerformanceController extends Controller
         $authUser = $request->user();
         $isAdminOrHead = $authUser->hasAnyRole(['Admin', 'Head Admin']);
 
+        // ======================================
+        // Scope member filter
+        // ======================================
         $authDownlineIds = $authUser->downlineUserIds();
 
         $allowedIds = $isAdminOrHead
-            ? User::query()->pluck('id') // semua user
+            ? User::query()->pluck('id')
             : $authDownlineIds->push($authUser->id)->unique()->values();
 
-        // ✅ member_id terpilih (optional)
         $memberId = (int) $request->get('member_id', 0);
+        $hasMemberFilter = $memberId && $allowedIds->contains($memberId);
 
-        // ✅ base user = auth user (default), atau user terpilih (jika valid)
         $baseUser = $authUser;
-        if ($memberId && $allowedIds->contains($memberId)) {
+        if ($hasMemberFilter) {
             $baseUser = User::query()->whereKey($memberId)->first() ?? $authUser;
         }
 
-        // ✅ scope = baseUser + seluruh downline baseUser
-        $childIds = $baseUser->downlineUserIds();
-        $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+        // Reset:
+        // - Admin/Head Admin => semua data
+        // Filter:
+        // - partner terpilih + downline
+        if ($isAdminOrHead && !$hasMemberFilter) {
+            $childIds = collect(); // direct reports tidak dipakai spesifik
+            $scopeUserIds = User::query()->pluck('id');
+        } else {
+            $childIds = $baseUser->downlineUserIds();
+            $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+        }
 
         // ======================================
-        // UNITS (expand bundling) helper for Performance
+        // Date range
         // ======================================
-        $joinUnits = function ($q, string $soAlias = 'so') {
-            return $q
-                ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
-                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
-        };
-
-        $unitsExpr = "
-        COALESCE(SUM(
-            CASE
-                WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                ELSE soi.qty
-            END
-        ), 0)
-        ";
-
-        // keyword (kita tidak pakai lagi untuk filtering di query, karena sudah pakai dropdown)
         $q = trim((string) $request->get('q', ''));
 
-        // date range dari request
         [$from, $to, $isManual] = $this->normalizeDateRange(
             $request->get('from'),
             $request->get('to')
@@ -75,16 +66,17 @@ class PerformanceController extends Controller
         $defaultFrom = $cutoff?->start_date ?? Carbon::now()->startOfMonth()->subMonth()->toDateString();
         $defaultTo   = $cutoff?->end_date   ?? Carbon::now()->endOfMonth()->addMonth()->toDateString();
 
-        // ✅ jika tidak manual, pakai cutoff (default)
         if (!$isManual) {
             $from = $defaultFrom;
             $to   = $defaultTo;
         }
 
-        // ✅ dropdown options: auth user + semua downline auth
+        // ======================================
+        // Dropdown options
+        // ======================================
         $memberOptions = User::query()
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('id', $allowedIds))
-            ->when($isAdminOrHead, fn($q) => $q->where('status', 'Active')) // optional: hanya active
+            ->when($isAdminOrHead, fn($q) => $q->where('status', 'Active'))
             ->orderByRaw("COALESCE(NULLIF(full_name,''), name) asc")
             ->get(['id', 'name', 'full_name'])
             ->map(fn($u) => [
@@ -93,11 +85,38 @@ class PerformanceController extends Controller
             ])
             ->values();
 
-        // =========================
-        // TEAM PERFORMANCE (units selesai) -> scope: downline baseUser
-        // =========================
+        // ======================================
+        // Helper units
+        // ======================================
+        $joinUnits = function ($q, string $soAlias = 'so') {
+            return $q
+                ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
+                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
+        };
+
+        $unitsExpr = "
+            COALESCE(SUM(
+                CASE
+                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                    ELSE soi.qty
+                END
+            ), 0)
+        ";
+
+        $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
+
+        // ======================================
+        // TEAM PERFORMANCE
+        // - reset admin/head admin => semua HP
+        // - filter partner => hanya downline partner terpilih
+        // ======================================
         $teamPerformanceQ = User::query()
-            ->whereIn('users.id', $childIds)
+            ->when(
+                $isAdminOrHead && !$hasMemberFilter,
+                fn($q) => $q->role('Health Planner')->where('users.status', 'Active'),
+                fn($q) => $q->whereIn('users.id', $childIds)
+            )
             ->leftJoin('sales_orders as so', function ($join) use ($from, $to) {
                 $join->on('so.sales_user_id', '=', 'users.id')
                     ->whereNull('so.deleted_at')
@@ -111,18 +130,25 @@ class PerformanceController extends Controller
             ->select(
                 'users.id',
                 'users.name',
+                DB::raw("COALESCE(NULLIF(users.full_name,''), users.name) as full_label"),
                 DB::raw("{$unitsExpr} as units")
             )
-            ->groupBy('users.id', 'users.name')
+            ->groupBy('users.id', 'users.name', 'users.full_name')
             ->orderByDesc('units');
 
         $teamPerformance = $teamPerformanceQ
             ->get()
-            ->map(...);
+            ->map(function ($row) {
+                return [
+                    'id' => $row->id,
+                    'name' => $row->full_label,
+                    'units' => (int) $row->units,
+                ];
+            });
 
-        // =========================
-        // MY TOTAL UNITS -> sekarang mengikuti baseUser (biar konsisten saat pilih member)
-        // =========================
+        // ======================================
+        // MY TOTAL UNITS
+        // ======================================
         $myTotalUnitsQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
             ->where('so.sales_user_id', $baseUser->id)
@@ -135,19 +161,9 @@ class PerformanceController extends Controller
             ->selectRaw("{$unitsExpr} as units")
             ->value('units');
 
-        // =========================
-        // SUMMARY CARDS -> scope: baseUser + downline baseUser
-        // =========================
-        // helper
-        $joinUnits = function ($q, string $soAlias = 'so') {
-            return $q
-                ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
-                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
-        };
-
-        $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
-
+        // ======================================
+        // SUMMARY CARDS
+        // ======================================
         $summaryQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
@@ -158,11 +174,7 @@ class PerformanceController extends Controller
             $this->applyCutoffSoFilter($summaryQ, $from, $to);
         }
 
-        // JOIN untuk units (expand bundling)
         $summaryQ = $joinUnits($summaryQ, 'so');
-
-        // expression unit per row item
-        $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
 
         $summary = $summaryQ->selectRaw("
             COALESCE(SUM(
@@ -218,9 +230,9 @@ class PerformanceController extends Controller
             ),0) as total_sudah_install
         ")->first();
 
-        // =========================
-        // TEAM SHEET -> scope: baseUser + downline baseUser (bukan cuma downline)
-        // =========================
+        // ======================================
+        // TEAM SHEET
+        // ======================================
         $soiAgg = DB::table('sales_order_items as soi')
             ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
             ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
@@ -284,20 +296,18 @@ class PerformanceController extends Controller
 
         return view('performances.index', [
             'teamPerformance' => $teamPerformance,
-            'teamMemberCount' => $isAdminOrHead
+            'teamMemberCount' => ($isAdminOrHead && !$hasMemberFilter)
                 ? User::query()->role('Health Planner')->where('status', 'Active')->count()
                 : $childIds->count(),
-            'myTotalUnits'    => $myTotalUnits,          // total units baseUser
-            'q'               => $q,                     // tidak dipakai untuk query, tapi boleh tetap dipassing
+            'myTotalUnits'    => $myTotalUnits,
+            'q'               => $q,
             'from'            => $from,
             'to'              => $to,
             'summary'         => $summary,
             'teamSheetRows'   => $teamSheetRows,
-
-            // ✅ tambahan untuk dropdown
             'memberOptions'   => $memberOptions,
-            'memberId'        => $baseUser->id,          // selected (default auth)
-            'memberLabel'     => ($baseUser->full_name ?: $baseUser->name),
+            'memberId'        => $hasMemberFilter ? $baseUser->id : null,
+            'memberLabel'     => $hasMemberFilter ? ($baseUser->full_name ?: $baseUser->name) : '',
         ]);
     }
 
@@ -305,8 +315,10 @@ class PerformanceController extends Controller
     {
         $auth = $request->user();
 
+        $isAdminOrHead = $auth->hasAnyRole(['Admin', 'Head Admin']);
         $isChild = $auth->childrenUsers()->where('users.id', $user->id)->exists();
-        abort_unless($isChild, 403);
+
+        abort_unless($isAdminOrHead || $isChild, 403);
 
         [$from, $to, $isManual] = $this->normalizeDateRange(
             $request->get('from'),
@@ -321,7 +333,6 @@ class PerformanceController extends Controller
             $from = $defaultFrom;
             $to   = $defaultTo;
         }
-
 
         $totalUnitsQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
@@ -348,7 +359,7 @@ class PerformanceController extends Controller
         $ordersQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
             ->where('so.sales_user_id', $user->id)
-            ->where('so.status', 'selesai'); // ✅
+            ->where('so.status', 'selesai');
 
         if ($from) $ordersQ->whereDate('so.install_date', '>=', $from);
         if ($to)   $ordersQ->whereDate('so.install_date', '<=', $to);
@@ -372,19 +383,30 @@ class PerformanceController extends Controller
         $authUser = $request->user();
         $isAdminOrHead = $authUser->hasAnyRole(['Admin', 'Head Admin']);
 
+        // ======================================
+        // Scope member filter
+        // ======================================
         $authDownlineIds = $authUser->downlineUserIds();
-        $memberId = (int) $request->get('member_id', 0);
+
         $allowedIds = $isAdminOrHead
             ? User::query()->pluck('id')
             : $authDownlineIds->push($authUser->id)->unique()->values();
 
+        $memberId = (int) $request->get('member_id', 0);
+        $hasMemberFilter = $memberId && $allowedIds->contains($memberId);
+
         $baseUser = $authUser;
-        if ($memberId && $allowedIds->contains($memberId)) {
+        if ($hasMemberFilter) {
             $baseUser = User::query()->whereKey($memberId)->first() ?? $authUser;
         }
 
-        $childIds = $baseUser->downlineUserIds();
-        $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+        if ($isAdminOrHead && !$hasMemberFilter) {
+            $childIds = collect();
+            $scopeUserIds = User::query()->pluck('id');
+        } else {
+            $childIds = $baseUser->downlineUserIds();
+            $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+        }
 
         [$from, $to, $isManual] = $this->normalizeDateRange(
             $request->get('from'),
@@ -401,9 +423,9 @@ class PerformanceController extends Controller
             $to   = $defaultTo;
         }
 
-        // =========================================================
-        // Helper units (expand bundling)
-        // =========================================================
+        // ======================================
+        // Helper units
+        // ======================================
         $joinUnits = function ($q, string $soAlias = 'so') {
             return $q
                 ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
@@ -411,12 +433,11 @@ class PerformanceController extends Controller
                 ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
         };
 
-        // unit per row item
         $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
 
-        // =========================================================
-        // SUMMARY (UNITS, bukan count SO)
-        // =========================================================
+        // ======================================
+        // SUMMARY
+        // ======================================
         $summaryQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
@@ -427,7 +448,6 @@ class PerformanceController extends Controller
             $this->applyCutoffSoFilter($summaryQ, $from, $to);
         }
 
-        // join untuk hitung units
         $summaryQ = $joinUnits($summaryQ, 'so');
 
         $summary = $summaryQ->selectRaw("
@@ -484,21 +504,21 @@ class PerformanceController extends Controller
             ),0) as total_sudah_install
         ")->first();
 
-        // =========================================================
-        // TEAM SHEET (ns_units: UNITS expanded bundling)
-        // =========================================================
+        // ======================================
+        // TEAM SHEET
+        // ======================================
         $soiAgg = DB::table('sales_order_items as soi')
             ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
             ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
             ->selectRaw("
-            soi.sales_order_id,
-            COALESCE(SUM(
-                CASE
-                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                    ELSE soi.qty
-                END
-            ),0) as ns_units
-        ")
+                soi.sales_order_id,
+                COALESCE(SUM(
+                    CASE
+                        WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                        ELSE soi.qty
+                    END
+                ),0) as ns_units
+            ")
             ->groupBy('soi.sales_order_id');
 
         $sheetQ = DB::table('sales_orders as so')
@@ -531,13 +551,13 @@ class PerformanceController extends Controller
                 'so.status',
                 'so.install_date',
                 DB::raw("
-                COALESCE(
-                    NULLIF(so.payment_method_remarks,''),
-                    NULLIF(so.ccp_remarks,''),
-                    NULLIF(so.status_reason,''),
-                    '-'
-                ) as remarks
-            "),
+                    COALESCE(
+                        NULLIF(so.payment_method_remarks,''),
+                        NULLIF(so.ccp_remarks,''),
+                        NULLIF(so.status_reason,''),
+                        '-'
+                    ) as remarks
+                "),
                 DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
                 DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])
@@ -550,6 +570,7 @@ class PerformanceController extends Controller
             'to' => $to,
             'summary' => $summary,
             'teamSheetRows' => $teamSheetRows,
+            'hasMemberFilter' => $hasMemberFilter,
         ];
     }
 
@@ -563,14 +584,11 @@ class PerformanceController extends Controller
         $to = $data['to'];
         $summary = $data['summary'];
         $teamSheetRows = $data['teamSheetRows'];
+        $hasMemberFilter = $data['hasMemberFilter'];
 
-        // =========================
-        // Title with Role Prefix
-        // =========================
         $userName = strtoupper($baseUser->full_name ?: $baseUser->name);
         $roleName = $baseUser->roles->pluck('name')->first();
 
-        // mapping role → prefix
         $roleMap = [
             'Health Manager' => 'HM',
             'Health Planner' => 'HP',
@@ -580,37 +598,33 @@ class PerformanceController extends Controller
         ];
 
         $rolePrefix = $roleMap[$roleName] ?? $roleName ?? '';
-
-        // final title
-        $title = trim("Team {$rolePrefix} {$userName}");
+        $title = $hasMemberFilter
+            ? trim("Team {$rolePrefix} {$userName}")
+            : 'Team Performance All';
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Performance');
 
-        // Column widths
-        $sheet->getColumnDimension('A')->setWidth(6);   // No
-        $sheet->getColumnDimension('B')->setWidth(28);  // Nama HP
-        $sheet->getColumnDimension('C')->setWidth(38);  // Nama Customer
-        $sheet->getColumnDimension('D')->setWidth(16);  // Tgl Key-in
-        $sheet->getColumnDimension('E')->setWidth(16);  // CCP Disetujui
-        $sheet->getColumnDimension('F')->setWidth(12);  // Key-in (NS)
-        $sheet->getColumnDimension('G')->setWidth(14);  // Install/NS
-        $sheet->getColumnDimension('H')->setWidth(16);  // Tgl Instalasi
-        $sheet->getColumnDimension('I')->setWidth(42);  // Remarks
+        $sheet->getColumnDimension('A')->setWidth(6);
+        $sheet->getColumnDimension('B')->setWidth(28);
+        $sheet->getColumnDimension('C')->setWidth(38);
+        $sheet->getColumnDimension('D')->setWidth(16);
+        $sheet->getColumnDimension('E')->setWidth(16);
+        $sheet->getColumnDimension('F')->setWidth(12);
+        $sheet->getColumnDimension('G')->setWidth(14);
+        $sheet->getColumnDimension('H')->setWidth(16);
+        $sheet->getColumnDimension('I')->setWidth(42);
 
-        // Title row
         $sheet->mergeCells('A1:I1');
         $sheet->setCellValue('A1', $title);
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
         $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        // Range row
         $sheet->mergeCells('A2:I2');
         $sheet->setCellValue('A2', "Range: {$from} s/d {$to}");
         $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        // Header row
         $headerRow = 4;
         $headers = ['No', 'Nama HP', 'Nama Customer', 'Tanggal Key in', 'CCP disetujui', 'Key-in', 'Install/NS', 'Tanggal Instalasi', 'Remarks'];
         $sheet->fromArray($headers, null, "A{$headerRow}");
@@ -623,7 +637,7 @@ class PerformanceController extends Controller
             ],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['argb' => 'FFBFE3FF'], // biru muda
+                'startColor' => ['argb' => 'FFBFE3FF'],
             ],
             'borders' => [
                 'allBorders' => [
@@ -634,12 +648,8 @@ class PerformanceController extends Controller
         ]);
 
         $row = $headerRow + 1;
-
-        // data totals (optional tambahan)
-        $totalNsUnits = 0;
-        $totalRows = 0;
-
         $no = 1;
+
         foreach ($teamSheetRows as $hpName => $rows) {
             $startRowForHp = $row;
             $count = $rows->count();
@@ -648,13 +658,10 @@ class PerformanceController extends Controller
                 $keyIn = $r->key_in_at ? Carbon::parse($r->key_in_at)->format('d-M') : '-';
                 $ccpAppr = $r->ccp_approved_at ? Carbon::parse($r->ccp_approved_at)->format('d-M') : '';
                 $installDate = $r->install_date ? Carbon::parse($r->install_date)->format('d-M') : '';
-
                 $ns = (int) $r->ns_units;
-                $totalNsUnits += $ns;
-                $totalRows++;
 
                 $sheet->setCellValue("A{$row}", $no);
-                $sheet->setCellValue("B{$row}", $hpName); // nanti di-merge
+                $sheet->setCellValue("B{$row}", $hpName);
                 $sheet->setCellValue("C{$row}", $r->customer_name);
                 $sheet->setCellValue("D{$row}", $keyIn);
                 $sheet->setCellValue("E{$row}", $ccpAppr ?: '');
@@ -666,21 +673,18 @@ class PerformanceController extends Controller
                 $row++;
             }
 
-            // merge Nama HP & No (excel-like)
             if ($count > 1) {
                 $endRowForHp = $row - 1;
                 $sheet->mergeCells("A{$startRowForHp}:A{$endRowForHp}");
                 $sheet->mergeCells("B{$startRowForHp}:B{$endRowForHp}");
             }
 
-            // align merged cells top
             $sheet->getStyle("A{$startRowForHp}:B" . ($row - 1))
                 ->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
 
             $no++;
         }
 
-        // Borders for data
         $sheet->getStyle("A" . ($headerRow + 1) . ":I" . ($row - 1))->applyFromArray([
             'alignment' => ['vertical' => Alignment::VERTICAL_TOP],
             'borders' => [
@@ -691,68 +695,52 @@ class PerformanceController extends Controller
             ],
         ]);
 
-        // =========================
-        // SUMMARY (colored rows only)
-        // =========================
         $row += 2;
 
-        // Title
         $sheet->mergeCells("A{$row}:I{$row}");
         $sheet->setCellValue("A{$row}", "Summary");
         $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize(12);
         $row++;
 
-        // Data summary (ONLY 5 sesuai stat card)
         $summaryRows = [
-            ['Total Key-In', (int)($summary->total_key_in ?? 0), 'FFF9FAFB'],      // gray-50
-            ['Total Recurring', (int)($summary->total_recurring ?? 0), 'FFEFF6FF'], // blue-50
-            ['Dijadwalkan', (int)($summary->dijadwalkan ?? 0), 'FFFFFBEB'],   // yellow-50
-            ['Menunggu Jadwal', (int)($summary->menunggu_jadwal ?? 0), 'FFFFFBEB'],    // yellow-50
-            ['Pending', (int)($summary->pending ?? 0), 'FFFAF5FF'],               // purple-50
-            ['Total sudah install (OK)', (int)($summary->total_sudah_install ?? 0), 'FFF0FDF4'], // green-50
+            ['Total Key-In', (int)($summary->total_key_in ?? 0), 'FFF9FAFB'],
+            ['Total Recurring', (int)($summary->total_recurring ?? 0), 'FFEFF6FF'],
+            ['Dijadwalkan', (int)($summary->dijadwalkan ?? 0), 'FFFFFBEB'],
+            ['Menunggu Jadwal', (int)($summary->menunggu_jadwal ?? 0), 'FFFFFBEB'],
+            ['Pending', (int)($summary->pending ?? 0), 'FFFAF5FF'],
+            ['Total sudah install (OK)', (int)($summary->total_sudah_install ?? 0), 'FFF0FDF4'],
         ];
 
         foreach ($summaryRows as [$label, $value, $bgColor]) {
-
-            // Label
             $sheet->setCellValue("A{$row}", $label);
-
-            // Value
             $sheet->setCellValue("I{$row}", $value);
-
-            // Merge label area (A-H)
             $sheet->mergeCells("A{$row}:H{$row}");
 
-            // Styling
             $sheet->getStyle("A{$row}:I{$row}")->applyFromArray([
-                'font' => [
-                    'bold' => true,
-                ],
+                'font' => ['bold' => true],
                 'alignment' => [
-                    'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
                 ],
                 'fill' => [
-                    'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                    'fillType' => Fill::FILL_SOLID,
                     'startColor' => ['argb' => $bgColor],
                 ],
                 'borders' => [
                     'allBorders' => [
-                        'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                        'borderStyle' => Border::BORDER_THIN,
                         'color' => ['argb' => 'FFE5E7EB'],
                     ],
                 ],
             ]);
 
-            // Value align right
             $sheet->getStyle("I{$row}")
                 ->getAlignment()
-                ->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT);
+                ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
             $row++;
         }
 
-        // Save to temp & download
-        $fileName = 'performance_' . Str::slug($baseUser->full_name ?: $baseUser->name) . "_{$from}_{$to}.xlsx";
+        $fileName = 'performance_' . Str::slug($title) . "_{$from}_{$to}.xlsx";
         $tmpPath = storage_path('app/' . Str::uuid()->toString() . '.xlsx');
 
         (new Xlsx($spreadsheet))->save($tmpPath);
@@ -778,26 +766,12 @@ class PerformanceController extends Controller
 
     private function applyCutoffSoFilter($q, string $from, string $to): void
     {
-        $openStatuses = ['menunggu jadwal', 'dijadwalkan', 'ditunda', 'gagal penelponan'];
-
-        // window carry over = 1 bulan sebelum from (kalender)
         $carryFrom = Carbon::parse($from)->subMonthNoOverflow()->toDateString();
 
-        $q->where(function ($w) use ($from, $to, $carryFrom, $openStatuses) {
-
-            // A) Normal: semua SO yang key_in masuk window
+        $q->where(function ($w) use ($from, $to, $carryFrom) {
             $w->whereDate('so.key_in_at', '>=', $from)
                 ->whereDate('so.key_in_at', '<=', $to);
 
-            // B) Carry-over: SO open (yang belum selesai) TAPI cuma max 1 bulan & non-recurring
-            // $w->orWhere(function ($x) use ($carryFrom, $from, $openStatuses) {
-            //     $x->whereRaw('COALESCE(so.is_recurring,0) = 0')
-            //         ->whereDate('so.key_in_at', '>=', $carryFrom)
-            //         ->whereDate('so.key_in_at', '<', $from)
-            //         ->whereIn('so.status', $openStatuses);
-            // });
-
-            // C) Carry-over: key-in yang belum diverifikasi (Total Key-In) max 1 bulan & non-recurring
             $w->orWhere(function ($x) use ($carryFrom, $from) {
                 $x->whereRaw('COALESCE(so.is_recurring,0) = 0')
                     ->whereDate('so.key_in_at', '>=', $carryFrom)
