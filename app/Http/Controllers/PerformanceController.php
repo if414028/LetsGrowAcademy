@@ -39,7 +39,7 @@ class PerformanceController extends Controller
         }
 
         // ✅ scope = baseUser + seluruh downline baseUser
-        $childIds = $baseUser->downlineUserIds(); // downline dari yang dipilih
+        $childIds = $baseUser->downlineUserIds();
         $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
 
         // ======================================
@@ -97,8 +97,7 @@ class PerformanceController extends Controller
         // TEAM PERFORMANCE (units selesai) -> scope: downline baseUser
         // =========================
         $teamPerformanceQ = User::query()
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('users.id', $childIds))
-            ->when($isAdminOrHead, fn($q) => $q->role('Health Planner'))
+            ->whereIn('users.id', $childIds)
             ->leftJoin('sales_orders as so', function ($join) use ($from, $to) {
                 $join->on('so.sales_user_id', '=', 'users.id')
                     ->whereNull('so.deleted_at')
@@ -151,7 +150,7 @@ class PerformanceController extends Controller
 
         $summaryQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('so.sales_user_id', $scopeUserIds));
+            ->whereIn('so.sales_user_id', $scopeUserIds);
 
         if ($isManual) {
             $this->applyManualDateFilter($summaryQ, $from, $to);
@@ -245,7 +244,7 @@ class PerformanceController extends Controller
                 $j->on('soi.sales_order_id', '=', 'so.id');
             })
             ->whereNull('so.deleted_at')
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('so.sales_user_id', $scopeUserIds));
+            ->whereIn('so.sales_user_id', $scopeUserIds);
 
         if ($isManual) {
             $this->applyManualDateFilter($sheetQ, $from, $to);
@@ -384,8 +383,8 @@ class PerformanceController extends Controller
             $baseUser = User::query()->whereKey($memberId)->first() ?? $authUser;
         }
 
-        $childIds = $isAdminOrHead ? collect() : $baseUser->downlineUserIds();
-        $scopeUserIds = $isAdminOrHead ? null : $childIds->push($baseUser->id)->unique()->values();
+        $childIds = $baseUser->downlineUserIds();
+        $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
 
         [$from, $to, $isManual] = $this->normalizeDateRange(
             $request->get('from'),
@@ -420,7 +419,7 @@ class PerformanceController extends Controller
         // =========================================================
         $summaryQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('so.sales_user_id', $scopeUserIds));
+            ->whereIn('so.sales_user_id', $scopeUserIds);
 
         if ($isManual) {
             $this->applyManualDateFilter($summaryQ, $from, $to);
@@ -511,7 +510,7 @@ class PerformanceController extends Controller
                 $j->on('soi.sales_order_id', '=', 'so.id');
             })
             ->whereNull('so.deleted_at')
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('so.sales_user_id', $scopeUserIds));
+            ->whereIn('so.sales_user_id', $scopeUserIds);
 
         if ($isManual) {
             $this->applyManualDateFilter($sheetQ, $from, $to);
