@@ -107,14 +107,16 @@ class ReportController extends Controller
             return collect();
         }
 
+        // Units per seller = total qty, bukan total SO
+        // bundle di-expand
         $unitsExpr = "
-        COALESCE(SUM(
-            CASE
-                WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                ELSE soi.qty
-            END
-        ), 0)
-    ";
+            COALESCE(SUM(
+                CASE
+                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                    ELSE soi.qty
+                END
+            ), 0)
+        ";
 
         $unitsPerSeller = DB::table('sales_orders as so')
             ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
@@ -122,7 +124,7 @@ class ReportController extends Controller
             ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
             ->whereNull('so.deleted_at')
             ->where('so.status', 'selesai')
-            ->whereNotNull('so.key_in_at')
+            ->whereNotNull('so.install_date')
             ->whereDate('so.key_in_at', '>=', $from)
             ->whereDate('so.key_in_at', '<=', $to)
             ->groupBy('so.sales_user_id')
@@ -134,26 +136,26 @@ class ReportController extends Controller
         $targetsInline = '(' . $targetIds->implode(',') . ')';
 
         $cteSql = "
-        WITH RECURSIVE descendants AS (
-            SELECT u.id AS ancestor_id, u.id AS descendant_id
-            FROM users u
-            WHERE u.id IN {$targetsInline}
+            WITH RECURSIVE descendants AS (
+                SELECT u.id AS ancestor_id, u.id AS descendant_id
+                FROM users u
+                WHERE u.id IN {$targetsInline}
 
-            UNION ALL
+                UNION ALL
 
-            SELECT d.ancestor_id, uh.child_user_id AS descendant_id
+                SELECT d.ancestor_id, uh.child_user_id AS descendant_id
+                FROM descendants d
+                JOIN user_hierarchies uh
+                    ON uh.parent_user_id = d.descendant_id
+            )
+            SELECT d.ancestor_id, COALESCE(SUM(u.units), 0) AS units
             FROM descendants d
-            JOIN user_hierarchies uh
-                ON uh.parent_user_id = d.descendant_id
-        )
-        SELECT d.ancestor_id, COALESCE(SUM(u.units), 0) AS units
-        FROM descendants d
-        LEFT JOIN (
-            " . $unitsPerSeller->toSql() . "
-        ) u
-            ON u.sales_user_id = d.descendant_id
-        GROUP BY d.ancestor_id
-    ";
+            LEFT JOIN (
+                " . $unitsPerSeller->toSql() . "
+            ) u
+                ON u.sales_user_id = d.descendant_id
+            GROUP BY d.ancestor_id
+        ";
 
         $rows = DB::select($cteSql, $unitsPerSeller->getBindings());
 
@@ -198,13 +200,13 @@ class ReportController extends Controller
         }
 
         $unitsExpr = "
-        COALESCE(SUM(
-            CASE
-                WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                ELSE soi.qty
-            END
-        ), 0)
-    ";
+            COALESCE(SUM(
+                CASE
+                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                    ELSE soi.qty
+                END
+            ), 0)
+        ";
 
         $rows = DB::table('sales_orders as so')
             ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
@@ -212,7 +214,7 @@ class ReportController extends Controller
             ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
             ->whereNull('so.deleted_at')
             ->where('so.status', 'selesai')
-            ->whereNotNull('so.key_in_at')
+            ->whereNotNull('so.install_date')
             ->whereDate('so.key_in_at', '>=', $from)
             ->whereDate('so.key_in_at', '<=', $to)
             ->whereIn('so.sales_user_id', $targetIds)
