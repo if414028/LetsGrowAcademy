@@ -294,6 +294,15 @@ class PerformanceController extends Controller
             ->get()
             ->groupBy('hp_name');
 
+        // ======================================
+        // ROAD TO HM (hanya untuk akun HP yang login)
+        // ======================================
+        $roadToHm = null;
+
+        if ($authUser->hasRole('Health Planner')) {
+            $roadToHm = $this->buildRoadToHmData($authUser);
+        }
+
         return view('performances.index', [
             'teamPerformance' => $teamPerformance,
             'teamMemberCount' => ($isAdminOrHead && !$hasMemberFilter)
@@ -308,6 +317,7 @@ class PerformanceController extends Controller
             'memberOptions'   => $memberOptions,
             'memberId'        => $hasMemberFilter ? $baseUser->id : null,
             'memberLabel'     => $hasMemberFilter ? ($baseUser->full_name ?: $baseUser->name) : '',
+            'roadToHm'        => $roadToHm,
         ]);
     }
 
@@ -804,5 +814,274 @@ class PerformanceController extends Controller
         $q->whereDate('so.key_in_at', '>=', $from)
             ->whereDate('so.key_in_at', '<=', $to)
             ->whereNotNull('so.key_in_at');
+    }
+
+    private function buildRoadToHmData(User $user): array
+    {
+        Carbon::setLocale('id');
+
+        $targetPersonal = 3;
+        $targetTeam = 30;
+        $targetActiveHp = 5;
+
+        $now = Carbon::now()->startOfMonth();
+
+        // Ambil histori agak panjang biar bisa cari titik reset terakhir
+        $historyStart = $now->copy()->subMonthsNoOverflow(12)->startOfMonth();
+        $historyEnd   = $now->copy()->addMonthsNoOverflow(4)->endOfMonth();
+
+        $downlineIds = $user->downlineUserIds()->unique()->values();
+
+        $downlines = User::query()
+            ->whereIn('id', $downlineIds)
+            ->where('status', 'Active')
+            ->orderByRaw("COALESCE(NULLIF(full_name,''), name) asc")
+            ->get(['id', 'name', 'full_name']);
+
+        $trackedUserIds = $downlines->pluck('id')->push($user->id)->unique()->values();
+
+        $unitsExpr = "
+        COALESCE(SUM(
+            CASE
+                WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                ELSE soi.qty
+            END
+        ), 0)
+    ";
+
+        $monthlyUnitsRaw = DB::table('sales_orders as so')
+            ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
+            ->whereNull('so.deleted_at')
+            ->where('so.status', 'selesai')
+            ->whereIn('so.sales_user_id', $trackedUserIds)
+            ->whereNotNull('so.install_date')
+            ->whereDate('so.install_date', '>=', $historyStart->toDateString())
+            ->whereDate('so.install_date', '<=', $historyEnd->toDateString())
+            ->selectRaw("
+            so.sales_user_id,
+            DATE_FORMAT(so.install_date, '%Y-%m-01') as month_key,
+            {$unitsExpr} as units
+        ")
+            ->groupBy('so.sales_user_id', DB::raw("DATE_FORMAT(so.install_date, '%Y-%m-01')"))
+            ->get();
+
+        $unitsByUserMonth = [];
+        foreach ($monthlyUnitsRaw as $row) {
+            $unitsByUserMonth[$row->sales_user_id][$row->month_key] = (int) $row->units;
+        }
+
+        $activeHpIds = User::query()
+            ->whereIn('id', $downlineIds)
+            ->role('Health Planner')
+            ->pluck('id')
+            ->values();
+
+        // Helper hitung achievement per bulan
+        $getPersonalAch = function (string $monthKey) use ($unitsByUserMonth, $user) {
+            return (int) ($unitsByUserMonth[$user->id][$monthKey] ?? 0);
+        };
+
+        $getTeamAch = function (string $monthKey) use ($trackedUserIds, $unitsByUserMonth) {
+            $total = 0;
+            foreach ($trackedUserIds as $uid) {
+                $total += (int) ($unitsByUserMonth[$uid][$monthKey] ?? 0);
+            }
+            return $total;
+        };
+
+        $getActiveHpAch = function (string $monthKey) use ($activeHpIds, $unitsByUserMonth) {
+            $count = 0;
+            foreach ($activeHpIds as $uid) {
+                if ((int) ($unitsByUserMonth[$uid][$monthKey] ?? 0) > 0) {
+                    $count++;
+                }
+            }
+            return $count;
+        };
+
+        // Bangun histori bulan: dari 12 bulan lalu sampai bulan sekarang
+        $historyMonths = collect();
+        $cursor = $historyStart->copy();
+
+        while ($cursor->lte($now)) {
+            $monthKey = $cursor->format('Y-m-01');
+
+            $personalAch = $getPersonalAch($monthKey);
+            $teamAch = $getTeamAch($monthKey);
+            $activeHpAch = $getActiveHpAch($monthKey);
+
+            $personalPassed = $personalAch >= $targetPersonal;
+            $teamPassed = $teamAch >= $targetTeam;
+            $activeHpPassed = $activeHpAch >= $targetActiveHp;
+
+            $historyMonths->push([
+                'key' => $monthKey,
+                'date' => $cursor->copy(),
+                'label' => ucfirst($cursor->translatedFormat('F')),
+                'personal_ach' => $personalAch,
+                'team_ach' => $teamAch,
+                'active_hp_ach' => $activeHpAch,
+                'personal_passed' => $personalPassed,
+                'team_passed' => $teamPassed,
+                'active_hp_passed' => $activeHpPassed,
+                'all_passed' => $personalPassed && $teamPassed && $activeHpPassed,
+            ]);
+
+            $cursor->addMonthNoOverflow();
+        }
+
+        // Cari start evaluasi aktif:
+        // mulai dari bulan setelah kegagalan terakhir
+        $lastFailedIndex = null;
+        foreach ($historyMonths as $index => $month) {
+            if (!$month['all_passed']) {
+                $lastFailedIndex = $index;
+            }
+        }
+
+        if ($lastFailedIndex === null) {
+            // belum pernah gagal dalam histori => start dari bulan pertama yang tersedia,
+            // tapi idealnya tidak lebih maju dari bulan sekarang
+            $activeStartMonth = $historyMonths->last()['date']->copy();
+            foreach ($historyMonths as $month) {
+                if ($month['all_passed']) {
+                    $activeStartMonth = $month['date']->copy();
+                    break;
+                }
+            }
+        } else {
+            $failedMonthDate = $historyMonths[$lastFailedIndex]['date']->copy();
+            $activeStartMonth = $failedMonthDate->copy()->addMonthNoOverflow();
+
+            if ($activeStartMonth->gt($now)) {
+                $activeStartMonth = $now->copy();
+            }
+        }
+
+        // 4 bulan evaluasi aktif
+        $months = collect(range(0, 3))->map(function ($i) use ($activeStartMonth) {
+            $m = $activeStartMonth->copy()->addMonthsNoOverflow($i);
+
+            return [
+                'key' => $m->format('Y-m-01'),
+                'label' => ucfirst($m->translatedFormat('F')),
+                'start' => $m->copy()->startOfMonth()->toDateString(),
+                'end' => $m->copy()->endOfMonth()->toDateString(),
+            ];
+        })->values();
+
+        $month5 = $activeStartMonth->copy()->addMonthsNoOverflow(4);
+        $month5Label = ucfirst($month5->translatedFormat('F'));
+
+        $buildCell = function (
+            string $monthKey,
+            int $ach,
+            int $target,
+            bool $passed
+        ) use ($now) {
+            $monthDate = Carbon::parse($monthKey)->startOfMonth();
+            $isPastOrCurrent = $monthDate->lte($now);
+
+            return [
+                'ach' => $ach,
+                'shrt' => max($target - $ach, 0),
+                'passed' => $passed,
+                'is_green' => $isPastOrCurrent && $passed,
+            ];
+        };
+
+        $personalMonths = [];
+        $teamMonths = [];
+        $activeHpMonths = [];
+
+        $monthPassedMap = [];
+
+        foreach ($months as $m) {
+            $monthKey = $m['key'];
+
+            $personalAch = $getPersonalAch($monthKey);
+            $teamAch = $getTeamAch($monthKey);
+            $activeHpAch = $getActiveHpAch($monthKey);
+
+            $personalPassed = $personalAch >= $targetPersonal;
+            $teamPassed = $teamAch >= $targetTeam;
+            $activeHpPassed = $activeHpAch >= $targetActiveHp;
+
+            $monthPassedMap[$monthKey] = $personalPassed && $teamPassed && $activeHpPassed;
+
+            $personalMonths[$monthKey] = [
+                'ach' => $personalAch,
+                'shrt' => max($targetPersonal - $personalAch, 0),
+                'passed' => $personalPassed,
+            ];
+
+            $teamMonths[$monthKey] = [
+                'ach' => $teamAch,
+                'shrt' => max($targetTeam - $teamAch, 0),
+                'passed' => $teamPassed,
+            ];
+
+            $activeHpMonths[$monthKey] = [
+                'ach' => $activeHpAch,
+                'shrt' => max($targetActiveHp - $activeHpAch, 0),
+                'passed' => $activeHpPassed,
+            ];
+        }
+
+        foreach ($months as $m) {
+            $monthKey = $m['key'];
+            $isGreen = $monthPassedMap[$monthKey] ?? false;
+
+            $personalMonths[$monthKey]['is_green'] = $isGreen;
+            $teamMonths[$monthKey]['is_green'] = $isGreen;
+            $activeHpMonths[$monthKey]['is_green'] = $isGreen;
+        }
+
+        $rows = [
+            [
+                'label' => 'Personal',
+                'target' => $targetPersonal,
+                'months' => $personalMonths,
+            ],
+            [
+                'label' => 'Team',
+                'target' => $targetTeam,
+                'months' => $teamMonths,
+            ],
+            [
+                'label' => 'Active HP',
+                'target' => $targetActiveHp,
+                'months' => $activeHpMonths,
+            ],
+        ];
+
+        // Congrats hijau kalau 4 bulan aktif semuanya lolos
+        $allFourMonthsPassed = true;
+        foreach ($months as $m) {
+            $monthKey = $m['key'];
+
+            $personalPassed = $personalMonths[$monthKey]['passed'] ?? false;
+            $teamPassed = $teamMonths[$monthKey]['passed'] ?? false;
+            $activeHpPassed = $activeHpMonths[$monthKey]['passed'] ?? false;
+
+            if (!($personalPassed && $teamPassed && $activeHpPassed)) {
+                $allFourMonthsPassed = false;
+                break;
+            }
+        }
+
+        return [
+            'months' => $months,
+            'month5' => $month5Label,
+            'rows' => $rows,
+            'congrats_green' => $allFourMonthsPassed,
+            'targets' => [
+                'personal' => $targetPersonal,
+                'team' => $targetTeam,
+                'active_hp' => $targetActiveHp,
+            ],
+        ];
     }
 }

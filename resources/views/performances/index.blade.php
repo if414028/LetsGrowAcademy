@@ -321,6 +321,107 @@
             </div>
         </div>
 
+        @if (auth()->user()->hasRole('Health Planner') && !empty($roadToHm))
+            <div class="mt-6 rounded-2xl border bg-white shadow-sm">
+                <div class="flex items-center justify-between gap-4 border-b px-5 py-4">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-900">Road to HM</h2>
+                        <p class="text-sm text-gray-500">
+                            Evaluasi 4 bulan berjalan untuk melihat progress menuju HM.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="p-5">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full border-separate border-spacing-0 text-sm">
+                            <thead>
+                                <tr>
+                                    <th rowspan="2"
+                                        class="sticky left-0 z-10 border-b border-r bg-white px-4 py-3 text-left font-semibold text-gray-900">
+                                        List
+                                    </th>
+
+                                    @foreach ($roadToHm['months'] as $month)
+                                        <th colspan="2"
+                                            class="border-b border-r bg-gray-50 px-4 py-3 text-center text-sm font-semibold text-gray-900">
+                                            {{ $month['label'] }}
+                                        </th>
+                                    @endforeach
+
+                                    <th rowspan="2"
+                                        class="border-b bg-gray-100 px-6 py-3 text-center font-semibold text-gray-500">
+                                        {{ $roadToHm['month5'] }}
+                                    </th>
+                                </tr>
+                                <tr>
+                                    @foreach ($roadToHm['months'] as $month)
+                                        <th
+                                            class="border-b bg-gray-50 px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">
+                                            Ach
+                                        </th>
+                                        <th
+                                            class="border-b border-r bg-gray-50 px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-gray-500">
+                                            Shrt
+                                        </th>
+                                    @endforeach
+                                </tr>
+                            </thead>
+
+                            <tbody class="divide-y divide-gray-100">
+                                @foreach ($roadToHm['rows'] as $row)
+                                    <tr class="hover:bg-gray-50/50">
+                                        <td
+                                            class="sticky left-0 z-10 border-r bg-white px-4 py-3 font-medium text-gray-900">
+                                            {{ $row['label'] }}
+                                        </td>
+
+                                        @foreach ($roadToHm['months'] as $month)
+                                            @php
+                                                $cell = $row['months'][$month['key']] ?? ['ach' => 0, 'shrt' => 0];
+                                            @endphp
+
+                                            <td @class([
+                                                'px-3 py-3 text-center',
+                                                'bg-green-50 text-green-800 font-semibold' => $cell['is_green'] ?? false,
+                                                'text-gray-900' => !($cell['is_green'] ?? false),
+                                            ])>
+                                                {{ (int) $cell['ach'] }}
+                                            </td>
+
+                                            <td @class([
+                                                'border-r px-3 py-3 text-center',
+                                                'bg-green-50 text-green-800 font-semibold' => $cell['is_green'] ?? false,
+                                                'text-gray-500' => !($cell['is_green'] ?? false),
+                                            ])>
+                                                {{ (int) $cell['shrt'] }}
+                                            </td>
+                                        @endforeach
+
+                                        @if ($loop->first)
+                                            <td rowspan="{{ count($roadToHm['rows']) }}" @class([
+                                                'px-6 py-3 text-center text-sm font-semibold align-middle',
+                                                'bg-green-50 text-green-700' => $roadToHm['congrats_green'] ?? false,
+                                                'bg-gray-100 text-gray-500' => !($roadToHm['congrats_green'] ?? false),
+                                            ])>
+                                                Congrats You Are a HM
+                                            </td>
+                                        @endif
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                        <div>Target Personal: <span class="font-semibold text-gray-900">3 NS</span></div>
+                        <div>Target Team: <span class="font-semibold text-gray-900">30 NS</span></div>
+                        <div>Target Active HP: <span class="font-semibold text-gray-900">5 orang</span></div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         {{-- Bottom Sheet --}}
         <div x-show="sheetOpen" x-cloak class="fixed inset-0 z-50" @keydown.escape.window="closeSheet()">
             {{-- overlay --}}
