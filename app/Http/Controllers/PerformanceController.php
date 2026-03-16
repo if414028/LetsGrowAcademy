@@ -290,7 +290,22 @@ class PerformanceController extends Controller
                 DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
                 DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])
-            ->selectRaw("CASE WHEN DATE(so.key_in_at) < DATE(?) THEN 1 ELSE 0 END as is_carry_over", [$from])
+            ->selectRaw("
+                CASE
+                    WHEN DATE(so.key_in_at) < DATE(?)
+                    AND (
+                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'menunggu pengecekan' AND so.status = 'menunggu verifikasi')
+                        OR
+                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status = 'menunggu jadwal')
+                        OR
+                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status = 'dijadwalkan')
+                        OR
+                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status IN ('ditunda', 'gagal penelponan'))
+                    )
+                    THEN 1
+                    ELSE 0
+                END as is_carry_over
+            ", [$from])
             ->get()
             ->groupBy('hp_name');
 
@@ -779,14 +794,44 @@ class PerformanceController extends Controller
         $carryFrom = Carbon::parse($from)->subMonthNoOverflow()->toDateString();
 
         $q->where(function ($w) use ($from, $to, $carryFrom) {
+            // SO dalam periode cutoff
             $w->whereDate('so.key_in_at', '>=', $from)
                 ->whereDate('so.key_in_at', '<=', $to);
 
+            // Carry over dari periode sebelumnya
             $w->orWhere(function ($x) use ($carryFrom, $from) {
-                $x->whereRaw('COALESCE(so.is_recurring,0) = 0')
-                    ->whereDate('so.key_in_at', '>=', $carryFrom)
+                $x->whereDate('so.key_in_at', '>=', $carryFrom)
                     ->whereDate('so.key_in_at', '<', $from)
-                    ->where('so.ccp_status', 'menunggu pengecekan');
+                    ->where(function ($carry) {
+                        $carry
+                            // Total Recurring
+                            ->orWhere(function ($a) {
+                                $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                    ->where('so.ccp_status', 'menunggu pengecekan')
+                                    ->where('so.status', 'menunggu verifikasi');
+                            })
+
+                            // Menunggu Jadwal
+                            ->orWhere(function ($a) {
+                                $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                    ->where('so.ccp_status', 'disetujui')
+                                    ->where('so.status', 'menunggu jadwal');
+                            })
+
+                            // Dijadwalkan
+                            ->orWhere(function ($a) {
+                                $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                    ->where('so.ccp_status', 'disetujui')
+                                    ->where('so.status', 'dijadwalkan');
+                            })
+
+                            // Pending
+                            ->orWhere(function ($a) {
+                                $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                    ->where('so.ccp_status', 'disetujui')
+                                    ->whereIn('so.status', ['ditunda', 'gagal penelponan']);
+                            });
+                    });
             });
         })->whereNotNull('so.key_in_at');
     }
