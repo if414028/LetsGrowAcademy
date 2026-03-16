@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Permission\Models\Role;
 use Illuminate\Validation\Rule;
+use Illuminate\Database\Query\Builder;
 
 class ContestController extends Controller
 {
@@ -117,10 +118,11 @@ class ContestController extends Controller
     public function create(Request $request)
     {
         $user = $request->user();
+        $productOptions = $this->getContestProductOptions();
 
         // SM: tidak perlu pilih HM (auto downline)
         if ($user->hasRole('Sales Manager')) {
-            return view('contests.create');
+            return view('contests.create', compact('productOptions'));
         }
 
         // Admin / Head Admin: bisa pilih HM mana saja
@@ -130,7 +132,7 @@ class ContestController extends Controller
                 ->orderBy('name')
                 ->get();
 
-            return view('contests.create', compact('healthManagers'));
+            return view('contests.create', compact('healthManagers', 'productOptions'));
         }
 
         // HM: pilih HM dalam 1 SM (atau minimal dirinya)
@@ -153,7 +155,7 @@ class ContestController extends Controller
                 $healthManagers->prepend($user);
             }
 
-            return view('contests.create', compact('healthManagers'));
+            return view('contests.create', compact('healthManagers', 'productOptions'));
         }
 
         abort(403);
@@ -171,13 +173,17 @@ class ContestController extends Controller
             'description' => ['nullable', 'string'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'max_install_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'target_unit' => ['required', 'integer', 'min:1'],
             'reward' => ['nullable', 'string', 'max:255'],
             'banner' => ['nullable', 'image', 'max:2048'],
 
             'type' => ['nullable', 'in:leaderboard,qualifier'],
 
-            // ✅ hanya berlaku kalau type=qualifier, dan minimal salah satu wajib diisi
+            'product_filter_type' => ['required', Rule::in(['all', 'specific', 'exclude'])],
+            'product_ids' => ['nullable', 'array'],
+            'product_ids.*' => ['string'],
+
             'monthly_min_personal_ns' => [
                 'nullable',
                 'integer',
@@ -201,6 +207,15 @@ class ContestController extends Controller
         }
 
         $data = $request->validate($rules);
+
+        if (
+            in_array($data['product_filter_type'] ?? 'all', ['specific', 'exclude'], true)
+            && empty($data['product_ids'])
+        ) {
+            return back()
+                ->withErrors(['product_ids' => 'Pilih minimal 1 produk untuk jenis filter ini.'])
+                ->withInput();
+        }
 
         return DB::transaction(function () use ($data, $request, $user) {
 
@@ -268,7 +283,12 @@ class ContestController extends Controller
                 // buang key yang null biar tidak dianggap syarat
                 $qualifierRules = array_filter($qualifierRules, fn($v) => $v !== null);
 
+                $productFilterType = $data['product_filter_type'] ?? 'all';
+                $productIds = array_values(array_unique($data['product_ids'] ?? []));
+
                 $baseRules = array_merge($baseRules, $qualifierRules);
+                $baseRules['product_filter_type'] = $productFilterType;
+                $baseRules['product_ids'] = $productIds;
             }
 
             $contest = Contest::create([
@@ -276,13 +296,13 @@ class ContestController extends Controller
                 'description' => $data['description'] ?? null,
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
+                'max_install_date' => $data['max_install_date'] ?? null,
                 'target_unit' => $data['target_unit'],
                 'reward' => $data['reward'] ?? null,
                 'banner_url' => $bannerUrl,
                 'created_by_user_id' => $user->id,
                 'created_by_role_id' => $user->roles()->first()?->id,
                 'status' => 'draft',
-
                 'type' => $type,
                 'rules' => !empty($baseRules) ? $baseRules : null,
             ]);
@@ -417,6 +437,7 @@ class ContestController extends Controller
 
         $start = $contest->start_date?->copy()->startOfDay();
         $end   = $contest->end_date?->copy()->endOfDay();
+        $maxInstallDate = ($contest->max_install_date ?? $contest->end_date)?->copy()->endOfDay();
 
         // =========================
         // ✅ MODE: QUALIFIER 133
@@ -437,12 +458,17 @@ class ContestController extends Controller
             // personal qty per bulan (SUM qty) untuk semua peserta HP
             $personalQtyByMonth = [];
             foreach ($months as $m) {
-                $personalQtyByMonth[$m['key']] = DB::table('sales_orders')
+                $query = DB::table('sales_orders')
                     ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
                     ->whereIn('sales_orders.sales_user_id', $hpIds)
                     ->where('sales_orders.status', 'selesai')
                     ->whereBetween('sales_orders.key_in_at', [$m['from'], $m['to']])
-                    ->whereBetween('sales_orders.install_date', [$m['from'], $m['to']])
+                    ->whereNotNull('sales_orders.install_date')
+                    ->where('sales_orders.install_date', '<=', $maxInstallDate);
+
+                $this->applyContestProductFilter($query, $rules);
+
+                $personalQtyByMonth[$m['key']] = $query
                     ->groupBy('sales_orders.sales_user_id')
                     ->selectRaw('sales_orders.sales_user_id, COALESCE(SUM(sales_order_items.qty),0) as total_qty')
                     ->pluck('total_qty', 'sales_orders.sales_user_id')
@@ -510,12 +536,17 @@ class ContestController extends Controller
         // =========================
         // ✅ MODE: LEADERBOARD
         // =========================
-        $progressMap = DB::table('sales_orders')
+        $progressQuery = DB::table('sales_orders')
             ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
             ->whereIn('sales_orders.sales_user_id', $hpIds)
             ->where('sales_orders.status', 'selesai')
             ->whereBetween('sales_orders.key_in_at', [$start, $end])
-            ->whereBetween('sales_orders.install_date', [$start, $end])
+            ->whereNotNull('sales_orders.install_date')
+            ->where('sales_orders.install_date', '<=', $maxInstallDate);
+
+        $this->applyContestProductFilter($progressQuery, $rules);
+
+        $progressMap = $progressQuery
             ->groupBy('sales_orders.sales_user_id')
             ->selectRaw('sales_orders.sales_user_id, COALESCE(SUM(sales_order_items.qty),0) as total_unit')
             ->pluck('total_unit', 'sales_orders.sales_user_id');
@@ -590,10 +621,11 @@ class ContestController extends Controller
         }
 
         $user = $request->user();
+        $productOptions = $this->getContestProductOptions();
 
         // SM: tidak perlu pilih HM (auto)
         if ($user->hasRole('Sales Manager')) {
-            return view('contests.edit', compact('contest'));
+            return view('contests.edit', compact('contest', 'productOptions'));
         }
 
         // Admin / Head Admin: boleh pilih HM mana saja
@@ -603,10 +635,9 @@ class ContestController extends Controller
                 ->orderBy('name')
                 ->get();
 
-            // ✅ ambil selected HM dari rules.target_hm_ids (bukan participants)
             $selectedHmIds = (array) (($contest->rules ?? [])['target_hm_ids'] ?? []);
 
-            return view('contests.edit', compact('contest', 'healthManagers', 'selectedHmIds'));
+            return view('contests.edit', compact('contest', 'healthManagers', 'selectedHmIds', 'productOptions'));
         }
 
         // HM: pilih HM dalam 1 SM (atau minimal dirinya)
@@ -629,10 +660,9 @@ class ContestController extends Controller
                 $healthManagers->prepend($user);
             }
 
-            // ✅ ambil selected HM dari rules.target_hm_ids
             $selectedHmIds = (array) (($contest->rules ?? [])['target_hm_ids'] ?? []);
 
-            return view('contests.edit', compact('contest', 'healthManagers', 'selectedHmIds'));
+            return view('contests.edit', compact('contest', 'healthManagers', 'selectedHmIds', 'productOptions'));
         }
 
         abort(403);
@@ -658,12 +688,17 @@ class ContestController extends Controller
             'description' => ['nullable', 'string'],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'max_install_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'target_unit' => ['required', 'integer', 'min:1'],
             'reward' => ['nullable', 'string', 'max:255'],
             'banner' => ['nullable', 'image', 'max:2048'],
             'remove_banner' => ['nullable', 'boolean'],
 
             'type' => ['nullable', 'in:leaderboard,qualifier'],
+
+            'product_filter_type' => ['required', Rule::in(['all', 'specific', 'exclude'])],
+            'product_ids' => ['nullable', 'array'],
+            'product_ids.*' => ['string'],
 
             'monthly_min_personal_ns' => [
                 'nullable',
@@ -688,6 +723,15 @@ class ContestController extends Controller
         }
 
         $data = $request->validate($rules);
+
+        if (
+            in_array($data['product_filter_type'] ?? 'all', ['specific', 'exclude'], true)
+            && empty($data['product_ids'])
+        ) {
+            return back()
+                ->withErrors(['product_ids' => 'Pilih minimal 1 produk untuk jenis filter ini.'])
+                ->withInput();
+        }
 
         return DB::transaction(function () use ($data, $request, $user, $contest) {
 
@@ -760,7 +804,12 @@ class ContestController extends Controller
 
                 $qualifierRules = array_filter($qualifierRules, fn($v) => $v !== null);
 
+                $productFilterType = $data['product_filter_type'] ?? 'all';
+                $productIds = array_values(array_unique($data['product_ids'] ?? []));
+
                 $newRules = array_merge($newRules, $qualifierRules);
+                $newRules['product_filter_type'] = $productFilterType;
+                $newRules['product_ids'] = $productIds;
             }
 
             $contest->update([
@@ -768,10 +817,10 @@ class ContestController extends Controller
                 'description' => $data['description'] ?? null,
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
+                'max_install_date' => $data['max_install_date'] ?? null,
                 'target_unit' => $data['target_unit'],
                 'reward' => $data['reward'] ?? null,
                 'banner_url' => $bannerUrl,
-
                 'date_basis' => $dateBasis,
                 'type' => $type,
                 'rules' => !empty($newRules) ? $newRules : null,
@@ -833,5 +882,58 @@ class ContestController extends Controller
         $contest->update(['status' => 'draft']);
 
         return back()->with('success', 'Kontes berhasil di-unpublish.');
+    }
+
+    private function getContestProductOptions()
+    {
+        return DB::table('products')
+            ->select('id', 'product_name', 'type')
+            ->where('is_active', 1)
+            ->orderBy('product_name')
+            ->get()
+            ->map(fn($item) => (object) [
+                'value' => 'product:' . $item->id,
+                'label' => $item->type === 'bundle'
+                    ? '[Bundle] ' . $item->product_name
+                    : $item->product_name,
+                'type' => $item->type === 'bundle' ? 'bundle' : 'product',
+            ])
+            ->values();
+    }
+
+    private function normalizeContestProductIds(array $productIds): array
+    {
+        $ids = [];
+
+        foreach ($productIds as $value) {
+            if (str_starts_with($value, 'product:')) {
+                $ids[] = (int) str_replace('product:', '', $value);
+            }
+        }
+
+        return array_values(array_unique(array_filter($ids)));
+    }
+
+    private function applyContestProductFilter(\Illuminate\Database\Query\Builder $query, array $rules): void
+    {
+        $filterType = $rules['product_filter_type'] ?? 'all';
+        $rawIds = (array) ($rules['product_ids'] ?? []);
+        $productIds = $this->normalizeContestProductIds($rawIds);
+
+        if ($filterType === 'all' || empty($productIds)) {
+            return;
+        }
+
+        if ($filterType === 'specific') {
+            $query->whereIn('sales_order_items.product_id', $productIds);
+            return;
+        }
+
+        if ($filterType === 'exclude') {
+            $query->where(function ($q) use ($productIds) {
+                $q->whereNull('sales_order_items.product_id')
+                    ->orWhereNotIn('sales_order_items.product_id', $productIds);
+            });
+        }
     }
 }

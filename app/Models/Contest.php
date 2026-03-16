@@ -17,6 +17,7 @@ class Contest extends Model
         'description',
         'start_date',
         'end_date',
+        'max_install_date',
         'target_unit',
         'reward',
         'banner_url',
@@ -32,6 +33,7 @@ class Contest extends Model
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'max_install_date' => 'date',
         'rules' => 'array'
     ];
 

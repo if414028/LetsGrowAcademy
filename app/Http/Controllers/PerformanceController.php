@@ -44,7 +44,7 @@ class PerformanceController extends Controller
         // Filter:
         // - partner terpilih + downline
         if ($isAdminOrHead && !$hasMemberFilter) {
-            $childIds = collect(); // direct reports tidak dipakai spesifik
+            $childIds = collect();
             $scopeUserIds = User::query()->pluck('id');
         } else {
             $childIds = $baseUser->downlineUserIds();
@@ -108,8 +108,6 @@ class PerformanceController extends Controller
 
         // ======================================
         // TEAM PERFORMANCE
-        // - reset admin/head admin => semua HP
-        // - filter partner => hanya downline partner terpilih
         // ======================================
         $teamPerformanceQ = User::query()
             ->when(
@@ -169,9 +167,9 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         if ($isManual) {
-            $this->applyManualDateFilter($summaryQ, $from, $to);
+            $this->applyPerformanceScopeFilter($summaryQ, $from, $to, false);
         } else {
-            $this->applyCutoffSoFilter($summaryQ, $from, $to);
+            $this->applyPerformanceScopeFilter($summaryQ, $from, $to, true);
         }
 
         $summaryQ = $joinUnits($summaryQ, 'so');
@@ -259,9 +257,9 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         if ($isManual) {
-            $this->applyManualDateFilter($sheetQ, $from, $to);
+            $this->applyPerformanceScopeFilter($sheetQ, $from, $to, false);
         } else {
-            $this->applyCutoffSoFilter($sheetQ, $from, $to);
+            $this->applyPerformanceScopeFilter($sheetQ, $from, $to, true);
         }
 
         $teamSheetRows = $sheetQ
@@ -293,7 +291,7 @@ class PerformanceController extends Controller
             ->selectRaw("
                 CASE
                     WHEN DATE(so.key_in_at) < DATE(?)
-                    AND (
+                     AND (
                         (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'menunggu pengecekan' AND so.status = 'menunggu verifikasi')
                         OR
                         (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status = 'menunggu jadwal')
@@ -301,7 +299,7 @@ class PerformanceController extends Controller
                         (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status = 'dijadwalkan')
                         OR
                         (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status IN ('ditunda', 'gagal penelponan'))
-                    )
+                     )
                     THEN 1
                     ELSE 0
                 END as is_carry_over
@@ -310,7 +308,7 @@ class PerformanceController extends Controller
             ->groupBy('hp_name');
 
         // ======================================
-        // ROAD TO HM (hanya untuk akun HP yang login)
+        // ROAD TO HM
         // ======================================
         $roadToHm = null;
 
@@ -468,9 +466,9 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         if ($isManual) {
-            $this->applyManualDateFilter($summaryQ, $from, $to);
+            $this->applyPerformanceScopeFilter($summaryQ, $from, $to, false);
         } else {
-            $this->applyCutoffSoFilter($summaryQ, $from, $to);
+            $this->applyPerformanceScopeFilter($summaryQ, $from, $to, true);
         }
 
         $summaryQ = $joinUnits($summaryQ, 'so');
@@ -558,9 +556,9 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         if ($isManual) {
-            $this->applyManualDateFilter($sheetQ, $from, $to);
+            $this->applyPerformanceScopeFilter($sheetQ, $from, $to, false);
         } else {
-            $this->applyCutoffSoFilter($sheetQ, $from, $to);
+            $this->applyPerformanceScopeFilter($sheetQ, $from, $to, true);
         }
 
         $teamSheetRows = $sheetQ
@@ -575,6 +573,9 @@ class PerformanceController extends Controller
                 'so.ccp_status',
                 'so.status',
                 'so.install_date',
+                'so.status_reason',
+                'so.ccp_remarks',
+                'so.payment_method_remarks',
                 DB::raw("
                     COALESCE(
                         NULLIF(so.payment_method_remarks,''),
@@ -586,6 +587,22 @@ class PerformanceController extends Controller
                 DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
                 DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])
+            ->selectRaw("
+                CASE
+                    WHEN DATE(so.key_in_at) < DATE(?)
+                     AND (
+                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'menunggu pengecekan' AND so.status = 'menunggu verifikasi')
+                        OR
+                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status = 'menunggu jadwal')
+                        OR
+                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status = 'dijadwalkan')
+                        OR
+                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status IN ('ditunda', 'gagal penelponan'))
+                     )
+                    THEN 1
+                    ELSE 0
+                END as is_carry_over
+            ", [$from])
             ->get()
             ->groupBy('hp_name');
 
@@ -789,51 +806,64 @@ class PerformanceController extends Controller
         return redirect()->route('performance.index')->with('success', 'Cut off performance berhasil disimpan.');
     }
 
-    private function applyCutoffSoFilter($q, string $from, string $to): void
+    /**
+     * Scope data performance:
+     * 1. key_in_at dalam periode
+     * 2. atau status selesai + install_date dalam periode
+     * 3. atau carry over recurring dari periode sebelumnya (khusus cutoff mode)
+     */
+    private function applyPerformanceScopeFilter($q, string $from, string $to, bool $withCarryOver = true): void
     {
         $carryFrom = Carbon::parse($from)->subMonthNoOverflow()->toDateString();
 
-        $q->where(function ($w) use ($from, $to, $carryFrom) {
-            // SO dalam periode cutoff
-            $w->whereDate('so.key_in_at', '>=', $from)
-                ->whereDate('so.key_in_at', '<=', $to);
-
-            // Carry over dari periode sebelumnya
-            $w->orWhere(function ($x) use ($carryFrom, $from) {
-                $x->whereDate('so.key_in_at', '>=', $carryFrom)
-                    ->whereDate('so.key_in_at', '<', $from)
-                    ->where(function ($carry) {
-                        $carry
-                            // Total Recurring
-                            ->orWhere(function ($a) {
-                                $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
-                                    ->where('so.ccp_status', 'menunggu pengecekan')
-                                    ->where('so.status', 'menunggu verifikasi');
-                            })
-
-                            // Menunggu Jadwal
-                            ->orWhere(function ($a) {
-                                $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
-                                    ->where('so.ccp_status', 'disetujui')
-                                    ->where('so.status', 'menunggu jadwal');
-                            })
-
-                            // Dijadwalkan
-                            ->orWhere(function ($a) {
-                                $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
-                                    ->where('so.ccp_status', 'disetujui')
-                                    ->where('so.status', 'dijadwalkan');
-                            })
-
-                            // Pending
-                            ->orWhere(function ($a) {
-                                $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
-                                    ->where('so.ccp_status', 'disetujui')
-                                    ->whereIn('so.status', ['ditunda', 'gagal penelponan']);
-                            });
-                    });
+        $q->where(function ($w) use ($from, $to, $carryFrom, $withCarryOver) {
+            // A. SO key-in dalam periode
+            $w->where(function ($a) use ($from, $to) {
+                $a->whereNotNull('so.key_in_at')
+                    ->whereDate('so.key_in_at', '>=', $from)
+                    ->whereDate('so.key_in_at', '<=', $to);
             });
-        })->whereNotNull('so.key_in_at');
+
+            // B. SO selesai dan install dalam periode
+            $w->orWhere(function ($a) use ($from, $to) {
+                $a->where('so.status', 'selesai')
+                    ->whereNotNull('so.install_date')
+                    ->whereDate('so.install_date', '>=', $from)
+                    ->whereDate('so.install_date', '<=', $to);
+            });
+
+            // C. Carry over dari periode sebelumnya
+            if ($withCarryOver) {
+                $w->orWhere(function ($x) use ($carryFrom, $from) {
+                    $x->whereNotNull('so.key_in_at')
+                        ->whereDate('so.key_in_at', '>=', $carryFrom)
+                        ->whereDate('so.key_in_at', '<', $from)
+                        ->where(function ($carry) {
+                            $carry
+                                ->where(function ($a) {
+                                    $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                        ->where('so.ccp_status', 'menunggu pengecekan')
+                                        ->where('so.status', 'menunggu verifikasi');
+                                })
+                                ->orWhere(function ($a) {
+                                    $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                        ->where('so.ccp_status', 'disetujui')
+                                        ->where('so.status', 'menunggu jadwal');
+                                })
+                                ->orWhere(function ($a) {
+                                    $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                        ->where('so.ccp_status', 'disetujui')
+                                        ->where('so.status', 'dijadwalkan');
+                                })
+                                ->orWhere(function ($a) {
+                                    $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                        ->where('so.ccp_status', 'disetujui')
+                                        ->whereIn('so.status', ['ditunda', 'gagal penelponan']);
+                                });
+                        });
+                });
+            }
+        });
     }
 
     private function normalizeDateRange(?string $from, ?string $to): array
@@ -856,9 +886,7 @@ class PerformanceController extends Controller
 
     private function applyManualDateFilter($q, string $from, string $to): void
     {
-        $q->whereDate('so.key_in_at', '>=', $from)
-            ->whereDate('so.key_in_at', '<=', $to)
-            ->whereNotNull('so.key_in_at');
+        $this->applyPerformanceScopeFilter($q, $from, $to, false);
     }
 
     private function buildRoadToHmData(User $user): array
@@ -871,7 +899,6 @@ class PerformanceController extends Controller
 
         $now = Carbon::now()->startOfMonth();
 
-        // Ambil histori agak panjang biar bisa cari titik reset terakhir
         $historyStart = $now->copy()->subMonthsNoOverflow(12)->startOfMonth();
         $historyEnd   = $now->copy()->addMonthsNoOverflow(4)->endOfMonth();
 
@@ -886,13 +913,13 @@ class PerformanceController extends Controller
         $trackedUserIds = $downlines->pluck('id')->push($user->id)->unique()->values();
 
         $unitsExpr = "
-        COALESCE(SUM(
-            CASE
-                WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                ELSE soi.qty
-            END
-        ), 0)
-    ";
+            COALESCE(SUM(
+                CASE
+                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                    ELSE soi.qty
+                END
+            ), 0)
+        ";
 
         $monthlyUnitsRaw = DB::table('sales_orders as so')
             ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
@@ -905,10 +932,10 @@ class PerformanceController extends Controller
             ->whereDate('so.install_date', '>=', $historyStart->toDateString())
             ->whereDate('so.install_date', '<=', $historyEnd->toDateString())
             ->selectRaw("
-            so.sales_user_id,
-            DATE_FORMAT(so.install_date, '%Y-%m-01') as month_key,
-            {$unitsExpr} as units
-        ")
+                so.sales_user_id,
+                DATE_FORMAT(so.install_date, '%Y-%m-01') as month_key,
+                {$unitsExpr} as units
+            ")
             ->groupBy('so.sales_user_id', DB::raw("DATE_FORMAT(so.install_date, '%Y-%m-01')"))
             ->get();
 
@@ -923,7 +950,6 @@ class PerformanceController extends Controller
             ->pluck('id')
             ->values();
 
-        // Helper hitung achievement per bulan
         $getPersonalAch = function (string $monthKey) use ($unitsByUserMonth, $user) {
             return (int) ($unitsByUserMonth[$user->id][$monthKey] ?? 0);
         };
@@ -946,7 +972,6 @@ class PerformanceController extends Controller
             return $count;
         };
 
-        // Bangun histori bulan: dari 12 bulan lalu sampai bulan sekarang
         $historyMonths = collect();
         $cursor = $historyStart->copy();
 
@@ -977,8 +1002,6 @@ class PerformanceController extends Controller
             $cursor->addMonthNoOverflow();
         }
 
-        // Cari start evaluasi aktif:
-        // mulai dari bulan setelah kegagalan terakhir
         $lastFailedIndex = null;
         foreach ($historyMonths as $index => $month) {
             if (!$month['all_passed']) {
@@ -987,8 +1010,6 @@ class PerformanceController extends Controller
         }
 
         if ($lastFailedIndex === null) {
-            // belum pernah gagal dalam histori => start dari bulan pertama yang tersedia,
-            // tapi idealnya tidak lebih maju dari bulan sekarang
             $activeStartMonth = $historyMonths->last()['date']->copy();
             foreach ($historyMonths as $month) {
                 if ($month['all_passed']) {
@@ -1005,7 +1026,6 @@ class PerformanceController extends Controller
             }
         }
 
-        // 4 bulan evaluasi aktif
         $months = collect(range(0, 3))->map(function ($i) use ($activeStartMonth) {
             $m = $activeStartMonth->copy()->addMonthsNoOverflow($i);
 
@@ -1019,23 +1039,6 @@ class PerformanceController extends Controller
 
         $month5 = $activeStartMonth->copy()->addMonthsNoOverflow(4);
         $month5Label = ucfirst($month5->translatedFormat('F'));
-
-        $buildCell = function (
-            string $monthKey,
-            int $ach,
-            int $target,
-            bool $passed
-        ) use ($now) {
-            $monthDate = Carbon::parse($monthKey)->startOfMonth();
-            $isPastOrCurrent = $monthDate->lte($now);
-
-            return [
-                'ach' => $ach,
-                'shrt' => max($target - $ach, 0),
-                'passed' => $passed,
-                'is_green' => $isPastOrCurrent && $passed,
-            ];
-        };
 
         $personalMonths = [];
         $teamMonths = [];
@@ -1102,7 +1105,6 @@ class PerformanceController extends Controller
             ],
         ];
 
-        // Congrats hijau kalau 4 bulan aktif semuanya lolos
         $allFourMonthsPassed = true;
         foreach ($months as $m) {
             $monthKey = $m['key'];

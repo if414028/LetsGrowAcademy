@@ -60,6 +60,15 @@
                         required>
                 </div>
 
+                <div>
+                    <label class="text-sm font-semibold text-gray-700">Tanggal Install Maksimum</label>
+                    <input type="date" name="max_install_date" value="{{ old('max_install_date') }}"
+                        class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                    <p class="mt-2 text-xs text-gray-500">
+                        SO dihitung jika key in ada di periode kontes dan tanggal install <= tanggal ini. Jika
+                            dikosongkan, default mengikuti End Date. </p>
+                </div>
+
                 {{-- Contest Type --}}
                 <div class="md:col-span-2">
                     <label class="text-sm font-semibold text-gray-700">Tipe Kontes</label>
@@ -96,6 +105,59 @@
                     <input type="text" name="reward" value="{{ old('reward') }}"
                         class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                         placeholder="Contoh: Voucher / Bonus / Hadiah">
+                </div>
+
+                <div class="md:col-span-2 rounded-2xl border bg-gray-50 p-5">
+                    <div class="text-sm font-semibold text-gray-900">Filter Produk</div>
+                    <div class="mt-1 text-xs text-gray-600">
+                        Tentukan apakah kontes berlaku untuk semua produk, hanya produk tertentu, atau mengecualikan
+                        produk tertentu.
+                    </div>
+
+                    <div class="mt-4">
+                        <label class="text-sm font-semibold text-gray-700">Jenis Produk</label>
+                        <select id="product_filter_type" name="product_filter_type"
+                            class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                            <option value="all" {{ old('product_filter_type', 'all') === 'all' ? 'selected' : '' }}>
+                                Semua Produk</option>
+                            <option value="specific" {{ old('product_filter_type') === 'specific' ? 'selected' : '' }}>
+                                Spesifik Produk</option>
+                            <option value="exclude" {{ old('product_filter_type') === 'exclude' ? 'selected' : '' }}>
+                                Exclude Produk</option>
+                        </select>
+                    </div>
+
+                    <div id="product_picker_wrapper" class="mt-4 hidden">
+                        <label class="text-sm font-semibold text-gray-700">Pilih Produk</label>
+                        <input type="text" id="product_search"
+                            class="mt-2 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                            placeholder="Ketik nama produk / bundle...">
+
+                        <div id="product_list"
+                            class="mt-3 max-h-64 overflow-y-auto rounded-xl border bg-white p-3 space-y-2">
+                            @forelse(($productOptions ?? []) as $item)
+                                <label
+                                    class="product-option flex items-start gap-3 rounded-lg px-2 py-2 hover:bg-gray-50"
+                                    data-label="{{ strtolower($item->label) }}">
+                                    <input type="checkbox" name="product_ids[]" value="{{ $item->value }}"
+                                        class="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        {{ collect(old('product_ids', []))->contains($item->value) ? 'checked' : '' }}>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-800">{{ $item->label }}</div>
+                                        <div class="text-xs text-gray-500">
+                                            {{ $item->type === 'bundle' ? 'Bundle' : 'Produk Satuan' }}
+                                        </div>
+                                    </div>
+                                </label>
+                            @empty
+                                <div class="text-sm text-gray-500">Belum ada data produk.</div>
+                            @endforelse
+                        </div>
+
+                        @error('product_ids')
+                            <div class="mt-2 text-sm text-red-600">{{ $message }}</div>
+                        @enderror
+                    </div>
                 </div>
 
                 <div class="md:col-span-2">
@@ -222,7 +284,12 @@
             const targetLabel = document.getElementById('target_label');
             const targetHint = document.getElementById('target_hint');
 
-            function sync() {
+            const productFilterTypeEl = document.getElementById('product_filter_type');
+            const productPickerWrapper = document.getElementById('product_picker_wrapper');
+            const productSearchEl = document.getElementById('product_search');
+            const productOptionEls = Array.from(document.querySelectorAll('.product-option'));
+
+            function syncContestType() {
                 const type = typeEl?.value || 'leaderboard';
 
                 if (type === 'qualifier') {
@@ -236,8 +303,32 @@
                 }
             }
 
-            typeEl?.addEventListener('change', sync);
-            sync();
+            function syncProductFilter() {
+                const value = productFilterTypeEl?.value || 'all';
+
+                if (value === 'specific' || value === 'exclude') {
+                    productPickerWrapper?.classList.remove('hidden');
+                } else {
+                    productPickerWrapper?.classList.add('hidden');
+                }
+            }
+
+            function filterProducts() {
+                const keyword = (productSearchEl?.value || '').trim().toLowerCase();
+
+                productOptionEls.forEach((el) => {
+                    const label = el.dataset.label || '';
+                    el.style.display = label.includes(keyword) ? '' : 'none';
+                });
+            }
+
+            typeEl?.addEventListener('change', syncContestType);
+            productFilterTypeEl?.addEventListener('change', syncProductFilter);
+            productSearchEl?.addEventListener('input', filterProducts);
+
+            syncContestType();
+            syncProductFilter();
+            filterProducts();
         })();
     </script>
 </x-dashboard-layout>
