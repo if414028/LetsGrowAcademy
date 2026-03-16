@@ -799,6 +799,14 @@ class ContestController extends Controller
         //
     }
 
+    private function canUnpublish(Request $request, Contest $contest): bool
+    {
+        $user = $request->user();
+
+        return $user->hasAnyRole(['Admin', 'Head Admin'])
+            || (int) $contest->created_by_user_id === (int) $user->id;
+    }
+
     public function publish(Contest $contest)
     {
         $this->authorize('update', $contest);
@@ -810,5 +818,20 @@ class ContestController extends Controller
         $contest->update(['status' => 'active']);
 
         return back()->with('success', 'Kontes berhasil dipublish.');
+    }
+
+    public function unpublish(Request $request, Contest $contest)
+    {
+        if (!$this->canUnpublish($request, $contest)) {
+            abort(403);
+        }
+
+        if ($contest->status !== 'active') {
+            abort(400, 'Hanya kontes aktif yang bisa di-unpublish.');
+        }
+
+        $contest->update(['status' => 'draft']);
+
+        return back()->with('success', 'Kontes berhasil di-unpublish.');
     }
 }

@@ -215,17 +215,48 @@
                                         </a>
                                     @endcan
 
-                                    {{-- Publish --}}
-                                    @can('update', $contest)
+                                    @php
+                                        $canManagePublish =
+                                            auth()
+                                                ->user()
+                                                ->hasAnyRole(['Admin', 'Head Admin']) ||
+                                            (int) $contest->created_by_user_id === (int) auth()->id();
+                                    @endphp
+
+                                    {{-- Publish / Unpublish --}}
+                                    @if ($canManagePublish)
                                         @if ($contest->status === 'draft')
-                                            <form method="POST" action="{{ route('contests.publish', $contest) }}">
+                                            <form id="publish-form-{{ $contest->id }}" method="POST"
+                                                action="{{ route('contests.publish', $contest) }}">
                                                 @csrf
-                                                <button class="px-3 py-1 rounded-lg bg-green-600 text-white text-sm">
+
+                                                <button type="button"
+                                                    onclick="showConfirm(
+            'Publish kontes ini?',
+            'publish',
+            () => document.getElementById('publish-form-{{ $contest->id }}').submit()
+        )"
+                                                    class="px-3 py-1 rounded-lg bg-green-600 text-white text-sm hover:bg-green-700">
                                                     Publish
                                                 </button>
                                             </form>
+                                        @elseif ($contest->status === 'active')
+                                            <form id="unpublish-form-{{ $contest->id }}" method="POST"
+                                                action="{{ route('contests.unpublish', $contest) }}">
+                                                @csrf
+
+                                                <button type="button"
+                                                    onclick="showConfirm(
+            'Unpublish kontes ini? Status akan kembali ke draft.',
+            'unpublish',
+            () => document.getElementById('unpublish-form-{{ $contest->id }}').submit()
+        )"
+                                                    class="px-3 py-1 rounded-lg bg-red-600 text-white text-sm hover:bg-red-700">
+                                                    Unpublish
+                                                </button>
+                                            </form>
                                         @endif
-                                    @endcan
+                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -245,4 +276,94 @@
             {{ $contests->appends(request()->query())->links() }}
         </div>
     </div>
+
+    {{-- Confirmation Modal --}}
+    <div id="confirmModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40">
+
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-6">
+
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                Konfirmasi
+            </h3>
+
+            <p id="confirmMessage" class="text-sm text-gray-600 mb-6">
+                Apakah kamu yakin?
+            </p>
+
+            <div class="flex justify-end gap-3">
+
+                <button id="confirmCancel" class="px-4 py-2 rounded-lg text-sm">
+                    Cancel
+                </button>
+
+                <button id="confirmOk" class="px-4 py-2 rounded-lg text-sm text-white">
+                    OK
+                </button>
+
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const modal = document.getElementById('confirmModal');
+        const confirmMessage = document.getElementById('confirmMessage');
+        const confirmOk = document.getElementById('confirmOk');
+        const confirmCancel = document.getElementById('confirmCancel');
+
+        let confirmCallback = null;
+
+        function resetButtonStyles() {
+            confirmOk.className = 'px-4 py-2 rounded-lg text-sm text-white transition';
+            confirmCancel.className = 'px-4 py-2 rounded-lg text-sm transition';
+
+            // pastikan semua variasi warna lama kebuang
+            confirmOk.classList.remove(
+                'bg-blue-600', 'hover:bg-blue-700',
+                'bg-red-600', 'hover:bg-red-700'
+            );
+
+            confirmCancel.classList.remove(
+                'bg-gray-200', 'hover:bg-gray-300', 'text-gray-700',
+                'bg-blue-600', 'hover:bg-blue-700', 'text-white'
+            );
+        }
+
+        function showConfirm(message, type, callback) {
+            confirmMessage.innerText = message;
+            confirmCallback = callback;
+
+            resetButtonStyles();
+
+            if (type === 'unpublish') {
+                // OK merah, Cancel biru
+                confirmOk.classList.add('bg-red-600', 'hover:bg-red-700');
+                confirmCancel.classList.add('bg-blue-600', 'hover:bg-blue-700', 'text-white');
+            } else {
+                // publish: OK biru, Cancel abu
+                confirmOk.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                confirmCancel.classList.add('bg-gray-200', 'hover:bg-gray-300', 'text-gray-700');
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        confirmCancel.onclick = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            confirmCallback = null;
+        };
+
+        confirmOk.onclick = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+
+            if (confirmCallback) {
+                const cb = confirmCallback;
+                confirmCallback = null;
+                cb();
+            }
+        };
+    </script>
 </x-dashboard-layout>

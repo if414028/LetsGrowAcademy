@@ -137,6 +137,8 @@ Route::middleware('auth', 'active')->group(function () {
 
     Route::post('/contests/{contest}/publish', [ContestController::class, 'publish'])
         ->name('contests.publish');
+    Route::post('/contests/{contest}/unpublish', [ContestController::class, 'unpublish'])
+        ->name('contests.unpublish');
 
     // Bundles Product
     Route::get('/bundles', [BundleController::class, 'index'])->name('bundles.index');
