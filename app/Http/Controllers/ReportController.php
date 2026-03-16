@@ -56,9 +56,9 @@ class ReportController extends Controller
 
         // =========================================================
         // LEADERBOARD HEALTH PLANNER
-        // - Admin-like: semua Health Planner
-        // - HM / HP: semua bawahan langsung user login
-        // HP = HP + semua bawahannya
+        // - Admin-like: semua Health Planner aktif
+        // - selain admin-like: bawahan langsung user login
+        // HP = pribadi saja, TANPA bawahan
         // =========================================================
         if ($isAdminLike) {
             $hpTargets = User::query()
@@ -66,16 +66,15 @@ class ReportController extends Controller
                 ->whereHas('roles', fn($q) => $q->where('name', 'Health Planner'))
                 ->select('users.id', 'users.name', 'users.full_name')
                 ->get();
-
-            $hpLeaderboard = $this->buildLeaderboardWithDescendants($hpTargets, $from, $to);
         } else {
             $hpTargets = User::query()
+                ->where('status', 'Active')
                 ->whereIn('users.id', $user->childrenUsers()->pluck('users.id'))
                 ->select('users.id', 'users.name', 'users.full_name')
                 ->get();
-
-            $hpLeaderboard = $this->buildLeaderboardWithDescendants($hpTargets, $from, $to);
         }
+
+        $hpLeaderboard = $this->buildPersonalLeaderboard($hpTargets, $from, $to);
 
         return view('reports.index', [
             'from' => $from,
@@ -96,7 +95,7 @@ class ReportController extends Controller
 
     /**
      * Leaderboard untuk target + semua descendants.
-     * Cocok untuk Health Manager dan Health Planner.
+     * Dipakai untuk Health Manager.
      */
     private function buildLeaderboardWithDescendants($targets, string $from, string $to)
     {
@@ -106,16 +105,14 @@ class ReportController extends Controller
             return collect();
         }
 
-        // Units per seller = total qty, bukan total SO
-        // bundle di-expand
         $unitsExpr = "
-        COALESCE(SUM(
-            CASE
-                WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                ELSE soi.qty
-            END
-        ), 0)
-    ";
+            COALESCE(SUM(
+                CASE
+                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                    ELSE soi.qty
+                END
+            ), 0)
+        ";
 
         $unitsPerSeller = DB::table('sales_orders as so')
             ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
@@ -135,31 +132,97 @@ class ReportController extends Controller
         $targetsInline = '(' . $targetIds->implode(',') . ')';
 
         $cteSql = "
-        WITH RECURSIVE descendants AS (
-            SELECT u.id AS ancestor_id, u.id AS descendant_id
-            FROM users u
-            WHERE u.id IN {$targetsInline}
+            WITH RECURSIVE descendants AS (
+                SELECT u.id AS ancestor_id, u.id AS descendant_id
+                FROM users u
+                WHERE u.id IN {$targetsInline}
 
-            UNION ALL
+                UNION ALL
 
-            SELECT d.ancestor_id, uh.child_user_id AS descendant_id
+                SELECT d.ancestor_id, uh.child_user_id AS descendant_id
+                FROM descendants d
+                JOIN user_hierarchies uh
+                    ON uh.parent_user_id = d.descendant_id
+            )
+            SELECT d.ancestor_id, COALESCE(SUM(u.units), 0) AS units
             FROM descendants d
-            JOIN user_hierarchies uh
-                ON uh.parent_user_id = d.descendant_id
-        )
-        SELECT d.ancestor_id, COALESCE(SUM(u.units), 0) AS units
-        FROM descendants d
-        LEFT JOIN (
-            " . $unitsPerSeller->toSql() . "
-        ) u
-            ON u.sales_user_id = d.descendant_id
-        GROUP BY d.ancestor_id
-    ";
+            LEFT JOIN (
+                " . $unitsPerSeller->toSql() . "
+            ) u
+                ON u.sales_user_id = d.descendant_id
+            GROUP BY d.ancestor_id
+        ";
 
         $rows = DB::select($cteSql, $unitsPerSeller->getBindings());
 
         $unitsMap = collect($rows)
             ->mapWithKeys(fn($r) => [(int) $r->ancestor_id => (int) $r->units]);
+
+        return $targets
+            ->map(function ($t) use ($unitsMap) {
+                $id = (int) $t->id;
+
+                return [
+                    'id' => $id,
+                    'name' => (string) ($t->full_name ?: $t->name),
+                    'units' => (int) ($unitsMap[$id] ?? 0),
+                ];
+            })
+            ->sortBy([
+                ['units', 'desc'],
+                ['name', 'asc'],
+            ])
+            ->values()
+            ->take(10)
+            ->values()
+            ->map(fn($row, $idx) => [
+                'rank' => $idx + 1,
+                'id' => $row['id'],
+                'name' => $row['name'],
+                'units' => $row['units'],
+            ]);
+    }
+
+    /**
+     * Leaderboard personal saja (tanpa bawahan).
+     * Dipakai untuk Health Planner.
+     */
+    private function buildPersonalLeaderboard($targets, string $from, string $to)
+    {
+        $targetIds = $targets->pluck('id')->map(fn($v) => (int) $v)->values();
+
+        if ($targetIds->isEmpty()) {
+            return collect();
+        }
+
+        $unitsExpr = "
+            COALESCE(SUM(
+                CASE
+                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
+                    ELSE soi.qty
+                END
+            ), 0)
+        ";
+
+        $rows = DB::table('sales_orders as so')
+            ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
+            ->whereNull('so.deleted_at')
+            ->where('so.status', 'selesai')
+            ->whereNotNull('so.install_date')
+            ->whereDate('so.install_date', '>=', $from)
+            ->whereDate('so.install_date', '<=', $to)
+            ->whereIn('so.sales_user_id', $targetIds->all())
+            ->groupBy('so.sales_user_id')
+            ->select(
+                'so.sales_user_id',
+                DB::raw("{$unitsExpr} as units")
+            )
+            ->get();
+
+        $unitsMap = collect($rows)
+            ->mapWithKeys(fn($r) => [(int) $r->sales_user_id => (int) $r->units]);
 
         return $targets
             ->map(function ($t) use ($unitsMap) {
