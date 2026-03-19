@@ -4,15 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\Contest;
 use App\Models\User;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Spatie\Permission\Models\Role;
 use Illuminate\Validation\Rule;
-use Illuminate\Database\Query\Builder;
+use Spatie\Permission\Models\Role;
 
 class ContestController extends Controller
 {
@@ -32,16 +32,13 @@ class ContestController extends Controller
 
         // RULE (index):
         // - Admin/Head Admin: lihat semua kontes (all status)
-        // - Sales Manager: lihat kontes yg dia buat (all status) + kontes timnya yg status=active (published)
-        // - Health Manager: lihat kontes yg dia buat (all status) + kontes yg target HM-nya dia (status=active)
-        // - Health Planner: lihat kontes yg dia participant
-
-        $query = Contest::query()->with(['creator', 'creatorRole']);
+        // - Sales Manager: lihat kontes yg dia buat (all status) + kontes timnya yg status=active/ended
+        // - Health Manager: lihat kontes yg dia buat (all status) + kontes yg target HM-nya dia (status=active/ended)
+        // - Health Planner: lihat kontes active/ended yg dia participant + kontes yg dia buat sendiri (opsional)
 
         if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
-            // ✅ lihat semua kontes
+            // lihat semua
         } elseif ($user->hasRole('Sales Manager')) {
-            // HM direct child SM
             $hmIds = User::query()
                 ->whereIn('id', function ($q) use ($user) {
                     $q->select('child_user_id')
@@ -50,14 +47,12 @@ class ContestController extends Controller
                 })
                 ->whereHas('roles', fn($r) => $r->where('name', 'Health Manager'))
                 ->pluck('id')
-                ->map(fn($v) => (int)$v)
+                ->map(fn($v) => (int) $v)
                 ->all();
 
             $query->where(function ($w) use ($user, $hmIds) {
-                // ✅ kontes yang dia buat (status apa pun)
                 $w->where('created_by_user_id', $user->id);
 
-                // ✅ kontes active/ended yang target HM-nya ada di bawah dia
                 $w->orWhere(function ($w2) use ($hmIds) {
                     $w2->whereIn('status', ['active', 'ended']);
 
@@ -74,26 +69,25 @@ class ContestController extends Controller
                 });
             });
         } elseif ($user->hasRole('Health Manager')) {
-
             $query->where(function ($w) use ($user) {
-                // ✅ kontes yang dia buat
                 $w->where('created_by_user_id', $user->id);
 
-                // ✅ kontes active/ended yang target HM include dia
                 $w->orWhere(function ($w2) use ($user) {
                     $w2->whereIn('status', ['active', 'ended'])
-                        ->whereJsonContains('rules->target_hm_ids', (int)$user->id);
+                        ->whereJsonContains('rules->target_hm_ids', (int) $user->id);
                 });
             });
         } else {
-            // ✅ HP / role lain: hanya kontes active/ended yang dia participant
-            $query->whereIn('status', ['active', 'ended'])
-                ->whereHas('participants', function ($p) use ($user) {
-                    $p->where('users.id', $user->id);
+            $query->where(function ($w) use ($user) {
+                $w->where(function ($w2) use ($user) {
+                    $w2->whereIn('status', ['active', 'ended'])
+                        ->whereHas('participants', function ($p) use ($user) {
+                            $p->where('users.id', $user->id);
+                        });
                 });
 
-            // (opsional) kalau suatu saat HP bisa bikin kontes:
-            $query->orWhere('created_by_user_id', $user->id);
+                $w->orWhere('created_by_user_id', $user->id);
+            });
         }
 
         if ($q !== '') {
@@ -120,12 +114,10 @@ class ContestController extends Controller
         $user = $request->user();
         $productOptions = $this->getContestProductOptions();
 
-        // SM: tidak perlu pilih HM (auto downline)
         if ($user->hasRole('Sales Manager')) {
             return view('contests.create', compact('productOptions'));
         }
 
-        // Admin / Head Admin: bisa pilih HM mana saja
         if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
             $healthManagers = User::query()
                 ->whereHas('roles', fn($r) => $r->where('name', 'Health Manager'))
@@ -135,7 +127,6 @@ class ContestController extends Controller
             return view('contests.create', compact('healthManagers', 'productOptions'));
         }
 
-        // HM: pilih HM dalam 1 SM (atau minimal dirinya)
         if ($user->hasRole('Health Manager')) {
             $parentSmId = DB::table('user_hierarchies')
                 ->where('child_user_id', $user->id)
@@ -174,7 +165,12 @@ class ContestController extends Controller
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'max_install_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'target_unit' => ['required', 'integer', 'min:1'],
+            'target_unit' => [
+                'nullable',
+                'integer',
+                'min:1',
+                Rule::requiredIf(fn() => in_array($request->input('product_filter_type'), ['all', 'exclude'], true)),
+            ],
             'reward' => ['nullable', 'string', 'max:255'],
             'banner' => ['nullable', 'image', 'max:2048'],
 
@@ -183,6 +179,8 @@ class ContestController extends Controller
             'product_filter_type' => ['required', Rule::in(['all', 'specific', 'exclude'])],
             'product_ids' => ['nullable', 'array'],
             'product_ids.*' => ['string'],
+            'product_min_qtys' => ['nullable', 'array'],
+            'product_min_qtys.*' => ['nullable', 'integer', 'min:1'],
 
             'monthly_min_personal_ns' => [
                 'nullable',
@@ -200,7 +198,6 @@ class ContestController extends Controller
             ],
         ];
 
-        // HM/Admin/Head Admin: wajib pilih HM minimal 1
         if ($user->hasRole('Health Manager') || $user->hasAnyRole(['Admin', 'Head Admin'])) {
             $rules['hm_ids'] = ['required', 'array', 'min:1'];
             $rules['hm_ids.*'] = ['integer'];
@@ -218,14 +215,12 @@ class ContestController extends Controller
         }
 
         return DB::transaction(function () use ($data, $request, $user) {
-
             $bannerUrl = null;
             if ($request->hasFile('banner')) {
                 $path = $request->file('banner')->store('contests', 'public');
                 $bannerUrl = $path;
             }
 
-            // Tentukan HM target
             if ($user->hasRole('Sales Manager')) {
                 $selectedHmIds = User::query()
                     ->whereIn('id', function ($q) use ($user) {
@@ -242,10 +237,7 @@ class ContestController extends Controller
                 $selectedHmIds = array_values(array_unique(array_map('intval', $data['hm_ids'] ?? [])));
             }
 
-            // Ambil semua HP di bawah HM terpilih
             $hpIds = $this->getDescendantsByRole($selectedHmIds, 'Health Planner');
-
-            // ✅ Participants = HP ONLY
             $participantIds = array_values(array_unique($hpIds));
 
             $type = $data['type'] ?? 'leaderboard';
@@ -258,14 +250,22 @@ class ContestController extends Controller
                 $type = 'qualifier';
             }
 
-            $baseRules = [];
+            $productFilterType = $data['product_filter_type'] ?? 'all';
+            $productIds = array_values(array_unique($data['product_ids'] ?? []));
+            $productMinQtys = $this->normalizeContestProductMinQtys(
+                $productIds,
+                $data['product_min_qtys'] ?? []
+            );
 
-            // selalu simpan target HM supaya index() HM/SM bisa filter
-            $baseRules['target_hm_ids'] = $selectedHmIds;
+            $baseRules = [
+                'target_hm_ids' => $selectedHmIds,
+                'product_filter_type' => $productFilterType,
+                'product_ids' => $productIds,
+                'product_min_qtys' => $productMinQtys,
+            ];
 
             if ($isQualifier) {
                 $qualifierRules = [
-                    // simpan hanya kalau user isi
                     'monthly_min_personal_ns' => isset($data['monthly_min_personal_ns'])
                         ? (int) $data['monthly_min_personal_ns']
                         : null,
@@ -274,21 +274,13 @@ class ContestController extends Controller
                         ? (int) $data['monthly_min_direct_active_partner']
                         : null,
 
-                    // tetap ada buat definisi active partner
                     'direct_partner_active_min_personal_ns' => 1,
                     'active_partner_definition' => 'partner_personal_qty_min_1',
                     'partner_relation' => 'direct',
                 ];
 
-                // buang key yang null biar tidak dianggap syarat
                 $qualifierRules = array_filter($qualifierRules, fn($v) => $v !== null);
-
-                $productFilterType = $data['product_filter_type'] ?? 'all';
-                $productIds = array_values(array_unique($data['product_ids'] ?? []));
-
                 $baseRules = array_merge($baseRules, $qualifierRules);
-                $baseRules['product_filter_type'] = $productFilterType;
-                $baseRules['product_ids'] = $productIds;
             }
 
             $contest = Contest::create([
@@ -297,7 +289,7 @@ class ContestController extends Controller
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'max_install_date' => $data['max_install_date'] ?? null,
-                'target_unit' => $data['target_unit'],
+                'target_unit' => $data['target_unit'] ?? null,
                 'reward' => $data['reward'] ?? null,
                 'banner_url' => $bannerUrl,
                 'created_by_user_id' => $user->id,
@@ -307,12 +299,10 @@ class ContestController extends Controller
                 'rules' => !empty($baseRules) ? $baseRules : null,
             ]);
 
-            // Eligible roles: HM + HP (boleh tetap, untuk reference)
             $hmRoleId = Role::where('name', 'Health Manager')->value('id');
             $hpRoleId = Role::where('name', 'Health Planner')->value('id');
             $contest->eligibleRoles()->sync(array_values(array_filter([$hmRoleId, $hpRoleId])));
 
-            // Attach participants (pivot)
             $now = now();
             $attachData = [];
             foreach ($participantIds as $uid) {
@@ -327,62 +317,6 @@ class ContestController extends Controller
                 ->route('contests.index')
                 ->with('success', 'Kontes berhasil dibuat.');
         });
-    }
-
-    private function getDirectChildrenIds(int $parentUserId, ?string $roleName = null): array
-    {
-        $ids = DB::table('user_hierarchies')
-            ->where('parent_user_id', $parentUserId)
-            ->pluck('child_user_id')
-            ->map(fn($v) => (int) $v)
-            ->all();
-
-        if (!$roleName) return $ids;
-
-        return User::query()
-            ->whereIn('id', $ids ?: [0])
-            ->whereHas('roles', fn($q) => $q->where('name', $roleName))
-            ->pluck('id')
-            ->map(fn($v) => (int) $v)
-            ->all();
-    }
-
-    private function getDescendantsByRole(array $rootUserIds, string $roleName): array
-    {
-        $rootUserIds = array_values(array_unique(array_filter($rootUserIds)));
-
-        if (empty($rootUserIds)) return [];
-
-        $visited = [];
-        $queue = $rootUserIds;
-
-        while (!empty($queue)) {
-            $batch = $queue;
-            $queue = [];
-
-            $children = DB::table('user_hierarchies')
-                ->whereIn('parent_user_id', $batch)
-                ->pluck('child_user_id')
-                ->map(fn($v) => (int) $v)
-                ->all();
-
-            foreach ($children as $cid) {
-                if (!isset($visited[$cid])) {
-                    $visited[$cid] = true;
-                    $queue[] = $cid;
-                }
-            }
-        }
-
-        $allDescendantIds = array_keys($visited);
-        if (empty($allDescendantIds)) return [];
-
-        return User::query()
-            ->whereIn('id', $allDescendantIds)
-            ->whereHas('roles', fn($q) => $q->where('name', $roleName))
-            ->pluck('id')
-            ->map(fn($v) => (int) $v)
-            ->all();
     }
 
     /**
@@ -402,46 +336,36 @@ class ContestController extends Controller
         $hpIds = $hpParticipants->pluck('id')->all();
 
         $authUser = request()->user();
-
         $allParticipantHpIds = $hpIds;
 
-        // Admin/Head Admin: lihat semua peserta
         if ($authUser->hasAnyRole(['Admin', 'Head Admin'])) {
             $visibleHpIds = $allParticipantHpIds;
         } else {
-            // SM/HM/HP: hanya self (kalau HP) + semua downline HP
             $downlineHpIds = $this->getDescendantsByRole([(int) $authUser->id], 'Health Planner');
-
             $candidateIds = array_values(array_unique(array_merge([(int) $authUser->id], $downlineHpIds)));
-
-            // tampilkan hanya yang memang participant kontes ini
             $visibleHpIds = array_values(array_intersect($allParticipantHpIds, $candidateIds));
         }
 
-        // filter collection peserta yg dipakai buat evaluasi
         $hpParticipants = $hpParticipants->whereIn('id', $visibleHpIds)->values();
         $hpIds = $visibleHpIds;
 
         $rows = [];
         $months = [];
         $winners = [];
+        $productOptions = $this->getContestProductOptions();
 
         $type = $contest->type ?? 'leaderboard';
-        $dateBasis = $contest->date_basis ?? 'install_date';
         $rules = (array) ($contest->rules ?? []);
-        $isQualifier = ($type === 'qualifier') || !empty($rules);
+        $isQualifier = ($type === 'qualifier');
 
         if (empty($hpIds)) {
-            return view('contests.show', compact('contest', 'rows', 'months', 'winners'));
+            return view('contests.show', compact('contest', 'rows', 'months', 'winners', 'productOptions'));
         }
 
         $start = $contest->start_date?->copy()->startOfDay();
-        $end   = $contest->end_date?->copy()->endOfDay();
+        $end = $contest->end_date?->copy()->endOfDay();
         $maxInstallDate = ($contest->max_install_date ?? $contest->end_date)?->copy()->endOfDay();
 
-        // =========================
-        // ✅ MODE: QUALIFIER 133
-        // =========================
         if ($isQualifier) {
             $minPersonal = isset($rules['monthly_min_personal_ns'])
                 ? (int) $rules['monthly_min_personal_ns']
@@ -455,25 +379,15 @@ class ContestController extends Controller
 
             $months = $this->buildMonthRanges($start, $end);
 
-            // personal qty per bulan (SUM qty) untuk semua peserta HP
             $personalQtyByMonth = [];
             foreach ($months as $m) {
-                $query = DB::table('sales_orders')
-                    ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-                    ->whereIn('sales_orders.sales_user_id', $hpIds)
-                    ->where('sales_orders.status', 'selesai')
-                    ->whereBetween('sales_orders.key_in_at', [$m['from'], $m['to']])
-                    ->whereNotNull('sales_orders.install_date')
-                    ->where('sales_orders.install_date', '<=', $maxInstallDate);
-
-                $this->applyContestProductFilter($query, $rules);
-
-                $personalQtyByMonth[$m['key']] = $query
-                    ->groupBy('sales_orders.sales_user_id')
-                    ->selectRaw('sales_orders.sales_user_id, COALESCE(SUM(sales_order_items.qty),0) as total_qty')
-                    ->pluck('total_qty', 'sales_orders.sales_user_id')
-                    ->map(fn($v) => (int) $v)
-                    ->all();
+                $personalQtyByMonth[$m['key']] = $this->buildContestUserQtyMap(
+                    $hpIds,
+                    $m['from'],
+                    $m['to'],
+                    $maxInstallDate,
+                    $rules
+                );
             }
 
             $rows = $hpParticipants->map(function ($u) use (
@@ -486,15 +400,12 @@ class ContestController extends Controller
                 $perMonth = [];
                 $allEligible = true;
 
-                // direct partners = direct children role Health Planner
                 $directPartnerIds = $this->getDirectChildrenIds((int) $u->id, 'Health Planner');
 
                 foreach ($months as $m) {
                     $monthKey = $m['key'];
-
                     $personal = (int) (($personalQtyByMonth[$monthKey][$u->id] ?? 0));
 
-                    // active partner: partner dianggap active kalau qty >= minPartnerActive (default 1)
                     $activePartnerCount = 0;
                     if (!empty($directPartnerIds)) {
                         foreach ($directPartnerIds as $pid) {
@@ -506,15 +417,17 @@ class ContestController extends Controller
                     }
 
                     $passPersonal = ($minPersonal === null) ? true : ($personal >= $minPersonal);
-                    $passPartner  = ($minDirectActive === null) ? true : ($activePartnerCount >= $minDirectActive);
+                    $passPartner = ($minDirectActive === null) ? true : ($activePartnerCount >= $minDirectActive);
 
                     $eligibleMonth = $passPersonal && $passPartner;
-                    if (!$eligibleMonth) $allEligible = false;
+                    if (!$eligibleMonth) {
+                        $allEligible = false;
+                    }
 
                     $perMonth[] = [
                         'key' => $monthKey,
                         'label' => $m['label'],
-                        'personal_ns' => $personal, // legacy key untuk blade kamu
+                        'personal_ns' => $personal,
                         'active_partner' => $activePartnerCount,
                         'eligible' => $eligibleMonth,
                     ];
@@ -530,26 +443,16 @@ class ContestController extends Controller
 
             $winners = array_values(array_filter($rows, fn($r) => $r['is_winner'] === true));
 
-            return view('contests.show', compact('contest', 'rows', 'months', 'winners'));
+            return view('contests.show', compact('contest', 'rows', 'months', 'winners', 'productOptions'));
         }
 
-        // =========================
-        // ✅ MODE: LEADERBOARD
-        // =========================
-        $progressQuery = DB::table('sales_orders')
-            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-            ->whereIn('sales_orders.sales_user_id', $hpIds)
-            ->where('sales_orders.status', 'selesai')
-            ->whereBetween('sales_orders.key_in_at', [$start, $end])
-            ->whereNotNull('sales_orders.install_date')
-            ->where('sales_orders.install_date', '<=', $maxInstallDate);
-
-        $this->applyContestProductFilter($progressQuery, $rules);
-
-        $progressMap = $progressQuery
-            ->groupBy('sales_orders.sales_user_id')
-            ->selectRaw('sales_orders.sales_user_id, COALESCE(SUM(sales_order_items.qty),0) as total_unit')
-            ->pluck('total_unit', 'sales_orders.sales_user_id');
+        $progressMap = $this->buildContestUserQtyMap(
+            $hpIds,
+            $start,
+            $end,
+            $maxInstallDate,
+            $rules
+        );
 
         $target = (int) ($contest->target_unit ?? 0);
 
@@ -565,7 +468,6 @@ class ContestController extends Controller
             ];
         })->sortByDesc('done')->values()->all();
 
-        // rank with tie
         $rank = 0;
         $prev = null;
         foreach ($rows as $i => $row) {
@@ -576,35 +478,9 @@ class ContestController extends Controller
             $rows[$i]['rank'] = $rank;
         }
 
-        return view('contests.show', compact('contest', 'rows', 'months', 'winners'));
-    }
+        $productOptions = $this->getContestProductOptions();
 
-    private function buildMonthRanges($start, $end): array
-    {
-        if (!$start || !$end) return [];
-
-        $cursor = $start->copy()->startOfMonth();
-        $last = $end->copy()->startOfMonth();
-
-        $out = [];
-        while ($cursor <= $last) {
-            $from = $cursor->copy()->startOfMonth()->startOfDay();
-            $to = $cursor->copy()->endOfMonth()->endOfDay();
-
-            if ($from < $start) $from = $start->copy();
-            if ($to > $end) $to = $end->copy();
-
-            $out[] = [
-                'key' => $cursor->format('Y-m'),
-                'label' => $cursor->format('M Y'),
-                'from' => $from,
-                'to' => $to,
-            ];
-
-            $cursor->addMonthNoOverflow();
-        }
-
-        return $out;
+        return view('contests.show', compact('contest', 'rows', 'months', 'winners', 'productOptions'));
     }
 
     /**
@@ -623,12 +499,10 @@ class ContestController extends Controller
         $user = $request->user();
         $productOptions = $this->getContestProductOptions();
 
-        // SM: tidak perlu pilih HM (auto)
         if ($user->hasRole('Sales Manager')) {
             return view('contests.edit', compact('contest', 'productOptions'));
         }
 
-        // Admin / Head Admin: boleh pilih HM mana saja
         if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
             $healthManagers = User::query()
                 ->whereHas('roles', fn($r) => $r->where('name', 'Health Manager'))
@@ -640,7 +514,6 @@ class ContestController extends Controller
             return view('contests.edit', compact('contest', 'healthManagers', 'selectedHmIds', 'productOptions'));
         }
 
-        // HM: pilih HM dalam 1 SM (atau minimal dirinya)
         if ($user->hasRole('Health Manager')) {
             $parentSmId = DB::table('user_hierarchies')
                 ->where('child_user_id', $user->id)
@@ -689,7 +562,12 @@ class ContestController extends Controller
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'max_install_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'target_unit' => ['required', 'integer', 'min:1'],
+            'target_unit' => [
+                'nullable',
+                'integer',
+                'min:1',
+                Rule::requiredIf(fn() => in_array($request->input('product_filter_type'), ['all', 'exclude'], true)),
+            ],
             'reward' => ['nullable', 'string', 'max:255'],
             'banner' => ['nullable', 'image', 'max:2048'],
             'remove_banner' => ['nullable', 'boolean'],
@@ -699,6 +577,8 @@ class ContestController extends Controller
             'product_filter_type' => ['required', Rule::in(['all', 'specific', 'exclude'])],
             'product_ids' => ['nullable', 'array'],
             'product_ids.*' => ['string'],
+            'product_min_qtys' => ['nullable', 'array'],
+            'product_min_qtys.*' => ['nullable', 'integer', 'min:1'],
 
             'monthly_min_personal_ns' => [
                 'nullable',
@@ -716,7 +596,6 @@ class ContestController extends Controller
             ],
         ];
 
-        // HM/Admin/Head Admin: boleh ubah target HM (minimal 1)
         if ($user->hasRole('Health Manager') || $user->hasAnyRole(['Admin', 'Head Admin'])) {
             $rules['hm_ids'] = ['required', 'array', 'min:1'];
             $rules['hm_ids.*'] = ['integer'];
@@ -734,7 +613,6 @@ class ContestController extends Controller
         }
 
         return DB::transaction(function () use ($data, $request, $user, $contest) {
-
             $bannerUrl = $contest->banner_url;
 
             if (($data['remove_banner'] ?? false) && $bannerUrl) {
@@ -746,7 +624,6 @@ class ContestController extends Controller
                 $bannerUrl = $path;
             }
 
-            // Tentukan HM target
             if ($user->hasRole('Sales Manager')) {
                 $selectedHmIds = User::query()
                     ->whereIn('id', function ($q) use ($user) {
@@ -763,13 +640,9 @@ class ContestController extends Controller
                 $selectedHmIds = array_values(array_unique(array_map('intval', $data['hm_ids'] ?? [])));
             }
 
-            // Ambil HP di bawah HM target
             $hpIds = $this->getDescendantsByRole($selectedHmIds, 'Health Planner');
-
-            // ✅ Participants = HP ONLY
             $participantIds = array_values(array_unique($hpIds));
 
-            $dateBasis = $data['date_basis'] ?? ($contest->date_basis ?? 'install_date');
             $type = $data['type'] ?? ($contest->type ?? 'leaderboard');
 
             $isQualifier = ($type === 'qualifier')
@@ -780,12 +653,20 @@ class ContestController extends Controller
                 $type = 'qualifier';
             }
 
-            // merge rules lama supaya target_hm_ids tidak hilang
+            $productFilterType = $data['product_filter_type'] ?? 'all';
+            $productIds = array_values(array_unique($data['product_ids'] ?? []));
+            $productMinQtys = $this->normalizeContestProductMinQtys(
+                $productIds,
+                $data['product_min_qtys'] ?? []
+            );
+
             $oldRules = (array) ($contest->rules ?? []);
             $newRules = $oldRules;
 
-            // selalu update target HM
             $newRules['target_hm_ids'] = $selectedHmIds;
+            $newRules['product_filter_type'] = $productFilterType;
+            $newRules['product_ids'] = $productIds;
+            $newRules['product_min_qtys'] = $productMinQtys;
 
             if ($isQualifier) {
                 $qualifierRules = [
@@ -803,13 +684,15 @@ class ContestController extends Controller
                 ];
 
                 $qualifierRules = array_filter($qualifierRules, fn($v) => $v !== null);
-
-                $productFilterType = $data['product_filter_type'] ?? 'all';
-                $productIds = array_values(array_unique($data['product_ids'] ?? []));
-
                 $newRules = array_merge($newRules, $qualifierRules);
-                $newRules['product_filter_type'] = $productFilterType;
-                $newRules['product_ids'] = $productIds;
+            } else {
+                unset(
+                    $newRules['monthly_min_personal_ns'],
+                    $newRules['monthly_min_direct_active_partner'],
+                    $newRules['direct_partner_active_min_personal_ns'],
+                    $newRules['active_partner_definition'],
+                    $newRules['partner_relation']
+                );
             }
 
             $contest->update([
@@ -818,15 +701,13 @@ class ContestController extends Controller
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'max_install_date' => $data['max_install_date'] ?? null,
-                'target_unit' => $data['target_unit'],
+                'target_unit' => $data['target_unit'] ?? null,
                 'reward' => $data['reward'] ?? null,
                 'banner_url' => $bannerUrl,
-                'date_basis' => $dateBasis,
                 'type' => $type,
                 'rules' => !empty($newRules) ? $newRules : null,
             ]);
 
-            // sync participants
             $now = now();
             $attachData = [];
             foreach ($participantIds as $uid) {
@@ -884,6 +765,103 @@ class ContestController extends Controller
         return back()->with('success', 'Kontes berhasil di-unpublish.');
     }
 
+    private function getDirectChildrenIds(int $parentUserId, ?string $roleName = null): array
+    {
+        $ids = DB::table('user_hierarchies')
+            ->where('parent_user_id', $parentUserId)
+            ->pluck('child_user_id')
+            ->map(fn($v) => (int) $v)
+            ->all();
+
+        if (!$roleName) {
+            return $ids;
+        }
+
+        return User::query()
+            ->whereIn('id', $ids ?: [0])
+            ->whereHas('roles', fn($q) => $q->where('name', $roleName))
+            ->pluck('id')
+            ->map(fn($v) => (int) $v)
+            ->all();
+    }
+
+    private function getDescendantsByRole(array $rootUserIds, string $roleName): array
+    {
+        $rootUserIds = array_values(array_unique(array_filter($rootUserIds)));
+
+        if (empty($rootUserIds)) {
+            return [];
+        }
+
+        $visited = [];
+        $queue = $rootUserIds;
+
+        while (!empty($queue)) {
+            $batch = $queue;
+            $queue = [];
+
+            $children = DB::table('user_hierarchies')
+                ->whereIn('parent_user_id', $batch)
+                ->pluck('child_user_id')
+                ->map(fn($v) => (int) $v)
+                ->all();
+
+            foreach ($children as $cid) {
+                if (!isset($visited[$cid])) {
+                    $visited[$cid] = true;
+                    $queue[] = $cid;
+                }
+            }
+        }
+
+        $allDescendantIds = array_keys($visited);
+        if (empty($allDescendantIds)) {
+            return [];
+        }
+
+        return User::query()
+            ->whereIn('id', $allDescendantIds)
+            ->whereHas('roles', fn($q) => $q->where('name', $roleName))
+            ->pluck('id')
+            ->map(fn($v) => (int) $v)
+            ->all();
+    }
+
+    private function buildMonthRanges($start, $end): array
+    {
+        if (!$start || !$end) {
+            return [];
+        }
+
+        $cursor = $start->copy()->startOfMonth();
+        $last = $end->copy()->startOfMonth();
+
+        $out = [];
+        while ($cursor <= $last) {
+            $from = $cursor->copy()->startOfMonth()->startOfDay();
+            $to = $cursor->copy()->endOfMonth()->endOfDay();
+
+            if ($from < $start) {
+                $from = $start->copy();
+            }
+
+            if ($to > $end) {
+                $to = $end->copy();
+            }
+
+            $out[] = [
+                'key' => $cursor->format('Y-m'),
+                'label' => $cursor->format('M Y'),
+                'from' => $from,
+                'to' => $to,
+            ];
+
+            $cursor->addMonthNoOverflow();
+        }
+
+        return $out;
+    }
+
     private function getContestProductOptions()
     {
         return DB::table('products')
@@ -914,7 +892,19 @@ class ContestController extends Controller
         return array_values(array_unique(array_filter($ids)));
     }
 
-    private function applyContestProductFilter(\Illuminate\Database\Query\Builder $query, array $rules): void
+    private function normalizeContestProductMinQtys(array $productIds, array $productMinQtys = []): array
+    {
+        $normalized = [];
+
+        foreach ($productIds as $value) {
+            $minQty = (int) ($productMinQtys[$value] ?? 1);
+            $normalized[$value] = max($minQty, 1);
+        }
+
+        return $normalized;
+    }
+
+    private function applyContestProductFilter(Builder $query, array $rules): void
     {
         $filterType = $rules['product_filter_type'] ?? 'all';
         $rawIds = (array) ($rules['product_ids'] ?? []);
@@ -935,5 +925,99 @@ class ContestController extends Controller
                     ->orWhereNotIn('sales_order_items.product_id', $productIds);
             });
         }
+    }
+
+    private function buildContestUserQtyMap(array $hpIds, $from, $to, $maxInstallDate, array $rules): array
+    {
+        if (empty($hpIds)) {
+            return [];
+        }
+
+        $filterType = $rules['product_filter_type'] ?? 'all';
+        $rawIds = (array) ($rules['product_ids'] ?? []);
+        $productIds = $this->normalizeContestProductIds($rawIds);
+        $productMinQtysRaw = (array) ($rules['product_min_qtys'] ?? []);
+        $productMinQtys = $this->normalizeContestProductMinQtys($rawIds, $productMinQtysRaw);
+
+        // total isi bundle per bundle_id
+        $bundleQtySubquery = DB::table('bundle_items')
+            ->selectRaw('bundle_id, COALESCE(SUM(qty), 0) as bundle_total_qty')
+            ->groupBy('bundle_id');
+
+        $baseQuery = DB::table('sales_orders')
+            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+            ->join('products', 'products.id', '=', 'sales_order_items.product_id')
+            ->leftJoinSub($bundleQtySubquery, 'bundle_qty_map', function ($join) {
+                $join->on('bundle_qty_map.bundle_id', '=', 'sales_order_items.product_id');
+            })
+            ->whereIn('sales_orders.sales_user_id', $hpIds)
+            ->where('sales_orders.status', 'selesai')
+            ->whereBetween('sales_orders.key_in_at', [$from, $to])
+            ->whereNotNull('sales_orders.install_date')
+            ->where('sales_orders.install_date', '<=', $maxInstallDate);
+
+        // filter produk untuk specific / exclude
+        $this->applyContestProductFilter($baseQuery, $rules);
+
+        // qty efektif:
+        // - produk biasa => sales_order_items.qty
+        // - bundle => sales_order_items.qty * total isi bundle
+        $effectiveQtyExpr = "
+        CASE
+            WHEN products.type = 'bundle'
+                THEN sales_order_items.qty * COALESCE(NULLIF(bundle_qty_map.bundle_total_qty, 0), 1)
+            ELSE sales_order_items.qty
+        END
+    ";
+
+        // kalau bukan specific, atau tidak ada min qty produk, cukup jumlahkan qty efektif
+        if ($filterType !== 'specific' || empty($productIds) || empty($productMinQtys)) {
+            return $baseQuery
+                ->groupBy('sales_orders.sales_user_id')
+                ->selectRaw("
+                sales_orders.sales_user_id,
+                COALESCE(SUM({$effectiveQtyExpr}), 0) as total_qty
+            ")
+                ->pluck('total_qty', 'sales_orders.sales_user_id')
+                ->map(fn($v) => (int) $v)
+                ->all();
+        }
+
+        // untuk specific + min qty, hitung per user per product dulu
+        $perProductRows = (clone $baseQuery)
+            ->groupBy('sales_orders.sales_user_id', 'sales_order_items.product_id')
+            ->selectRaw("
+            sales_orders.sales_user_id,
+            sales_order_items.product_id,
+            COALESCE(SUM({$effectiveQtyExpr}), 0) as total_qty
+        ")
+            ->get();
+
+        $userProductQtyMap = [];
+        foreach ($perProductRows as $row) {
+            $userId = (int) $row->sales_user_id;
+            $productId = (int) $row->product_id;
+            $userProductQtyMap[$userId][$productId] = (int) $row->total_qty;
+        }
+
+        $result = [];
+        foreach ($hpIds as $userId) {
+            $userId = (int) $userId;
+            $sum = 0;
+
+            foreach ($productIds as $productId) {
+                $rawKey = 'product:' . $productId;
+                $qty = (int) ($userProductQtyMap[$userId][$productId] ?? 0);
+                $minQty = (int) ($productMinQtys[$rawKey] ?? 1);
+
+                if ($qty >= $minQty) {
+                    $sum += $qty;
+                }
+            }
+
+            $result[$userId] = $sum;
+        }
+
+        return $result;
     }
 }
