@@ -352,6 +352,7 @@ class ContestController extends Controller
         $rows = [];
         $months = [];
         $winners = [];
+        $winnerNames = [];
         $productOptions = $this->getContestProductOptions();
 
         $type = $contest->type ?? 'leaderboard';
@@ -359,7 +360,14 @@ class ContestController extends Controller
         $isQualifier = ($type === 'qualifier');
 
         if (empty($hpIds)) {
-            return view('contests.show', compact('contest', 'rows', 'months', 'winners', 'productOptions'));
+            return view('contests.show', compact(
+                'contest',
+                'rows',
+                'months',
+                'winners',
+                'winnerNames',
+                'productOptions'
+            ));
         }
 
         $start = $contest->start_date?->copy()->startOfDay();
@@ -442,8 +450,16 @@ class ContestController extends Controller
             })->values()->all();
 
             $winners = array_values(array_filter($rows, fn($r) => $r['is_winner'] === true));
+            $winnerNames = array_map(fn($row) => $row['name'], $winners);
 
-            return view('contests.show', compact('contest', 'rows', 'months', 'winners', 'productOptions'));
+            return view('contests.show', compact(
+                'contest',
+                'rows',
+                'months',
+                'winners',
+                'winnerNames',
+                'productOptions'
+            ));
         }
 
         $progressMap = $this->buildContestUserQtyMap(
@@ -465,6 +481,7 @@ class ContestController extends Controller
                 'name' => $u->name,
                 'done' => $done,
                 'pct' => $pct,
+                'is_winner' => $target > 0 ? $done >= $target : false,
             ];
         })->sortByDesc('done')->values()->all();
 
@@ -478,9 +495,17 @@ class ContestController extends Controller
             $rows[$i]['rank'] = $rank;
         }
 
-        $productOptions = $this->getContestProductOptions();
+        $winners = array_values(array_filter($rows, fn($row) => ($row['is_winner'] ?? false) === true));
+        $winnerNames = array_map(fn($row) => $row['name'], $winners);
 
-        return view('contests.show', compact('contest', 'rows', 'months', 'winners', 'productOptions'));
+        return view('contests.show', compact(
+            'contest',
+            'rows',
+            'months',
+            'winners',
+            'winnerNames',
+            'productOptions'
+        ));
     }
 
     /**

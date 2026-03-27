@@ -245,6 +245,44 @@
         </div>
     </div>
 
+    <div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <h3 class="text-lg font-semibold text-amber-900">Nama Pemenang Saat Ini</h3>
+                <p class="mt-1 text-sm text-amber-700">
+                    @if (($contest->type ?? 'leaderboard') === 'qualifier')
+                        Peserta yang lolos di semua bulan selama periode kontes.
+                    @else
+                        Peserta dengan peringkat tertinggi saat ini.
+                    @endif
+                </p>
+            </div>
+
+            <div class="rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-700">
+                {{ count($winnerNames ?? []) }} pemenang
+            </div>
+        </div>
+
+        <div class="mt-4">
+            @if (!empty($winnerNames))
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    @foreach ($winnerNames as $name)
+                        <div class="rounded-xl border border-amber-200 bg-white px-4 py-3 shadow-sm">
+                            <div class="text-sm text-gray-500">Pemenang</div>
+                            <div class="mt-1 font-semibold text-gray-900">
+                                {{ $name }}
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @else
+                <div class="rounded-xl border border-dashed border-amber-300 bg-white px-4 py-6 text-sm text-amber-700">
+                    Belum ada pemenang untuk kontes ini.
+                </div>
+            @endif
+        </div>
+    </div>
+
     @if (($contest->status ?? 'draft') !== 'draft')
         <div class="mt-6 overflow-hidden rounded-2xl border bg-white">
             <div class="border-b p-4">
