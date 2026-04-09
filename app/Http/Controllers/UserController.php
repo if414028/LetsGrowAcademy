@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use App\Models\SalesOrder;
+use App\Models\PerformanceCutoff;
+use Carbon\Carbon;
 
 class UserController extends Controller
 {
@@ -88,7 +90,22 @@ class UserController extends Controller
 
         $childrenCount = $directReports->count();
 
-        $downlineTree = $this->buildDownlineTree($user->id);
+        [$from, $to, $isManual] = $this->normalizeDateRange(
+            request()->get('from'),
+            request()->get('to')
+        );
+
+        $cutoff = PerformanceCutoff::current();
+
+        $defaultFrom = $cutoff?->start_date ?? Carbon::now()->startOfMonth()->subMonth()->toDateString();
+        $defaultTo   = $cutoff?->end_date   ?? Carbon::now()->endOfMonth()->addMonth()->toDateString();
+
+        if (!$isManual) {
+            $from = $defaultFrom;
+            $to   = $defaultTo;
+        }
+
+        $downlineTree = $this->buildDownlineTree($user->id, $from, $to, $isManual);
 
         return view('users.show', compact(
             'user',
@@ -670,7 +687,7 @@ class UserController extends Controller
         return $requestedRole;
     }
 
-    private function buildDownlineTree(int $rootUserId): array
+    private function buildDownlineTree(int $rootUserId, string $from, string $to, bool $isManual): array
     {
         // Ambil semua edge hierarchy untuk subtree rootUserId (MySQL 8+)
         $rows = DB::select("
@@ -708,22 +725,59 @@ class UserController extends Controller
             ->get()
             ->keyBy('id');
 
-        // ====== AGGREGATE SALES ORDER METRICS (1x query) ======
-        $keyInByUser = SalesOrder::query()
-            ->select('sales_user_id', DB::raw('COUNT(*) as cnt'))
-            ->whereIn('sales_user_id', $userIds)
-            ->whereRaw('LOWER(ccp_status) = ?', ['menunggu pengecekan'])
-            ->whereRaw('LOWER(status) = ?', ['menunggu verifikasi'])
-            ->where('is_recurring', 0)
-            ->groupBy('sales_user_id')
-            ->pluck('cnt', 'sales_user_id'); // [sales_user_id => cnt]
+        // ======================================
+        // Helper units (sama seperti PerformanceController)
+        // ======================================
+        $joinUnits = function ($q, string $soAlias = 'so') {
+            return $q
+                ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
+                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
+        };
 
-        $netSalesByUser = SalesOrder::query()
-            ->select('sales_user_id', DB::raw('COUNT(*) as cnt'))
-            ->whereIn('sales_user_id', $userIds)
-            ->where('status', 'selesai')
-            ->groupBy('sales_user_id')
-            ->pluck('cnt', 'sales_user_id'); // [sales_user_id => cnt]
+        $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
+
+        // ======================================
+        // Aggregate metrics per user
+        // - total_key_in  => sama seperti PerformanceController summary
+        // - total_net_sales => sama seperti total_sudah_install
+        // - filter cutoff/manual date juga sama
+        // ======================================
+        $metricsQ = DB::table('sales_orders as so')
+            ->whereNull('so.deleted_at')
+            ->whereIn('so.sales_user_id', $userIds);
+
+        if ($isManual) {
+            $this->applyPerformanceScopeFilterForUserTree($metricsQ, $from, $to, false);
+        } else {
+            $this->applyPerformanceScopeFilterForUserTree($metricsQ, $from, $to, true);
+        }
+
+        $metricsQ = $joinUnits($metricsQ, 'so');
+
+        $metricsRows = $metricsQ
+            ->selectRaw("
+            so.sales_user_id,
+
+            COALESCE(SUM(
+                CASE
+                    WHEN COALESCE(so.is_recurring, 0) = 0
+                    AND so.ccp_status = 'menunggu pengecekan'
+                    AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ), 0) as total_key_in,
+
+            COALESCE(SUM(
+                CASE
+                    WHEN so.status = 'selesai'
+                    THEN {$rowUnitExpr} ELSE 0
+                END
+            ), 0) as total_net_sales
+        ")
+            ->groupBy('so.sales_user_id')
+            ->get()
+            ->keyBy('sales_user_id');
 
         // adjacency: parent -> [child...]
         $childrenByParent = [];
@@ -732,12 +786,14 @@ class UserController extends Controller
         }
 
         // builder node rekursif
-        $buildNode = function ($userId) use (&$buildNode, $users, $childrenByParent, $keyInByUser, $netSalesByUser) {
+        $buildNode = function ($userId) use (&$buildNode, $users, $childrenByParent, $metricsRows) {
             $u = $users->get($userId);
 
             if (!$u) {
                 return null;
             }
+
+            $metric = $metricsRows->get($u->id);
 
             $children = collect($childrenByParent[$userId] ?? [])
                 ->map(fn($cid) => $buildNode($cid))
@@ -752,9 +808,8 @@ class UserController extends Controller
                 'photo' => $u->photo,
                 'role' => $u->getRoleNames()->first(),
 
-                // ✅ metrics
-                'total_key_in' => (int) ($keyInByUser[$u->id] ?? 0),
-                'total_net_sales' => (int) ($netSalesByUser[$u->id] ?? 0),
+                'total_key_in' => (int) ($metric->total_key_in ?? 0),
+                'total_net_sales' => (int) ($metric->total_net_sales ?? 0),
 
                 'children' => $children,
             ];
@@ -767,6 +822,78 @@ class UserController extends Controller
             'photo' => null,
             'children' => [],
         ];
+    }
+
+    private function normalizeDateRange(?string $from, ?string $to): array
+    {
+        $from = trim((string) $from);
+        $to   = trim((string) $to);
+
+        $from = $from !== '' ? $from : null;
+        $to   = $to !== '' ? $to : null;
+
+        $isManual = (bool) ($from || $to);
+
+        if ($isManual) {
+            if ($from && !$to) $to = Carbon::parse($from)->endOfMonth()->toDateString();
+            if (!$from && $to) $from = Carbon::parse($to)->startOfMonth()->toDateString();
+        }
+
+        return [$from, $to, $isManual];
+    }
+
+    private function applyPerformanceScopeFilterForUserTree($q, string $from, string $to, bool $withCarryOver = true): void
+    {
+        $carryFrom = Carbon::parse($from)->subMonthNoOverflow()->toDateString();
+
+        $q->where(function ($w) use ($from, $to, $carryFrom, $withCarryOver) {
+            // A. SO key-in dalam periode
+            $w->where(function ($a) use ($from, $to) {
+                $a->whereNotNull('so.key_in_at')
+                    ->whereDate('so.key_in_at', '>=', $from)
+                    ->whereDate('so.key_in_at', '<=', $to);
+            });
+
+            // B. SO selesai dan install dalam periode
+            $w->orWhere(function ($a) use ($from, $to) {
+                $a->where('so.status', 'selesai')
+                    ->whereNotNull('so.install_date')
+                    ->whereDate('so.install_date', '>=', $from)
+                    ->whereDate('so.install_date', '<=', $to);
+            });
+
+            // C. Carry over recurring dari periode sebelumnya
+            if ($withCarryOver) {
+                $w->orWhere(function ($x) use ($carryFrom, $from) {
+                    $x->whereNotNull('so.key_in_at')
+                        ->whereDate('so.key_in_at', '>=', $carryFrom)
+                        ->whereDate('so.key_in_at', '<', $from)
+                        ->where(function ($carry) {
+                            $carry
+                                ->where(function ($a) {
+                                    $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                        ->where('so.ccp_status', 'menunggu pengecekan')
+                                        ->where('so.status', 'menunggu verifikasi');
+                                })
+                                ->orWhere(function ($a) {
+                                    $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                        ->where('so.ccp_status', 'disetujui')
+                                        ->where('so.status', 'menunggu jadwal');
+                                })
+                                ->orWhere(function ($a) {
+                                    $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                        ->where('so.ccp_status', 'disetujui')
+                                        ->where('so.status', 'dijadwalkan');
+                                })
+                                ->orWhere(function ($a) {
+                                    $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
+                                        ->where('so.ccp_status', 'disetujui')
+                                        ->whereIn('so.status', ['ditunda', 'gagal penelponan']);
+                                });
+                        });
+                });
+            }
+        });
     }
 
     private function isDownliner(int $rootUserId, int $targetUserId): bool
