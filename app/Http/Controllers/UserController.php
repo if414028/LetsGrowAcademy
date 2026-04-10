@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PerformanceCutoff;
+use App\Models\SalesOrder;
 use App\Models\User;
 use App\Models\UserHierarchy;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Validator;
-use App\Models\SalesOrder;
-use App\Models\PerformanceCutoff;
-use Carbon\Carbon;
 
 class UserController extends Controller
 {
@@ -29,7 +29,6 @@ class UserController extends Controller
             abort(403, 'Kamu tidak punya akses untuk mengubah akun Head Admin.');
         }
     }
-
 
     public function index(Request $request)
     {
@@ -61,7 +60,6 @@ class UserController extends Controller
             }
         }
 
-
         // Admin tidak boleh lihat Head Admin
         $this->denyIfTargetIsHeadAdmin($user, $authUser);
 
@@ -69,17 +67,16 @@ class UserController extends Controller
         $user->load('roles');
 
         // Parent (referrer)
-        $parentHierarchy = \App\Models\UserHierarchy::with('parentUser')
+        $parentHierarchy = UserHierarchy::with('parentUser')
             ->where('child_user_id', $user->id)
             ->first();
 
         $parentUser = $parentHierarchy?->parentUser;
 
-        $hmUser = null;
         $hmUser = $this->findHealthManagerForUser($user->id);
 
         // Direct reports (bawahan langsung)
-        $childHierarchies = \App\Models\UserHierarchy::with('childUser.roles')
+        $childHierarchies = UserHierarchy::with('childUser.roles')
             ->where('parent_user_id', $user->id)
             ->orderByDesc('id')
             ->get();
@@ -160,11 +157,10 @@ class UserController extends Controller
             'city_of_domicile' => ['nullable', 'string', 'max:255'],
 
             // uploads
-            'photo' => ['nullable', 'image', 'max:2048'], // 2MB
-            'id_card' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'], // 4MB
+            'photo' => ['nullable', 'image', 'max:2048'],
+            'id_card' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:4096'],
         ]);
 
-        // ambil referrer + role
         $referrer = User::with('roles')->findOrFail($validated['referrer_user_id']);
 
         $rankMap = config('roles.rank');
@@ -179,22 +175,19 @@ class UserController extends Controller
                 ->withInput();
         }
 
-        // referrer harus punya role valid
         if (!$refRole || !isset($rankMap[$refRole])) {
             return back()
                 ->withErrors(['referrer_user_id' => 'Referrer belum punya role yang valid.'])
                 ->withInput();
         }
 
-        // role baru harus dikenal
         if (!isset($rankMap[$newRole])) {
             return back()
                 ->withErrors(['role' => 'Role tidak dikenali di config roles.rank'])
                 ->withInput();
         }
 
-        // rule: role baru tidak boleh lebih tinggi dari referrer
-        // rank kecil = lebih tinggi, jadi newRole harus rank >= refRole
+        // role baru tidak boleh lebih tinggi dari referrer
         if ($refRole === 'Health Planner') {
             $newRole = 'Health Planner';
         } else {
@@ -205,11 +198,9 @@ class UserController extends Controller
             }
         }
 
-        // upload files (simpan path di storage/app/public/...)
         $photoPath = $request->file('photo')?->store('users/photos', 'public');
         $idCardPath = $request->file('id_card')?->store('users/id-cards', 'public');
 
-        // create user
         $user = User::create([
             'name' => $validated['name'],
             'full_name' => $validated['full_name'] ?? null,
@@ -227,10 +218,8 @@ class UserController extends Controller
             'id_card' => $idCardPath,
         ]);
 
-        // assign role
         $user->assignRole($newRole);
 
-        // simpan hierarchy: referrer sebagai parent, user baru sebagai child
         UserHierarchy::create([
             'parent_user_id' => $referrer->id,
             'child_user_id' => $user->id,
@@ -252,9 +241,19 @@ class UserController extends Controller
         $this->denyIfTargetIsHeadAdmin($user, $authUser);
 
         $user->load('roles');
-        $roles = Role::query()->orderBy('name')->get();
 
-        return view('users.edit', compact('user', 'roles'));
+        $roles = Role::query()
+            ->orderBy('name')
+            ->when(!$authUser->hasRole('Head Admin'), function ($q) {
+                $q->where('name', '!=', 'Head Admin');
+            })
+            ->get();
+
+        $currentReferrer = UserHierarchy::with('parentUser.roles')
+            ->where('child_user_id', $user->id)
+            ->first()?->parentUser;
+
+        return view('users.edit', compact('user', 'roles', 'currentReferrer'));
     }
 
     public function update(Request $request, User $user)
@@ -268,7 +267,6 @@ class UserController extends Controller
         // Admin tidak boleh update Head Admin
         $this->denyIfTargetIsHeadAdmin($user, $authUser);
 
-
         // =========================
         // NON-ADMIN (self update)
         // =========================
@@ -279,7 +277,6 @@ class UserController extends Controller
                 'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             ]);
 
-            // uploads
             if ($request->hasFile('photo')) {
                 $validated['photo'] = $request->file('photo')->store('users/photos', 'public');
             }
@@ -288,7 +285,6 @@ class UserController extends Controller
                 $validated['id_card'] = $request->file('id_card')->store('users/id-cards', 'public');
             }
 
-            // password
             if (empty($validated['password'] ?? null)) {
                 unset($validated['password']);
             } else {
@@ -324,8 +320,9 @@ class UserController extends Controller
             'date_of_birth' => ['nullable', 'date'],
             'join_date' => ['nullable', 'date'],
 
-            // role
+            // role & referrer
             'role' => ['required', 'string', 'exists:roles,name'],
+            'referrer_user_id' => ['required', 'exists:users,id'],
 
             // uploads
             'photo' => ['nullable', 'image', 'max:2048'],
@@ -335,17 +332,18 @@ class UserController extends Controller
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
-        // uploads
         if ($request->hasFile('photo')) {
             $validated['photo'] = $request->file('photo')->store('users/photos', 'public');
         }
+
         if ($request->hasFile('id_card')) {
             $validated['id_card'] = $request->file('id_card')->store('users/id-cards', 'public');
         }
 
-        // role bukan kolom users
         $role = $validated['role'];
-        unset($validated['role']);
+        $referrerId = (int) $validated['referrer_user_id'];
+
+        unset($validated['role'], $validated['referrer_user_id']);
 
         if ($role === 'Head Admin' && !$authUser->hasRole('Head Admin')) {
             return back()
@@ -353,16 +351,56 @@ class UserController extends Controller
                 ->withInput();
         }
 
+        $referrer = User::with('roles')->findOrFail($referrerId);
 
-        // password
+        if ($referrer->id === $user->id) {
+            return back()
+                ->withErrors(['referrer_user_id' => 'Referrer tidak boleh diri sendiri.'])
+                ->withInput();
+        }
+
+        // Cegah loop: referrer tidak boleh anak/downline dari user ini
+        if ($this->isDescendantOrSelf($referrer->id, $user->id)) {
+            return back()
+                ->withErrors(['referrer_user_id' => 'Referrer tidak boleh berasal dari downline user ini.'])
+                ->withInput();
+        }
+
+        $rankMap = config('roles.rank');
+
+        $resolvedRoleOrError = $this->resolveRoleByReferrerRule(
+            referrer: $referrer,
+            requestedRole: $role,
+            actor: $authUser,
+            rankMap: $rankMap
+        );
+
+        if (is_string($resolvedRoleOrError) && str_starts_with($resolvedRoleOrError, 'ERROR:')) {
+            return back()
+                ->withErrors(['referrer_user_id' => mb_substr($resolvedRoleOrError, 6)])
+                ->withInput();
+        }
+
+        $role = $resolvedRoleOrError;
+
         if (empty($validated['password'] ?? null)) {
             unset($validated['password']);
         } else {
             $validated['password'] = Hash::make($validated['password']);
         }
 
-        $user->update($validated);
-        $user->syncRoles([$role]);
+        DB::transaction(function () use ($user, $validated, $role, $referrer) {
+            $user->update($validated);
+            $user->syncRoles([$role]);
+
+            UserHierarchy::updateOrCreate(
+                ['child_user_id' => $user->id],
+                [
+                    'parent_user_id' => $referrer->id,
+                    'relation_type' => 'referral',
+                ]
+            );
+        });
 
         return redirect()->route('users.show', $user)->with('success', 'User updated successfully.');
     }
@@ -388,8 +426,9 @@ class UserController extends Controller
             ->get()
             ->map(function ($u) use ($roleRanks) {
                 $role = $u->getRoleNames()->first();
+
                 return [
-                    'id'   => $u->id,
+                    'id' => $u->id,
                     'name' => $u->name,
                     'email' => $u->email,
                     'role' => $role,
@@ -420,7 +459,6 @@ class UserController extends Controller
             abort(403);
         }
 
-        // CSV header + contoh 1 baris
         $lines = [
             "name,full_name,email,password,role,referrer_email,status,dst_code,date_of_birth,phone_number,join_date,city_of_domicile",
             "Lala,Lala Herlina,lala@example.com,Password123!,Health Planner,hm@example.com,Active,DST001,1996-08-20,08123456789,2026-02-01,Jakarta",
@@ -434,9 +472,6 @@ class UserController extends Controller
         ]);
     }
 
-    /**
-     * Proses bulk upload CSV
-     */
     public function bulkUploadStore(Request $request)
     {
         $authUser = $request->user();
@@ -446,7 +481,7 @@ class UserController extends Controller
         }
 
         $request->validate([
-            'file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'], // max 5MB
+            'file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
         ]);
 
         $path = $request->file('file')->getRealPath();
@@ -456,14 +491,12 @@ class UserController extends Controller
             return back()->withErrors(['file' => 'File tidak bisa dibaca.']);
         }
 
-        // baca header
         $header = fgetcsv($handle);
         if (!$header) {
             fclose($handle);
             return back()->withErrors(['file' => 'CSV kosong / header tidak ditemukan.']);
         }
 
-        // rapihin header jadi lowercase
         $header = array_map(fn($h) => trim(mb_strtolower((string) $h)), $header);
 
         $requiredHeaders = [
@@ -481,11 +514,10 @@ class UserController extends Controller
         }
 
         $rows = [];
-        $rowNumber = 1; // header = 1
+        $rowNumber = 1;
         while (($data = fgetcsv($handle)) !== false) {
             $rowNumber++;
 
-            // skip baris kosong
             if (count(array_filter($data, fn($v) => trim((string) $v) !== '')) === 0) {
                 continue;
             }
@@ -508,7 +540,6 @@ class UserController extends Controller
         $success = [];
         $failed  = [];
 
-        // cache referrer by email biar hemat query
         $referrerEmails = collect($rows)
             ->pluck('referrer_email')
             ->filter()
@@ -527,7 +558,6 @@ class UserController extends Controller
         foreach ($rows as $row) {
             $rowIdx = $row['_row'];
 
-            // validasi per-row
             $v = Validator::make($row, [
                 'name' => ['required', 'string', 'max:255'],
                 'full_name' => ['nullable', 'string', 'max:255'],
@@ -556,7 +586,6 @@ class UserController extends Controller
             $emailLower = mb_strtolower($row['email']);
             $refEmailLower = mb_strtolower($row['referrer_email']);
 
-            // cek email duplicate existing
             if (User::query()->whereRaw('LOWER(email) = ?', [$emailLower])->exists()) {
                 $failed[] = [
                     'row' => $rowIdx,
@@ -566,7 +595,6 @@ class UserController extends Controller
                 continue;
             }
 
-            // referrer lookup
             $referrer = $referrersByEmail->get($refEmailLower);
             if (!$referrer) {
                 $failed[] = [
@@ -577,7 +605,6 @@ class UserController extends Controller
                 continue;
             }
 
-            // enforce same rule kaya store()
             $newRoleRequested = $row['role'];
 
             $resolvedRoleOrError = $this->resolveRoleByReferrerRule(
@@ -596,9 +623,7 @@ class UserController extends Controller
                 continue;
             }
 
-            $finalRole = $resolvedRoleOrError; // string role
-
-            // password: kalau kosong, generate
+            $finalRole = $resolvedRoleOrError;
             $plainPassword = $row['password'] ?: Str::random(12);
 
             try {
@@ -649,17 +674,6 @@ class UserController extends Controller
         ]);
     }
 
-    /**
-     * Reuse rule dari store():
-     * - hanya Head Admin bisa create Head Admin
-     * - referrer harus punya role valid (rankMap)
-     * - role tidak boleh lebih tinggi dari referrer (rank kecil = lebih tinggi)
-     * - kalau referrer Health Planner, role baru dipaksa Health Planner
-     *
-     * Return:
-     * - string role final
-     * - atau "ERROR:...." jika invalid
-     */
     private function resolveRoleByReferrerRule(User $referrer, string $requestedRole, User $actor, array $rankMap): string
     {
         if ($requestedRole === 'Head Admin' && !$actor->hasRole('Head Admin')) {
@@ -687,28 +701,53 @@ class UserController extends Controller
         return $requestedRole;
     }
 
+    private function isDescendantOrSelf(int $possibleDescendantId, int $rootUserId): bool
+    {
+        if ($possibleDescendantId === $rootUserId) {
+            return true;
+        }
+
+        $exists = DB::selectOne("
+            WITH RECURSIVE downline AS (
+                SELECT child_user_id
+                FROM user_hierarchies
+                WHERE parent_user_id = ?
+
+                UNION ALL
+
+                SELECT uh.child_user_id
+                FROM user_hierarchies uh
+                INNER JOIN downline d ON uh.parent_user_id = d.child_user_id
+            )
+            SELECT 1 AS ok
+            FROM downline
+            WHERE child_user_id = ?
+            LIMIT 1
+        ", [$rootUserId, $possibleDescendantId]);
+
+        return !is_null($exists);
+    }
+
     private function buildDownlineTree(int $rootUserId, string $from, string $to, bool $isManual): array
     {
-        // Ambil semua edge hierarchy untuk subtree rootUserId (MySQL 8+)
         $rows = DB::select("
-        WITH RECURSIVE downline AS (
-            SELECT parent_user_id, child_user_id, 1 AS depth
-            FROM user_hierarchies
-            WHERE parent_user_id = ?
+            WITH RECURSIVE downline AS (
+                SELECT parent_user_id, child_user_id, 1 AS depth
+                FROM user_hierarchies
+                WHERE parent_user_id = ?
 
-            UNION ALL
+                UNION ALL
 
-            SELECT uh.parent_user_id, uh.child_user_id, d.depth + 1
-            FROM user_hierarchies uh
-            INNER JOIN downline d ON uh.parent_user_id = d.child_user_id
-            WHERE d.depth < 20
-        )
-        SELECT parent_user_id, child_user_id, depth
-        FROM downline
-        ORDER BY depth, parent_user_id, child_user_id
-    ", [$rootUserId]);
+                SELECT uh.parent_user_id, uh.child_user_id, d.depth + 1
+                FROM user_hierarchies uh
+                INNER JOIN downline d ON uh.parent_user_id = d.child_user_id
+                WHERE d.depth < 20
+            )
+            SELECT parent_user_id, child_user_id, depth
+            FROM downline
+            ORDER BY depth, parent_user_id, child_user_id
+        ", [$rootUserId]);
 
-        // Kumpulkan semua user_id yang terlibat
         $userIds = collect($rows)
             ->flatMap(fn($r) => [$r->parent_user_id, $r->child_user_id])
             ->push($rootUserId)
@@ -716,7 +755,6 @@ class UserController extends Controller
             ->values()
             ->all();
 
-        // Load user sekali saja
         $users = User::query()
             ->select(['id', 'name', 'phone_number', 'photo'])
             ->with('roles')
@@ -725,9 +763,6 @@ class UserController extends Controller
             ->get()
             ->keyBy('id');
 
-        // ======================================
-        // Helper units (sama seperti PerformanceController)
-        // ======================================
         $joinUnits = function ($q, string $soAlias = 'so') {
             return $q
                 ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
@@ -737,12 +772,6 @@ class UserController extends Controller
 
         $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
 
-        // ======================================
-        // Aggregate metrics per user
-        // - total_key_in  => sama seperti PerformanceController summary
-        // - total_net_sales => sama seperti total_sudah_install
-        // - filter cutoff/manual date juga sama
-        // ======================================
         $metricsQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $userIds);
@@ -757,35 +786,33 @@ class UserController extends Controller
 
         $metricsRows = $metricsQ
             ->selectRaw("
-            so.sales_user_id,
+                so.sales_user_id,
 
-            COALESCE(SUM(
-                CASE
-                    WHEN COALESCE(so.is_recurring, 0) = 0
-                    AND so.ccp_status = 'menunggu pengecekan'
-                    AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
-                    THEN {$rowUnitExpr} ELSE 0
-                END
-            ), 0) as total_key_in,
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(so.is_recurring, 0) = 0
+                        AND so.ccp_status = 'menunggu pengecekan'
+                        AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
+                        THEN {$rowUnitExpr} ELSE 0
+                    END
+                ), 0) as total_key_in,
 
-            COALESCE(SUM(
-                CASE
-                    WHEN so.status = 'selesai'
-                    THEN {$rowUnitExpr} ELSE 0
-                END
-            ), 0) as total_net_sales
-        ")
+                COALESCE(SUM(
+                    CASE
+                        WHEN so.status = 'selesai'
+                        THEN {$rowUnitExpr} ELSE 0
+                    END
+                ), 0) as total_net_sales
+            ")
             ->groupBy('so.sales_user_id')
             ->get()
             ->keyBy('sales_user_id');
 
-        // adjacency: parent -> [child...]
         $childrenByParent = [];
         foreach ($rows as $r) {
             $childrenByParent[$r->parent_user_id][] = $r->child_user_id;
         }
 
-        // builder node rekursif
         $buildNode = function ($userId) use (&$buildNode, $users, $childrenByParent, $metricsRows) {
             $u = $users->get($userId);
 
@@ -807,10 +834,8 @@ class UserController extends Controller
                 'phone_number' => $u->phone_number ?? '-',
                 'photo' => $u->photo,
                 'role' => $u->getRoleNames()->first(),
-
                 'total_key_in' => (int) ($metric->total_key_in ?? 0),
                 'total_net_sales' => (int) ($metric->total_net_sales ?? 0),
-
                 'children' => $children,
             ];
         };
@@ -835,8 +860,12 @@ class UserController extends Controller
         $isManual = (bool) ($from || $to);
 
         if ($isManual) {
-            if ($from && !$to) $to = Carbon::parse($from)->endOfMonth()->toDateString();
-            if (!$from && $to) $from = Carbon::parse($to)->startOfMonth()->toDateString();
+            if ($from && !$to) {
+                $to = Carbon::parse($from)->endOfMonth()->toDateString();
+            }
+            if (!$from && $to) {
+                $from = Carbon::parse($to)->startOfMonth()->toDateString();
+            }
         }
 
         return [$from, $to, $isManual];
@@ -902,31 +931,29 @@ class UserController extends Controller
             return true;
         }
 
-        // cek apakah target ada di subtree root (user_hierarchies parent->child)
         $exists = DB::selectOne("
-        WITH RECURSIVE downline AS (
-            SELECT child_user_id
-            FROM user_hierarchies
-            WHERE parent_user_id = ?
+            WITH RECURSIVE downline AS (
+                SELECT child_user_id
+                FROM user_hierarchies
+                WHERE parent_user_id = ?
 
-            UNION ALL
+                UNION ALL
 
-            SELECT uh.child_user_id
-            FROM user_hierarchies uh
-            INNER JOIN downline d ON uh.parent_user_id = d.child_user_id
-        )
-        SELECT 1 AS ok
-        FROM downline
-        WHERE child_user_id = ?
-        LIMIT 1
-    ", [$rootUserId, $targetUserId]);
+                SELECT uh.child_user_id
+                FROM user_hierarchies uh
+                INNER JOIN downline d ON uh.parent_user_id = d.child_user_id
+            )
+            SELECT 1 AS ok
+            FROM downline
+            WHERE child_user_id = ?
+            LIMIT 1
+        ", [$rootUserId, $targetUserId]);
 
         return !is_null($exists);
     }
 
     private function findHealthManagerForUser(int $userId): ?User
     {
-        // naik ke atas hierarchy sampai ketemu role Health Manager
         $currentId = $userId;
 
         for ($i = 0; $i < 20; $i++) {
@@ -935,7 +962,7 @@ class UserController extends Controller
                 ->value('parent_user_id');
 
             if (!$parentId) {
-                return null; // sudah mentok (ga punya parent)
+                return null;
             }
 
             $parent = User::query()->with('roles')->find($parentId);
@@ -947,7 +974,6 @@ class UserController extends Controller
                 return $parent;
             }
 
-            // kalau belum HM, lanjut naik ke parent-nya lagi
             $currentId = $parentId;
         }
 

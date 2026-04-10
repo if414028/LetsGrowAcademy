@@ -65,6 +65,11 @@ Route::middleware('auth', 'active')->group(function () {
         Route::post('/users/bulk-upload', [UserController::class, 'bulkUploadStore'])->name('users.bulk.store');
     });
 
+    Route::middleware(['auth'])->group(function () {
+        Route::get('/users/search-referrers', [UserController::class, 'searchReferrers'])
+            ->name('users.search-referrers');
+    });
+
     Route::get('/users/{user}', [UserController::class, 'show'])->name('users.show');
     Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
