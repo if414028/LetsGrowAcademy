@@ -444,6 +444,12 @@ class PerformanceController extends Controller
             $to   = $defaultTo;
         }
 
+        $manualDateRange = (
+            $request->filled('from') || $request->filled('to')
+        ) && (
+            $from !== $defaultFrom || $to !== $defaultTo
+        );
+
         // ======================================
         // Helper units
         // ======================================
@@ -463,11 +469,7 @@ class PerformanceController extends Controller
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        if ($isManual) {
-            $this->applyPerformanceScopeFilter($summaryQ, $from, $to, false);
-        } else {
-            $this->applyPerformanceScopeFilter($summaryQ, $from, $to, true);
-        }
+        $this->applyPerformanceScopeFilter($summaryQ, $from, $to, !$manualDateRange);
 
         $summaryQ = $joinUnits($summaryQ, 'so');
 
@@ -553,11 +555,7 @@ class PerformanceController extends Controller
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        if ($isManual) {
-            $this->applyPerformanceScopeFilter($sheetQ, $from, $to, false);
-        } else {
-            $this->applyPerformanceScopeFilter($sheetQ, $from, $to, true);
-        }
+        $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange);
 
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
