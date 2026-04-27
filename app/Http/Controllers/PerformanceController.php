@@ -653,21 +653,22 @@ class PerformanceController extends Controller
         $sheet->getColumnDimension('G')->setWidth(14);
         $sheet->getColumnDimension('H')->setWidth(16);
         $sheet->getColumnDimension('I')->setWidth(42);
+        $sheet->getColumnDimension('J')->setWidth(42);
 
-        $sheet->mergeCells('A1:I1');
+        $sheet->mergeCells('A1:J1');
         $sheet->setCellValue('A1', $title);
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
         $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        $sheet->mergeCells('A2:I2');
+        $sheet->mergeCells('A2:J2');
         $sheet->setCellValue('A2', "Range: {$from} s/d {$to}");
         $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $headerRow = 4;
-        $headers = ['No', 'Nama HP', 'Nama Customer', 'Tanggal Key in', 'CCP disetujui', 'Key-in', 'Install/NS', 'Tanggal Instalasi', 'Remarks'];
+        $headers = ['No', 'Nama HP', 'Nama Customer', 'Tanggal Key in', 'Carry Over', 'CCP disetujui', 'Key-in', 'Install/NS', 'Tanggal Instalasi', 'Remarks'];
         $sheet->fromArray($headers, null, "A{$headerRow}");
 
-        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->applyFromArray([
+        $sheet->getStyle("A{$headerRow}:J{$headerRow}")->applyFromArray([
             'font' => ['bold' => true],
             'alignment' => [
                 'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -702,11 +703,12 @@ class PerformanceController extends Controller
                 $sheet->setCellValue("B{$row}", $hpName);
                 $sheet->setCellValue("C{$row}", $r->customer_name);
                 $sheet->setCellValue("D{$row}", $keyIn);
-                $sheet->setCellValue("E{$row}", $ccpAppr ?: '');
-                $sheet->setCellValue("F{$row}", "{$ns}NS");
-                $sheet->setCellValue("G{$row}", ($r->status ?? '') === 'selesai' ? 'OK' : '');
-                $sheet->setCellValue("H{$row}", $installDate ?: '');
-                $sheet->setCellValue("I{$row}", $r->remarks ?? '-');
+                $sheet->setCellValue("E{$row}", ((int) $r->is_carry_over === 1) ? 'Carry Over' : '-');
+                $sheet->setCellValue("F{$row}", $ccpAppr ?: '');
+                $sheet->setCellValue("G{$row}", "{$ns}NS");
+                $sheet->setCellValue("H{$row}", ($r->status ?? '') === 'selesai' ? 'OK' : '');
+                $sheet->setCellValue("I{$row}", $installDate ?: '');
+                $sheet->setCellValue("J{$row}", $r->remarks ?? '-');
 
                 $row++;
             }
@@ -723,7 +725,7 @@ class PerformanceController extends Controller
             $no++;
         }
 
-        $sheet->getStyle("A" . ($headerRow + 1) . ":I" . ($row - 1))->applyFromArray([
+        $sheet->getStyle("A" . ($headerRow + 1) . ":J" . ($row - 1))->applyFromArray([
             'alignment' => ['vertical' => Alignment::VERTICAL_TOP],
             'borders' => [
                 'allBorders' => [
@@ -735,7 +737,7 @@ class PerformanceController extends Controller
 
         $row += 2;
 
-        $sheet->mergeCells("A{$row}:I{$row}");
+        $sheet->mergeCells("A{$row}:J{$row}");
         $sheet->setCellValue("A{$row}", "Summary");
         $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize(12);
         $row++;
@@ -751,10 +753,10 @@ class PerformanceController extends Controller
 
         foreach ($summaryRows as [$label, $value, $bgColor]) {
             $sheet->setCellValue("A{$row}", $label);
-            $sheet->setCellValue("I{$row}", $value);
-            $sheet->mergeCells("A{$row}:H{$row}");
+            $sheet->setCellValue("J{$row}", $value);
+            $sheet->mergeCells("A{$row}:I{$row}");
 
-            $sheet->getStyle("A{$row}:I{$row}")->applyFromArray([
+            $sheet->getStyle("A{$row}:J{$row}")->applyFromArray([
                 'font' => ['bold' => true],
                 'alignment' => [
                     'vertical' => Alignment::VERTICAL_CENTER,
@@ -771,7 +773,7 @@ class PerformanceController extends Controller
                 ],
             ]);
 
-            $sheet->getStyle("I{$row}")
+            $sheet->getStyle("J{$row}")
                 ->getAlignment()
                 ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
