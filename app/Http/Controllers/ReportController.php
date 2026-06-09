@@ -126,7 +126,8 @@ class ReportController extends Controller
             ->groupBy('so.sales_user_id')
             ->select(
                 'so.sales_user_id',
-                DB::raw("{$unitsExpr} as units")
+                DB::raw("{$unitsExpr} as units"),
+                DB::raw('MIN(so.key_in_at) as first_key_in_at')
             );
 
         $targetsInline = '(' . $targetIds->implode(',') . ')';
@@ -144,7 +145,10 @@ class ReportController extends Controller
                 JOIN user_hierarchies uh
                     ON uh.parent_user_id = d.descendant_id
             )
-            SELECT d.ancestor_id, COALESCE(SUM(u.units), 0) AS units
+            SELECT
+                d.ancestor_id,
+                COALESCE(SUM(u.units), 0) AS units,
+                MIN(u.first_key_in_at) AS first_key_in_at
             FROM descendants d
             LEFT JOIN (
                 " . $unitsPerSeller->toSql() . "
@@ -155,25 +159,30 @@ class ReportController extends Controller
 
         $rows = DB::select($cteSql, $unitsPerSeller->getBindings());
 
-        $unitsMap = collect($rows)
-            ->mapWithKeys(fn($r) => [(int) $r->ancestor_id => (int) $r->units]);
+        $leaderboardMap = collect($rows)
+            ->mapWithKeys(fn($r) => [(int) $r->ancestor_id => [
+                'units' => (int) $r->units,
+                'first_key_in_at' => $r->first_key_in_at,
+            ]]);
 
         return $targets
-            ->map(function ($t) use ($unitsMap) {
+            ->map(function ($t) use ($leaderboardMap) {
                 $id = (int) $t->id;
+                $leaderboard = $leaderboardMap[$id] ?? ['units' => 0, 'first_key_in_at' => null];
 
                 return [
                     'id' => $id,
                     'name' => (string) ($t->full_name ?: $t->name),
-                    'units' => (int) ($unitsMap[$id] ?? 0),
+                    'units' => (int) $leaderboard['units'],
+                    'first_key_in_at' => $leaderboard['first_key_in_at'],
+                    'first_key_in_sort' => $leaderboard['first_key_in_at'] ?? '9999-12-31 23:59:59',
                 ];
             })
             ->sortBy([
                 ['units', 'desc'],
+                ['first_key_in_sort', 'asc'],
                 ['name', 'asc'],
             ])
-            ->values()
-            ->take(10)
             ->values()
             ->map(fn($row, $idx) => [
                 'rank' => $idx + 1,
@@ -217,29 +226,35 @@ class ReportController extends Controller
             ->groupBy('so.sales_user_id')
             ->select(
                 'so.sales_user_id',
-                DB::raw("{$unitsExpr} as units")
+                DB::raw("{$unitsExpr} as units"),
+                DB::raw('MIN(so.key_in_at) as first_key_in_at')
             )
             ->get();
 
-        $unitsMap = collect($rows)
-            ->mapWithKeys(fn($r) => [(int) $r->sales_user_id => (int) $r->units]);
+        $leaderboardMap = collect($rows)
+            ->mapWithKeys(fn($r) => [(int) $r->sales_user_id => [
+                'units' => (int) $r->units,
+                'first_key_in_at' => $r->first_key_in_at,
+            ]]);
 
         return $targets
-            ->map(function ($t) use ($unitsMap) {
+            ->map(function ($t) use ($leaderboardMap) {
                 $id = (int) $t->id;
+                $leaderboard = $leaderboardMap[$id] ?? ['units' => 0, 'first_key_in_at' => null];
 
                 return [
                     'id' => $id,
                     'name' => (string) ($t->full_name ?: $t->name),
-                    'units' => (int) ($unitsMap[$id] ?? 0),
+                    'units' => (int) $leaderboard['units'],
+                    'first_key_in_at' => $leaderboard['first_key_in_at'],
+                    'first_key_in_sort' => $leaderboard['first_key_in_at'] ?? '9999-12-31 23:59:59',
                 ];
             })
             ->sortBy([
                 ['units', 'desc'],
+                ['first_key_in_sort', 'asc'],
                 ['name', 'asc'],
             ])
-            ->values()
-            ->take(10)
             ->values()
             ->map(fn($row, $idx) => [
                 'rank' => $idx + 1,

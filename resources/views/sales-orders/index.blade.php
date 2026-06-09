@@ -16,8 +16,27 @@
     {{-- Table Card --}}
     <div class="mt-6 overflow-hidden rounded-2xl border bg-white">
         {{-- Topbar (Filter style like Products) --}}
-        <div class="flex flex-col gap-3 border-b px-4 py-4 md:flex-row md:items-center md:justify-between">
+        <div x-data="{ filterOpen: false }"
+            class="flex flex-col gap-3 border-b px-4 py-4 md:flex-row md:items-center md:justify-between">
+            @php
+                $activeFilterCount = collect(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type'])
+                    ->filter(fn($key) => $key === 'date_filter_by'
+                        ? request()->filled($key) && request($key) !== 'key_in_at'
+                        : request()->filled($key))
+                    ->count();
+            @endphp
+
             <form method="GET" class="flex w-full max-w-xl items-center gap-2">
+                @foreach (request()->except(['search', 'page']) as $key => $value)
+                    @if (is_array($value))
+                        @foreach ($value as $item)
+                            <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
+                        @endforeach
+                    @else
+                        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                    @endif
+                @endforeach
+
                 <input type="text" name="search" value="{{ request('search') }}"
                     placeholder="Cari Order No / Customer / Sales..."
                     class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
@@ -27,8 +46,17 @@
                     Cari
                 </button>
 
-                @if (request()->filled('search'))
-                    <a href="{{ route('sales-orders.index', request()->except('page')) }}"
+                <button type="button" @click="filterOpen = true"
+                    class="relative shrink-0 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                    Filter
+                    @if ($activeFilterCount > 0)
+                        <span
+                            class="ml-2 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">{{ $activeFilterCount }}</span>
+                    @endif
+                </button>
+
+                @if (request()->hasAny(['search', 'from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type']))
+                    <a href="{{ route('sales-orders.index', request()->except(['search', 'from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'page'])) }}"
                         class="shrink-0 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                         Reset
                     </a>
@@ -37,6 +65,95 @@
 
             <div class="text-sm text-gray-500">
                 Total: <span class="font-semibold text-gray-700">{{ $salesOrders->total() }}</span>
+            </div>
+
+            <div x-show="filterOpen" x-cloak class="fixed inset-0 z-50">
+                <div class="absolute inset-0 bg-black/40" @click="filterOpen = false"></div>
+                <div
+                    class="absolute left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-xl">
+                    <div class="flex items-center justify-between border-b px-5 py-4">
+                        <h2 class="text-base font-semibold text-gray-900">Filter Sales Orders</h2>
+                        <button type="button" @click="filterOpen = false"
+                            class="rounded-lg px-2 py-1 text-xl leading-none text-gray-500 hover:bg-gray-100">&times;</button>
+                    </div>
+
+                    <form method="GET" class="space-y-4 p-5">
+                        @foreach (request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'page']) as $key => $value)
+                            @if (is_array($value))
+                                @foreach ($value as $item)
+                                    <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
+                                @endforeach
+                            @else
+                                <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                            @endif
+                        @endforeach
+
+                        <div>
+                            <label for="date_filter_by" class="mb-1 block text-sm font-medium text-gray-700">Filter Tanggal</label>
+                            <select name="date_filter_by" id="date_filter_by"
+                                class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                @foreach ($dateFilterOptions as $value => $label)
+                                    <option value="{{ $value }}" @selected($dateFilterBy === $value)>
+                                        {{ $label }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label for="from" class="mb-1 block text-sm font-medium text-gray-700">From</label>
+                                <input type="date" name="from" id="from" value="{{ request('from') }}"
+                                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+
+                            <div>
+                                <label for="to" class="mb-1 block text-sm font-medium text-gray-700">To</label>
+                                <input type="date" name="to" id="to" value="{{ request('to') }}"
+                                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        @if ($canFilterHealthManager)
+                            <div>
+                                <label for="health_manager_id" class="mb-1 block text-sm font-medium text-gray-700">Health Manager</label>
+                                <select name="health_manager_id" id="health_manager_id"
+                                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="">Semua Health Manager</option>
+                                    @foreach ($healthManagerOptions as $hm)
+                                        <option value="{{ $hm['id'] }}" @selected((int) request('health_manager_id') === $hm['id'])>
+                                            {{ $hm['label'] }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                        @endif
+
+                        <div>
+                            <label for="customer_type" class="mb-1 block text-sm font-medium text-gray-700">Jenis Customer</label>
+                            <select name="customer_type" id="customer_type"
+                                class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="">Semua jenis customer</option>
+                                @foreach ($customerTypes as $type)
+                                    <option value="{{ $type }}" @selected(request('customer_type') === $type)>
+                                        {{ ucfirst($type) }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-2 border-t pt-4">
+                            <a href="{{ route('sales-orders.index', request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'page'])) }}"
+                                class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                Clear Filter
+                            </a>
+                            <button type="submit"
+                                class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                                Apply Filter
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
 

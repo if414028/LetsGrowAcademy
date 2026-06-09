@@ -240,10 +240,11 @@
                             <th class="px-4 py-3 w-[240px]">Nama HP</th>
                             <th class="px-4 py-3 w-[320px]">Nama Customer</th>
                             <th class="px-4 py-3">Tanggal Key-in</th>
-                            <th class="px-4 py-3">Carry Over</th>
+                            <th class="px-4 py-3">Old Case</th>
                             <th class="px-4 py-3">CCP Disetujui</th>
                             <th class="px-4 py-3">Key-in</th>
                             <th class="px-4 py-3">Install/NS</th>
+                            <th class="px-4 py-3">Status</th>
                             <th class="px-4 py-3">Tanggal Instalasi</th>
                             <th class="px-4 py-3 w-[280px]">Remarks</th>
                         </tr>
@@ -273,7 +274,7 @@
                                         @if (($r->is_carry_over ?? 0) == 1)
                                             <span
                                                 class="inline-flex items-center rounded-full bg-orange-50 px-2 py-1 text-xs font-semibold text-orange-700">
-                                                Carry Over
+                                                Old Case
                                             </span>
                                         @else
                                             <span class="text-gray-400 text-xs">-</span>
@@ -298,6 +299,23 @@
                                         @endif
                                     </td>
 
+                                    @php
+                                        $status = $r->status;
+                                        $statusClasses = match ($status) {
+                                            'dibatalkan', 'gagal penelponan' => 'bg-red-100 text-red-700',
+                                            'ditunda' => 'bg-yellow-100 text-yellow-700',
+                                            'selesai' => 'bg-green-100 text-green-700',
+                                            'menunggu verifikasi', 'dijadwalkan' => 'bg-gray-100 text-gray-700',
+                                            default => 'bg-gray-100 text-gray-700',
+                                        };
+                                    @endphp
+
+                                    <td class="px-4 py-3 text-sm">
+                                        <span class="rounded-full px-2 py-1 text-xs font-semibold {{ $statusClasses }}">
+                                            {{ $status ?? '-' }}
+                                        </span>
+                                    </td>
+
                                     {{-- Tanggal Instalasi --}}
                                     <td class="px-4 py-3 text-sm text-gray-700">
                                         {{ $fmt($r->install_date) }}
@@ -311,7 +329,7 @@
                             @endforeach
                         @empty
                             <tr>
-                                <td colspan="8" class="px-6 py-10 text-center text-sm text-gray-500">
+                                <td colspan="10" class="px-6 py-10 text-center text-sm text-gray-500">
                                     Tidak ada data.
                                 </td>
                             </tr>

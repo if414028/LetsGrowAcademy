@@ -258,7 +258,7 @@ class PerformanceController extends Controller
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange);
+        $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange, true);
 
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
@@ -283,7 +283,7 @@ class PerformanceController extends Controller
                         '-'
                     ) as remarks
                 "),
-                DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
+                'so.ccp_approved_at',
                 DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])
             ->selectRaw("
@@ -555,7 +555,7 @@ class PerformanceController extends Controller
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
-        $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange);
+        $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange, true);
 
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
@@ -580,7 +580,7 @@ class PerformanceController extends Controller
                         '-'
                     ) as remarks
                 "),
-                DB::raw("CASE WHEN so.ccp_status = 'disetujui' THEN so.updated_at ELSE NULL END as ccp_approved_at"),
+                'so.ccp_approved_at',
                 DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
             ])
             ->selectRaw("
@@ -652,23 +652,24 @@ class PerformanceController extends Controller
         $sheet->getColumnDimension('F')->setWidth(12);
         $sheet->getColumnDimension('G')->setWidth(14);
         $sheet->getColumnDimension('H')->setWidth(16);
-        $sheet->getColumnDimension('I')->setWidth(42);
+        $sheet->getColumnDimension('I')->setWidth(18);
         $sheet->getColumnDimension('J')->setWidth(42);
+        $sheet->getColumnDimension('K')->setWidth(42);
 
-        $sheet->mergeCells('A1:J1');
+        $sheet->mergeCells('A1:K1');
         $sheet->setCellValue('A1', $title);
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
         $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        $sheet->mergeCells('A2:J2');
+        $sheet->mergeCells('A2:K2');
         $sheet->setCellValue('A2', "Range: {$from} s/d {$to}");
         $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $headerRow = 4;
-        $headers = ['No', 'Nama HP', 'Nama Customer', 'Tanggal Key in', 'Carry Over', 'CCP disetujui', 'Key-in', 'Install/NS', 'Tanggal Instalasi', 'Remarks'];
+        $headers = ['No', 'Nama HP', 'Nama Customer', 'Tanggal Key in', 'Old Case', 'CCP disetujui', 'Key-in', 'Install/NS', 'Status', 'Tanggal Instalasi', 'Remarks'];
         $sheet->fromArray($headers, null, "A{$headerRow}");
 
-        $sheet->getStyle("A{$headerRow}:J{$headerRow}")->applyFromArray([
+        $sheet->getStyle("A{$headerRow}:K{$headerRow}")->applyFromArray([
             'font' => ['bold' => true],
             'alignment' => [
                 'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -703,12 +704,13 @@ class PerformanceController extends Controller
                 $sheet->setCellValue("B{$row}", $hpName);
                 $sheet->setCellValue("C{$row}", $r->customer_name);
                 $sheet->setCellValue("D{$row}", $keyIn);
-                $sheet->setCellValue("E{$row}", ((int) $r->is_carry_over === 1) ? 'Carry Over' : '-');
+                $sheet->setCellValue("E{$row}", ((int) $r->is_carry_over === 1) ? 'Old Case' : '-');
                 $sheet->setCellValue("F{$row}", $ccpAppr ?: '');
                 $sheet->setCellValue("G{$row}", "{$ns}NS");
                 $sheet->setCellValue("H{$row}", ($r->status ?? '') === 'selesai' ? 'OK' : '');
-                $sheet->setCellValue("I{$row}", $installDate ?: '');
-                $sheet->setCellValue("J{$row}", $r->remarks ?? '-');
+                $sheet->setCellValue("I{$row}", $r->status ? Str::of($r->status)->replace('_', ' ')->title() : '-');
+                $sheet->setCellValue("J{$row}", $installDate ?: '');
+                $sheet->setCellValue("K{$row}", $r->remarks ?? '-');
 
                 $row++;
             }
@@ -725,7 +727,7 @@ class PerformanceController extends Controller
             $no++;
         }
 
-        $sheet->getStyle("A" . ($headerRow + 1) . ":J" . ($row - 1))->applyFromArray([
+        $sheet->getStyle("A" . ($headerRow + 1) . ":K" . ($row - 1))->applyFromArray([
             'alignment' => ['vertical' => Alignment::VERTICAL_TOP],
             'borders' => [
                 'allBorders' => [
@@ -737,7 +739,7 @@ class PerformanceController extends Controller
 
         $row += 2;
 
-        $sheet->mergeCells("A{$row}:J{$row}");
+        $sheet->mergeCells("A{$row}:K{$row}");
         $sheet->setCellValue("A{$row}", "Summary");
         $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize(12);
         $row++;
@@ -753,10 +755,10 @@ class PerformanceController extends Controller
 
         foreach ($summaryRows as [$label, $value, $bgColor]) {
             $sheet->setCellValue("A{$row}", $label);
-            $sheet->setCellValue("J{$row}", $value);
-            $sheet->mergeCells("A{$row}:I{$row}");
+            $sheet->setCellValue("K{$row}", $value);
+            $sheet->mergeCells("A{$row}:J{$row}");
 
-            $sheet->getStyle("A{$row}:J{$row}")->applyFromArray([
+            $sheet->getStyle("A{$row}:K{$row}")->applyFromArray([
                 'font' => ['bold' => true],
                 'alignment' => [
                     'vertical' => Alignment::VERTICAL_CENTER,
@@ -773,7 +775,7 @@ class PerformanceController extends Controller
                 ],
             ]);
 
-            $sheet->getStyle("J{$row}")
+            $sheet->getStyle("K{$row}")
                 ->getAlignment()
                 ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
@@ -808,13 +810,20 @@ class PerformanceController extends Controller
      * Scope data performance:
      * 1. key_in_at dalam periode
      * 2. atau status selesai + install_date dalam periode
-     * 3. atau carry over recurring dari periode sebelumnya (khusus cutoff mode)
+     * 3. atau ccp_approved_at / updated_at dalam periode (khusus Team Sheet)
+     * 4. atau carry over recurring dari periode sebelumnya (khusus cutoff mode)
      */
-    private function applyPerformanceScopeFilter($q, string $from, string $to, bool $withCarryOver = true): void
+    private function applyPerformanceScopeFilter(
+        $q,
+        string $from,
+        string $to,
+        bool $withCarryOver = true,
+        bool $includeApprovalAndUpdateDates = false
+    ): void
     {
         $carryFrom = Carbon::parse($from)->subMonthNoOverflow()->toDateString();
 
-        $q->where(function ($w) use ($from, $to, $carryFrom, $withCarryOver) {
+        $q->where(function ($w) use ($from, $to, $carryFrom, $withCarryOver, $includeApprovalAndUpdateDates) {
             // A. SO key-in dalam periode
             $w->where(function ($a) use ($from, $to) {
                 $a->whereNotNull('so.key_in_at')
@@ -830,7 +839,22 @@ class PerformanceController extends Controller
                     ->whereDate('so.install_date', '<=', $to);
             });
 
-            // C. Carry over dari periode sebelumnya
+            // C. SO yang approval CCP atau update datanya masuk periode Team Sheet
+            if ($includeApprovalAndUpdateDates) {
+                $w->orWhere(function ($a) use ($from, $to) {
+                    $a->whereNotNull('so.ccp_approved_at')
+                        ->whereDate('so.ccp_approved_at', '>=', $from)
+                        ->whereDate('so.ccp_approved_at', '<=', $to);
+                });
+
+                $w->orWhere(function ($a) use ($from, $to) {
+                    $a->whereNotNull('so.updated_at')
+                        ->whereDate('so.updated_at', '>=', $from)
+                        ->whereDate('so.updated_at', '<=', $to);
+                });
+            }
+
+            // D. Carry over dari periode sebelumnya
             if ($withCarryOver) {
                 $w->orWhere(function ($x) use ($carryFrom, $from) {
                     $x->whereNotNull('so.key_in_at')

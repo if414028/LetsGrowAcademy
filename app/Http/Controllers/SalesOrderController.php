@@ -57,11 +57,65 @@ class SalesOrderController extends Controller
             $q->where('ccp_status', $request->ccp_status);
         }
 
+        $dateFilterColumns = [
+            'key_in_at' => 'key_in_at',
+            'ccp_approved_at' => 'ccp_approved_at',
+            'install_date' => 'install_date',
+        ];
+        $dateFilterBy = array_key_exists($request->get('date_filter_by'), $dateFilterColumns)
+            ? $request->get('date_filter_by')
+            : 'key_in_at';
+        $dateFilterColumn = $dateFilterColumns[$dateFilterBy];
+
+        if ($request->filled('from')) {
+            $q->whereDate($dateFilterColumn, '>=', $request->from);
+        }
+
+        if ($request->filled('to')) {
+            $q->whereDate($dateFilterColumn, '<=', $request->to);
+        }
+
+        if ($request->filled('customer_type') && in_array($request->customer_type, $this->customerTypes, true)) {
+            $q->where('customer_type', $request->customer_type);
+        }
+
+        $canFilterHealthManager = $user->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']);
+        $healthManagerOptions = $this->healthManagerFilterOptionsFor($user);
+
+        if ($canFilterHealthManager && $request->filled('health_manager_id')) {
+            $healthManagerId = (int) $request->health_manager_id;
+            $allowedHealthManagerIds = $healthManagerOptions->pluck('id')->map(fn($id) => (int) $id);
+
+            if ($allowedHealthManagerIds->contains($healthManagerId)) {
+                $hpIds = User::query()
+                    ->role('Health Planner')
+                    ->whereIn('id', $this->descendantUserIds($healthManagerId))
+                    ->pluck('id');
+
+                $q->whereIn('sales_user_id', $hpIds);
+            }
+        }
+
         $salesOrders = $q->latest('key_in_at')->paginate(10)->withQueryString();
         $activeStatus = $request->filled('status') ? $request->status : 'all';
         $statuses = $this->statuses;
+        $customerTypes = $this->customerTypes;
+        $dateFilterOptions = [
+            'key_in_at' => 'Berdasarkan Key In',
+            'ccp_approved_at' => 'Berdasarkan CCP Approved At',
+            'install_date' => 'Berdasarkan Tanggal Instalasi',
+        ];
 
-        return view('sales-orders.index', compact('salesOrders', 'statuses', 'activeStatus'));
+        return view('sales-orders.index', compact(
+            'salesOrders',
+            'statuses',
+            'activeStatus',
+            'customerTypes',
+            'dateFilterBy',
+            'dateFilterOptions',
+            'healthManagerOptions',
+            'canFilterHealthManager'
+        ));
     }
 
 
@@ -819,6 +873,35 @@ class SalesOrderController extends Controller
             ->whereIn('id', $treeIds)
             ->pluck('id')
             ->map(fn($id) => (int) $id)
+            ->values();
+    }
+
+    private function healthManagerFilterOptionsFor(User $user)
+    {
+        if (!$user->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin'])) {
+            return collect();
+        }
+
+        $q = User::query()
+            ->role('Health Manager')
+            ->where('status', 'Active');
+
+        if ($user->hasRole('Sales Manager')) {
+            $hmIds = UserHierarchy::query()
+                ->where('parent_user_id', $user->id)
+                ->pluck('child_user_id');
+
+            $q->whereIn('id', $hmIds);
+        }
+
+        return $q
+            ->orderByRaw("COALESCE(NULLIF(full_name,''), name) asc")
+            ->get(['id', 'name', 'full_name', 'email'])
+            ->map(fn($hm) => [
+                'id' => (int) $hm->id,
+                'label' => trim((string) ($hm->full_name ?: $hm->name)),
+                'email' => $hm->email,
+            ])
             ->values();
     }
 }

@@ -73,7 +73,7 @@
                     <h2 class="text-lg font-semibold text-gray-900">
                         Leaderboard Health Manager
                     </h2>
-                    <div class="text-sm text-gray-500">Top 10</div>
+                    <div class="text-sm text-gray-500">{{ number_format($hmLeaderboard->count()) }} entries</div>
                 </div>
 
                 <div class="mt-4">
@@ -126,7 +126,7 @@
                 <h2 class="text-lg font-semibold text-gray-900">
                     Leaderboard Health Planner
                 </h2>
-                <div class="text-sm text-gray-500">Top 10</div>
+                <div class="text-sm text-gray-500">{{ number_format($hpLeaderboard->count()) }} entries</div>
             </div>
 
             <div class="mt-4">
