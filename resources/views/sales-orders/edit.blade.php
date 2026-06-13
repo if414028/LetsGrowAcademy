@@ -270,7 +270,7 @@
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     @foreach ($ccpStatuses as $s)
                                         <option value="{{ $s }}" @selected(old('ccp_status', $salesOrder->ccp_status ?? 'menunggu pengecekan') === $s)>
-                                            {{ ucfirst($s) }}
+                                            {{ ucwords($s) }}
                                         </option>
                                     @endforeach
                                 </select>
@@ -307,7 +307,7 @@
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
                                     @foreach ($statuses as $s)
                                         <option value="{{ $s }}" @selected(old('status', $salesOrder->status ?? 'menunggu verifikasi') === $s)>
-                                            {{ ucfirst($s) }}
+                                            {{ ucwords($s) }}
                                         </option>
                                     @endforeach
                                 </select>
@@ -331,7 +331,7 @@
                                     placeholder="Masukkan alasan..."></textarea>
 
                                 <div class="mt-1 text-xs text-gray-400" x-show="requiredReason">
-                                    Wajib diisi untuk status: dibatalkan / ditunda / gagal penelponan.
+                                    Wajib diisi untuk status: dibatalkan / ditunda / gagal penelponan / tinjau ulang.
                                 </div>
                             </div>
                         </div>
@@ -434,7 +434,7 @@
                                                 <input type="text"
                                                     class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                                     :name="`items[${idx}][order_no]`" x-model="row.order_no"
-                                                    placeholder="Order number item..." required />
+                                                    placeholder="Order number item..." />
                                             </td>
 
                                             <td class="px-4 py-3 align-top" data-label="Qty">
@@ -477,7 +477,7 @@
                         </div>
 
                         <div class="mt-3 text-xs text-gray-500">
-                            Minimal 1 item. Order number item wajib diisi. Qty harus &ge; 1.
+                            Minimal 1 item. Order number item boleh dikosongkan sementara. Qty harus &ge; 1.
                         </div>
                     </div>
                 </div>
@@ -853,13 +853,13 @@
                 get requiredInstallDate() {
                     if (this.disabledAll) return false;
                     const st = this.normalizeStatus(this.status);
-                    return ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'].includes(st);
+                    return ['dijadwalkan', 'dibatalkan', 'ditunda', 'tinjau ulang', 'selesai'].includes(st);
                 },
 
                 get showReason() {
                     if (this.disabledAll) return false;
                     const st = this.normalizeStatus(this.status);
-                    return ['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st);
+                    return ['dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang'].includes(st);
                 },
 
                 get requiredReason() {
@@ -897,7 +897,7 @@
                         const st = this.normalizeStatus(val);
                         if (['menunggu verifikasi', 'menunggu jadwal', 'gagal penelponan'].includes(st)) this
                             .installDate = '';
-                        if (!['dibatalkan', 'ditunda', 'gagal penelponan'].includes(st)) this.reason = '';
+                        if (!['dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang'].includes(st)) this.reason = '';
                     });
 
                     this.$watch('ccpStatus', (val) => {

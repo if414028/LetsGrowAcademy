@@ -50,6 +50,18 @@
             </div>
 
             <div class="flex flex-wrap items-center justify-end gap-2">
+                <a href="{{ route('performance.export-new-format', request()->query()) }}"
+                    class="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white shadow-sm
+               hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2">
+                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                        stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M9 17.25v1.5A2.25 2.25 0 0011.25 21h1.5A2.25 2.25 0 0015 18.75v-1.5m-6 0h6m-6 0H6.75A2.25 2.25 0 014.5 15V5.25A2.25 2.25 0 016.75 3h10.5a2.25 2.25 0 012.25 2.25V15a2.25 2.25 0 01-2.25 2.25H15" />
+                    </svg>
+
+                    Export New Format
+                </a>
+
                 <a href="{{ route('performance.export-pdf', request()->query()) }}" target="_blank"
                     class="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm
                hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
@@ -164,7 +176,7 @@
                     {{ (int) ($summary->pending ?? 0) }}
                 </div>
                 <div class="mt-1 text-sm text-purple-600">
-                    Status: ditunda / gagal penelponan
+                    Status: ditunda / gagal penelponan / tinjau ulang
                 </div>
             </div>
 
@@ -317,7 +329,7 @@
                                         $status = $r->status;
                                         $statusClasses = match ($status) {
                                             'dibatalkan', 'gagal penelponan' => 'bg-red-100 text-red-700',
-                                            'ditunda' => 'bg-yellow-100 text-yellow-700',
+                                            'ditunda', 'tinjau ulang' => 'bg-yellow-100 text-yellow-700',
                                             'selesai' => 'bg-green-100 text-green-700',
                                             'menunggu verifikasi', 'dijadwalkan' => 'bg-gray-100 text-gray-700',
                                             default => 'bg-gray-100 text-gray-700',

@@ -217,7 +217,7 @@ class PerformanceController extends Controller
                 CASE
                     WHEN COALESCE(so.is_recurring, 0) = 1
                     AND so.ccp_status = 'disetujui'
-                    AND so.status IN ('ditunda', 'gagal penelponan')
+                    AND so.status IN ('ditunda', 'gagal penelponan', 'tinjau ulang')
                     THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as pending,
@@ -296,7 +296,7 @@ class PerformanceController extends Controller
                         OR
                         (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status = 'dijadwalkan')
                         OR
-                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status IN ('ditunda', 'gagal penelponan'))
+                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status IN ('ditunda', 'gagal penelponan', 'tinjau ulang'))
                      )
                     THEN 1
                     ELSE 0
@@ -514,7 +514,7 @@ class PerformanceController extends Controller
                 CASE
                     WHEN COALESCE(so.is_recurring, 0) = 1
                     AND so.ccp_status = 'disetujui'
-                    AND so.status IN ('ditunda', 'gagal penelponan')
+                    AND so.status IN ('ditunda', 'gagal penelponan', 'tinjau ulang')
                     THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as pending,
@@ -593,7 +593,7 @@ class PerformanceController extends Controller
                         OR
                         (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status = 'dijadwalkan')
                         OR
-                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status IN ('ditunda', 'gagal penelponan'))
+                        (COALESCE(so.is_recurring,0) = 1 AND so.ccp_status = 'disetujui' AND so.status IN ('ditunda', 'gagal penelponan', 'tinjau ulang'))
                      )
                     THEN 1
                     ELSE 0
@@ -807,6 +807,181 @@ class PerformanceController extends Controller
         return response()->download($tmpPath, $fileName)->deleteFileAfterSend(true);
     }
 
+    public function exportNewFormat(Request $request)
+    {
+        $data = $this->buildPerformanceNewFormatData($request);
+
+        /** @var \App\Models\User $baseUser */
+        $baseUser = $data['baseUser'];
+        $authUser = $request->user();
+        $from = $data['from'];
+        $to = $data['to'];
+        $rows = $data['rows'];
+        $hasMemberFilter = $data['hasMemberFilter'];
+
+        $memberName = $hasMemberFilter
+            ? strtoupper($baseUser->full_name ?: $baseUser->name)
+            : 'ALL';
+
+        $periodLabel = $this->performancePeriodLabel($from, $to);
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('New Format');
+
+        $sheet->getColumnDimension('A')->setWidth(5);
+        $sheet->getColumnDimension('B')->setWidth(26);
+        $sheet->getColumnDimension('C')->setWidth(24);
+        $sheet->getColumnDimension('D')->setWidth(32);
+        $sheet->getColumnDimension('E')->setWidth(24);
+        $sheet->getColumnDimension('F')->setWidth(10);
+        $sheet->getColumnDimension('G')->setWidth(16);
+        $sheet->getColumnDimension('H')->setWidth(15);
+        $sheet->getColumnDimension('I')->setWidth(22);
+
+        $sheet->mergeCells('A1:I1');
+        $sheet->setCellValue('A1', "LAPORAN PERFORMANCE {$memberName}");
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(12);
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $sheet->mergeCells('A2:I2');
+        $sheet->setCellValue('A2', $periodLabel);
+        $sheet->getStyle('A2')->getFont()->setBold(true);
+        $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+        $headerRow = 4;
+        $headers = ['NO.', 'NAMA HP', 'SALES ORDER', 'NAMA CUSTOMER', 'UNIT', 'PARTIAL', 'TANGGAL KEY-IN', 'STATUS', 'TANGGAL INSTALASI/TU'];
+        $sheet->fromArray($headers, null, "A{$headerRow}");
+        $sheet->getStyle("A{$headerRow}:I{$headerRow}")->applyFromArray([
+            'font' => ['bold' => true],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['argb' => 'FFE5E7EB'],
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['argb' => 'FF111827'],
+                ],
+            ],
+        ]);
+
+        $row = $headerRow + 1;
+        $no = 1;
+        $totalPartial = 0;
+        $totalSelesai = 0;
+        $totalDitinjauUlang = 0;
+        $totalCancelled = 0;
+        $totalUnit = 0;
+
+        foreach ($rows as $r) {
+            $isPartial = ($r->payment_method ?? '') === 'partial';
+            $status = (string) ($r->status ?? '');
+            $remarks = mb_strtolower((string) ($r->remarks ?? ''));
+            $unitCount = (int) ($r->unit_count ?? 0);
+
+            $totalPartial += $isPartial ? 1 : 0;
+            $totalSelesai += $status === 'selesai' ? $unitCount : 0;
+            $totalDitinjauUlang += str_contains($remarks, 'ditinjau ulang') ? $unitCount : 0;
+            $totalCancelled += $status === 'dibatalkan' ? $unitCount : 0;
+            $totalUnit += $unitCount;
+
+            $sheet->setCellValue("A{$row}", $no);
+            $sheet->setCellValue("B{$row}", $r->hp_name);
+            $sheet->setCellValue("C{$row}", $r->item_order_no ?: '-');
+            $sheet->setCellValue("D{$row}", $r->customer_name);
+            $sheet->setCellValue("E{$row}", $r->unit_label);
+            $sheet->setCellValue("F{$row}", $isPartial ? 'YES' : '');
+            $sheet->setCellValue("G{$row}", $r->key_in_at ? Carbon::parse($r->key_in_at)->format('n/j/Y') : '-');
+            $sheet->setCellValue("H{$row}", $this->newFormatStatusLabel($status, $remarks));
+            $sheet->setCellValue("I{$row}", $r->install_date ? Carbon::parse($r->install_date)->format('n/j/Y') : '');
+
+            $sheet->getStyle("A{$row}:I{$row}")->getFill()
+                ->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()
+                ->setARGB($this->newFormatStatusColor($status));
+
+            $row++;
+            $no++;
+        }
+
+        if ($row > $headerRow + 1) {
+            $sheet->getStyle("A" . ($headerRow + 1) . ":I" . ($row - 1))->applyFromArray([
+                'alignment' => [
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                    'wrapText' => true,
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['argb' => 'FF111827'],
+                    ],
+                ],
+            ]);
+
+            $sheet->getStyle("A" . ($headerRow + 1) . ":A" . ($row - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            $sheet->getStyle("F" . ($headerRow + 1) . ":I" . ($row - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        }
+
+        $summaryStart = $row + 1;
+        $sheet->mergeCells("A{$summaryStart}:I{$summaryStart}");
+        $sheet->setCellValue("A{$summaryStart}", 'SUMMARY');
+        $sheet->getStyle("A{$summaryStart}:I{$summaryStart}")->applyFromArray([
+            'font' => ['bold' => true],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['argb' => 'FF111827'],
+                ],
+            ],
+        ]);
+
+        $summaryRows = [
+            ['TOTAL PARTIAL', $totalPartial],
+            ['TOTAL SELESAI', $totalSelesai],
+            ['TOTAL DITINJAU ULANG', $totalDitinjauUlang],
+            ['TOTAL CANCELLED', $totalCancelled],
+            ['TOTAL UNIT', $totalUnit],
+        ];
+
+        $summaryRow = $summaryStart + 1;
+        foreach ($summaryRows as [$label, $value]) {
+            $sheet->mergeCells("A{$summaryRow}:E{$summaryRow}");
+            $sheet->mergeCells("F{$summaryRow}:I{$summaryRow}");
+            $sheet->setCellValue("A{$summaryRow}", $label);
+            $sheet->setCellValue("F{$summaryRow}", $value);
+            $sheet->getStyle("A{$summaryRow}:I{$summaryRow}")->applyFromArray([
+                'font' => ['bold' => true],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['argb' => 'FF111827'],
+                    ],
+                ],
+            ]);
+            $summaryRow++;
+        }
+
+        $fileName = $this->performanceNewFormatFileName($authUser, $from, $to);
+        $tmpPath = storage_path('app/' . Str::uuid()->toString() . '.xlsx');
+
+        (new Xlsx($spreadsheet))->save($tmpPath);
+
+        return response()->download($tmpPath, $fileName)->deleteFileAfterSend(true);
+    }
+
     public function exportPdf(Request $request)
     {
         $data = $this->buildPerformanceData($request);
@@ -850,6 +1025,178 @@ class PerformanceController extends Controller
         $dateRange = "{$from} sd {$to}";
 
         return "Team Performance - {$memberName} - {$dateRange}.{$extension}";
+    }
+
+    private function buildPerformanceNewFormatData(Request $request): array
+    {
+        $authUser = $request->user();
+        $isAdminOrHead = $authUser->hasAnyRole(['Admin', 'Head Admin']);
+
+        $authDownlineIds = $authUser->downlineUserIds();
+        $allowedIds = $isAdminOrHead
+            ? User::query()->pluck('id')
+            : $authDownlineIds->push($authUser->id)->unique()->values();
+
+        $memberId = (int) $request->get('member_id', 0);
+        $hasMemberFilter = $memberId && $allowedIds->contains($memberId);
+
+        $baseUser = $authUser;
+        if ($hasMemberFilter) {
+            $baseUser = User::query()->whereKey($memberId)->first() ?? $authUser;
+        }
+
+        if ($isAdminOrHead && !$hasMemberFilter) {
+            $scopeUserIds = User::query()->pluck('id');
+        } else {
+            $scopeUserIds = $baseUser->downlineUserIds()->push($baseUser->id)->unique()->values();
+        }
+
+        [$from, $to, $isManual] = $this->normalizeDateRange(
+            $request->get('from'),
+            $request->get('to')
+        );
+
+        $cutoff = PerformanceCutoff::current();
+        $defaultFrom = $cutoff?->start_date ?? Carbon::now()->startOfMonth()->subMonth()->toDateString();
+        $defaultTo   = $cutoff?->end_date   ?? Carbon::now()->endOfMonth()->addMonth()->toDateString();
+
+        if (!$isManual) {
+            $from = $defaultFrom;
+            $to   = $defaultTo;
+        }
+
+        $manualDateRange = (
+            $request->filled('from') || $request->filled('to')
+        ) && (
+            $from !== $defaultFrom || $to !== $defaultTo
+        );
+
+        $unitCountExpr = "
+            COALESCE(SUM(
+                CASE
+                    WHEN p.type = 'bundle' THEN soi.qty * COALESCE(bi.qty, 1)
+                    ELSE soi.qty
+                END
+            ), 0) as unit_count
+        ";
+
+        $q = DB::table('sales_orders as so')
+            ->join('users as u', 'u.id', '=', 'so.sales_user_id')
+            ->join('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
+            ->leftJoin('customers as c', function ($j) {
+                $j->on('c.id', '=', 'so.customer_id')->whereNull('c.deleted_at');
+            })
+            ->whereNull('so.deleted_at')
+            ->whereIn('so.sales_user_id', $scopeUserIds);
+
+        $this->applyPerformanceScopeFilter($q, $from, $to, !$manualDateRange, true);
+
+        $rows = $q
+            ->select([
+                'soi.id as item_id',
+                'soi.order_no as item_order_no',
+                DB::raw("COALESCE(NULLIF(u.full_name,''), u.name) as hp_name"),
+                DB::raw("COALESCE(c.full_name, '-') as customer_name"),
+                DB::raw("COALESCE(NULLIF(p.model,''), NULLIF(p.product_name,''), NULLIF(p.sku,''), '-') as unit_label"),
+                'so.payment_method',
+                'so.key_in_at',
+                'so.status',
+                'so.install_date',
+                DB::raw("
+                    COALESCE(
+                        NULLIF(so.payment_method_remarks,''),
+                        NULLIF(so.ccp_remarks,''),
+                        NULLIF(so.status_reason,''),
+                        '-'
+                    ) as remarks
+                "),
+            ])
+            ->selectRaw($unitCountExpr)
+            ->groupBy(
+                'soi.id',
+                'soi.order_no',
+                'u.full_name',
+                'u.name',
+                'c.full_name',
+                'p.model',
+                'p.product_name',
+                'p.sku',
+                'so.payment_method',
+                'so.key_in_at',
+                'so.status',
+                'so.install_date',
+                'so.payment_method_remarks',
+                'so.ccp_remarks',
+                'so.status_reason'
+            )
+            ->orderBy('u.name')
+            ->orderBy('so.key_in_at')
+            ->orderBy('soi.id')
+            ->get();
+
+        return [
+            'baseUser' => $baseUser,
+            'from' => $from,
+            'to' => $to,
+            'rows' => $rows,
+            'hasMemberFilter' => $hasMemberFilter,
+        ];
+    }
+
+    private function performancePeriodLabel(string $from, string $to): string
+    {
+        $fromDate = Carbon::parse($from);
+        $toDate = Carbon::parse($to);
+
+        if ($fromDate->isSameMonth($toDate)) {
+            return $fromDate->format('F Y');
+        }
+
+        return "{$from} s/d {$to}";
+    }
+
+    private function newFormatStatusLabel(string $status, string $remarks): string
+    {
+        if (str_contains($remarks, 'ditinjau ulang')) {
+            return 'DITINJAU ULANG';
+        }
+
+        return match ($status) {
+            'selesai' => 'SELESAI',
+            'dibatalkan' => 'CANCELLED',
+            'dijadwalkan' => 'DIJADWALKAN',
+            'menunggu jadwal' => 'MENUNGGU JADWAL',
+            'menunggu verifikasi' => 'MENUNGGU VERIFIKASI',
+            'ditunda' => 'DITUNDA',
+            'gagal penelponan' => 'GAGAL PENELPONAN',
+            'tinjau ulang' => 'TINJAU ULANG',
+            default => strtoupper($status ?: '-'),
+        };
+    }
+
+    private function newFormatStatusColor(string $status): string
+    {
+        return match ($status) {
+            'menunggu verifikasi', 'menunggu jadwal' => 'FFD9D9D9',
+            'dijadwalkan' => 'FF9FC5E8',
+            'dibatalkan' => 'FFE06666',
+            'ditunda', 'gagal penelponan' => 'FFF6B26B',
+            'tinjau ulang' => 'FFFFE599',
+            'selesai' => 'FFA9D18E',
+            default => 'FFFFFFFF',
+        };
+    }
+
+    private function performanceNewFormatFileName(User $authUser, string $from, string $to): string
+    {
+        $userName = trim((string) ($authUser->full_name ?: $authUser->name));
+        $userName = preg_replace('/[\/\\\\:*?"<>|]+/', '-', $userName) ?: 'User';
+
+        $monthName = strtoupper($this->performancePeriodLabel($from, $to));
+
+        return "Laporan Performance - {$userName} - {$monthName}.xlsx";
     }
 
     public function updateCutoff(Request $request)
@@ -942,7 +1289,7 @@ class PerformanceController extends Controller
                                 ->orWhere(function ($a) {
                                     $a->whereRaw('COALESCE(so.is_recurring,0) = 1')
                                         ->where('so.ccp_status', 'disetujui')
-                                        ->whereIn('so.status', ['ditunda', 'gagal penelponan']);
+                                        ->whereIn('so.status', ['ditunda', 'gagal penelponan', 'tinjau ulang']);
                                 });
                         });
                 });

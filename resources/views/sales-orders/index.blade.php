@@ -178,7 +178,7 @@
                     <a href="{{ route('sales-orders.index', array_filter(array_merge($baseQuery, ['status' => $st]), fn($v) => $v !== null && $v !== '')) }}"
                         class="whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold
                                 {{ $active === $st ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                        {{ ucfirst($st) }}
+                        {{ ucwords($st) }}
                     </a>
                 @endforeach
             </nav>
@@ -239,7 +239,7 @@
 
                                 $statusClasses = match ($status) {
                                     'dibatalkan', 'gagal penelponan' => 'bg-red-100 text-red-700',
-                                    'ditunda' => 'bg-yellow-100 text-yellow-700',
+                                    'ditunda', 'tinjau ulang' => 'bg-yellow-100 text-yellow-700',
                                     'selesai' => 'bg-green-100 text-green-700',
                                     'menunggu verifikasi', 'dijadwalkan' => 'bg-gray-100 text-gray-700',
                                     default => 'bg-gray-100 text-gray-700',
@@ -248,7 +248,7 @@
 
                             <td class="px-4 py-3">
                                 <span class="rounded-full px-2 py-1 text-xs font-semibold {{ $statusClasses }}">
-                                    {{ $status ?? '-' }}
+                                    {{ $status ? ucwords($status) : '-' }}
                                 </span>
                             </td>
 

@@ -93,7 +93,7 @@
 
                             $statusClasses = match ($status) {
                                 'dibatalkan', 'gagal penelponan' => 'bg-red-100 text-red-700',
-                                'ditunda' => 'bg-yellow-100 text-yellow-700',
+                                'ditunda', 'tinjau ulang' => 'bg-yellow-100 text-yellow-700',
                                 'selesai' => 'bg-green-100 text-green-700',
                                 'menunggu verifikasi', 'dijadwalkan' => 'bg-gray-100 text-gray-700',
                                 default => 'bg-gray-100 text-gray-700',
@@ -104,7 +104,7 @@
                             <div class="text-xs text-gray-500">Status Penjualan</div>
                             <div class="mt-1">
                                 <span class="rounded-full px-2 py-1 text-xs font-semibold {{ $statusClasses }}">
-                                    {{ $status ?? '-' }}
+                                    {{ $status ? ucwords($status) : '-' }}
                                 </span>
                             </div>
                         </div>

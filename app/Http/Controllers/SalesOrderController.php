@@ -20,7 +20,7 @@ class SalesOrderController extends Controller
         'outright' => 'POA',
     ];
 
-    private array $statuses = ['menunggu verifikasi', 'menunggu jadwal', 'dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'selesai'];
+    private array $statuses = ['menunggu verifikasi', 'menunggu jadwal', 'dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang', 'selesai'];
     private array $ccpStatuses = ['menunggu pengecekan', 'dibatalkan', 'ditolak', 'disetujui'];
     private array $customerTypes = ['individu', 'corporate'];
 
@@ -199,7 +199,7 @@ class SalesOrderController extends Controller
             // order fields
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
-                Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'], true)),
+                Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'tinjau ulang', 'selesai'], true)),
                 Rule::prohibitedIf(fn() => in_array($request->input('status'), [
                     'menunggu verifikasi',
                     'menunggu jadwal',
@@ -239,12 +239,12 @@ class SalesOrderController extends Controller
             // items
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
-            'items.*.order_no' => ['required', 'string', 'max:50'],
+            'items.*.order_no' => ['nullable', 'string', 'max:50'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.product_price_id' => ['required', 'exists:product_prices,id'],
 
             'status_reason' => [
-                Rule::requiredIf(fn() => in_array($request->input('status'), ['dibatalkan', 'ditunda', 'gagal penelponan'], true)),
+                Rule::requiredIf(fn() => in_array($request->input('status'), ['dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang'], true)),
                 'nullable',
                 'string',
                 'max:500',
@@ -292,7 +292,7 @@ class SalesOrderController extends Controller
 
 
         // normalize status_reason
-        if (!in_array($validated['status'], ['dibatalkan', 'ditunda', 'gagal penelponan'], true)) {
+        if (!in_array($validated['status'], ['dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang'], true)) {
             $validated['status_reason'] = null;
         }
 
@@ -321,7 +321,7 @@ class SalesOrderController extends Controller
 
             // install_date: simplify by status
             $installDate = null;
-            if (in_array($validated['status'] ?? null, ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'], true)) {
+            if (in_array($validated['status'] ?? null, ['dijadwalkan', 'dibatalkan', 'ditunda', 'tinjau ulang', 'selesai'], true)) {
                 $installDate = $validated['install_date'] ?? null;
             }
 
@@ -347,7 +347,7 @@ class SalesOrderController extends Controller
                 ->map(fn($row) => [
                     'product_id' => (int) $row['product_id'],
                     'product_price_id' => (int) $row['product_price_id'], // ✅ new
-                    'order_no' => trim($row['order_no']),
+                    'order_no' => filled($row['order_no'] ?? null) ? trim((string) $row['order_no']) : null,
                     'qty' => (int) $row['qty'],
                 ])
                 ->values()
@@ -473,7 +473,7 @@ class SalesOrderController extends Controller
 
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
-                Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'], true)),
+                Rule::requiredIf(fn() => in_array($request->input('status'), ['dijadwalkan', 'dibatalkan', 'ditunda', 'tinjau ulang', 'selesai'], true)),
                 Rule::prohibitedIf(fn() => in_array($request->input('status'), ['menunggu verifikasi', 'menunggu jadwal', 'gagal penelponan'], true)),
                 'nullable',
                 'date',
@@ -505,12 +505,12 @@ class SalesOrderController extends Controller
 
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
-            'items.*.order_no' => ['required', 'string', 'max:50'],
+            'items.*.order_no' => ['nullable', 'string', 'max:50'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.product_price_id' => ['required', 'exists:product_prices,id'],
 
             'status_reason' => [
-                Rule::requiredIf(fn() => in_array($request->input('status'), ['dibatalkan', 'ditunda', 'gagal penelponan'], true)),
+                Rule::requiredIf(fn() => in_array($request->input('status'), ['dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang'], true)),
                 'nullable',
                 'string',
                 'max:500',
@@ -556,7 +556,7 @@ class SalesOrderController extends Controller
             }
         }
 
-        if (!in_array($validated['status'], ['dibatalkan', 'ditunda', 'gagal penelponan'], true)) {
+        if (!in_array($validated['status'], ['dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang'], true)) {
             $validated['status_reason'] = null;
         }
 
@@ -581,7 +581,7 @@ class SalesOrderController extends Controller
 
             // install_date: simple by status
             $installDate = null;
-            if (in_array($validated['status'] ?? null, ['dijadwalkan', 'dibatalkan', 'ditunda', 'selesai'], true)) {
+            if (in_array($validated['status'] ?? null, ['dijadwalkan', 'dibatalkan', 'ditunda', 'tinjau ulang', 'selesai'], true)) {
                 $installDate = $validated['install_date'] ?? null;
             }
 
@@ -606,7 +606,7 @@ class SalesOrderController extends Controller
                 ->map(fn($row) => [
                     'product_id' => (int) $row['product_id'],
                     'product_price_id' => (int) $row['product_price_id'], // ✅ new
-                    'order_no' => trim($row['order_no']),
+                    'order_no' => filled($row['order_no'] ?? null) ? trim((string) $row['order_no']) : null,
                     'qty' => (int) $row['qty'],
                 ])
                 ->values()

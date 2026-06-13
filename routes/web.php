@@ -111,6 +111,9 @@ Route::middleware('auth', 'active')->group(function () {
     Route::get('/performance/export', [PerformanceController::class, 'export'])
         ->name('performance.export');
 
+    Route::get('/performance/export-new-format', [PerformanceController::class, 'exportNewFormat'])
+        ->name('performance.export-new-format');
+
     Route::get('/performance/export-pdf', [PerformanceController::class, 'exportPdf'])
         ->name('performance.export-pdf');
 
