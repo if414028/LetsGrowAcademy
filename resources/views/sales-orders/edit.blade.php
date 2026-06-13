@@ -2,8 +2,8 @@
     <div class="p-4 md:p-6">
         <div class="flex items-start justify-between gap-4">
             <div>
-                <h1 class="text-xl md:text-2xl font-semibold text-gray-900">Edit Sales Order</h1>
-                <p class="text-sm text-gray-500">Ubah data sales order.</p>
+                <h1 class="text-xl md:text-2xl font-semibold text-gray-900">Edit Penjualan</h1>
+                <p class="text-sm text-gray-500">Ubah data penjualan.</p>
             </div>
 
             <a href="{{ route('sales-orders.show', $salesOrder) }}"
@@ -125,13 +125,12 @@
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
                                 <label class="text-xs font-medium text-gray-600">
-                                    Order No <span class="text-red-500">*</span>
+                                    Order Number <span class="text-red-500">*</span>
                                 </label>
                                 <input id="order_no" name="order_no"
                                     value="{{ old('order_no', $salesOrder->order_no) }}"
-                                    class="mt-1 w-full rounded-xl border-gray-200 bg-gray-50 focus:border-blue-500 focus:ring-blue-500"
-                                    placeholder="Order no" readonly />
-                                <div class="mt-1 text-xs text-gray-400">Order No tidak diubah saat edit.</div>
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                    placeholder="Masukkan order number..." required />
                             </div>
 
                             <div>
@@ -339,7 +338,7 @@
 
                         <button type="submit"
                             class="mt-6 w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                            Update Sales Order
+                            Update Penjualan
                         </button>
                     </div>
                 </div>
@@ -354,6 +353,7 @@
                                 fn($it) => [
                                     'product_id' => $it->product_id,
                                     'product_price_id' => $it->product_price_id,
+                                    'order_no' => $it->order_no,
                                     'qty' => $it->qty,
                                 ],
                             )
@@ -361,7 +361,7 @@
                             ->all();
 
                         if (empty($initialItems)) {
-                            $initialItems = [['product_id' => '', 'product_price_id' => '', 'qty' => 1]];
+                            $initialItems = [['product_id' => '', 'product_price_id' => '', 'order_no' => '', 'qty' => 1]];
                         }
                     }
                 @endphp
@@ -379,11 +379,12 @@
                             </button>
                         </div>
 
-                        <div class="mt-4 overflow-visible rounded-xl border">
-                            <table class="min-w-full text-sm">
+                        <div class="product-items-table-wrap mt-4 overflow-visible rounded-xl border">
+                            <table class="product-items-table min-w-full text-sm">
                                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                                     <tr>
                                         <th class="px-4 py-3 text-left">Product</th>
+                                        <th class="px-4 py-3 text-left w-56">Order Number</th>
                                         <th class="px-4 py-3 text-left w-40">Qty</th>
                                         <th class="px-4 py-3 text-left w-56">Price</th>
                                         <th class="px-4 py-3 text-right w-24">Action</th>
@@ -393,7 +394,7 @@
                                 <tbody class="divide-y">
                                     <template x-for="(row, idx) in rows" :key="row._key">
                                         <tr class="align-top">
-                                            <td class="px-4 py-3 align-top" data-product-cell>
+                                            <td class="px-4 py-3 align-top" data-product-cell data-label="Product">
                                                 <div class="flex flex-col gap-1">
                                                     <input type="hidden" :name="`items[${idx}][product_id]`"
                                                         :value="row.product_id" required>
@@ -429,13 +430,20 @@
                                                 </div>
                                             </td>
 
-                                            <td class="px-4 py-3 align-top">
+                                            <td class="px-4 py-3 align-top" data-label="Order Number">
+                                                <input type="text"
+                                                    class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                                    :name="`items[${idx}][order_no]`" x-model="row.order_no"
+                                                    placeholder="Order number item..." required />
+                                            </td>
+
+                                            <td class="px-4 py-3 align-top" data-label="Qty">
                                                 <input type="number" min="1"
                                                     class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                                     :name="`items[${idx}][qty]`" x-model.number="row.qty" required />
                                             </td>
 
-                                            <td class="px-4 py-3 align-top">
+                                            <td class="px-4 py-3 align-top" data-label="Price">
                                                 <select
                                                     class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
                                                     :name="`items[${idx}][product_price_id]`"
@@ -454,7 +462,7 @@
                                                 </div>
                                             </td>
 
-                                            <td class="px-4 py-3 text-right align-top">
+                                            <td class="product-action-cell px-4 py-3 text-right align-top" data-label="">
                                                 <button type="button" @click="removeRow(idx)"
                                                     class="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                                                     :disabled="rows.length === 1"
@@ -469,7 +477,7 @@
                         </div>
 
                         <div class="mt-3 text-xs text-gray-500">
-                            Minimal 1 item. Qty harus &ge; 1.
+                            Minimal 1 item. Order number item wajib diisi. Qty harus &ge; 1.
                         </div>
                     </div>
                 </div>
@@ -710,6 +718,7 @@
                         _key: `${Date.now()}-${i}-${Math.random().toString(16).slice(2)}`,
                         product_id: pid,
                         product_price_id: exists ? chosen : (prices.length ? prices[0].id : ''),
+                        order_no: r.order_no ?? '',
                         qty: r.qty ?? 1,
                         query: pid ? labelById(pid) : '',
                         open: false,
@@ -722,6 +731,7 @@
                     _key: `${Date.now()}-0-${Math.random().toString(16).slice(2)}`,
                     product_id: '',
                     product_price_id: '',
+                    order_no: '',
                     qty: 1,
                     query: '',
                     open: false,
@@ -752,6 +762,7 @@
                         _key: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
                         product_id: '',
                         product_price_id: '',
+                        order_no: '',
                         qty: 1,
                         query: '',
                         open: false,

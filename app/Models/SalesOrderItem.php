@@ -13,6 +13,7 @@ class SalesOrderItem extends Model
         'sales_order_id',
         'product_id',
         'product_price_id',
+        'order_no',
         'qty'
     ];  
 

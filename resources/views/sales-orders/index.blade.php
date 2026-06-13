@@ -1,14 +1,14 @@
 <x-dashboard-layout>
     <div class="flex items-start justify-between gap-6">
         <div>
-            <h1 class="text-2xl font-semibold text-gray-900">Sales Orders</h1>
-            <p class="text-sm text-gray-500">Kelola daftar sales order.</p>
+            <h1 class="text-2xl font-semibold text-gray-900">Penjualan</h1>
+            <p class="text-sm text-gray-500">Kelola daftar penjualan.</p>
         </div>
 
         @role('Admin|Head Admin')
             <a href="{{ route('sales-orders.create') }}"
                 class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                <span>+ Buat Sales Order</span>
+                <span>+ Buat Penjualan</span>
             </a>
         @endrole
     </div>
@@ -38,7 +38,7 @@
                 @endforeach
 
                 <input type="text" name="search" value="{{ request('search') }}"
-                    placeholder="Cari Order No / Customer / Sales..."
+                    placeholder="Cari Order Number / Customer / Sales..."
                     class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
 
                 <button type="submit"
@@ -72,7 +72,7 @@
                 <div
                     class="absolute left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-xl">
                     <div class="flex items-center justify-between border-b px-5 py-4">
-                        <h2 class="text-base font-semibold text-gray-900">Filter Sales Orders</h2>
+                        <h2 class="text-base font-semibold text-gray-900">Filter Penjualan</h2>
                         <button type="button" @click="filterOpen = false"
                             class="rounded-lg px-2 py-1 text-xl leading-none text-gray-500 hover:bg-gray-100">&times;</button>
                     </div>
@@ -189,7 +189,7 @@
             <table class="min-w-full text-sm">
                 <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                     <tr>
-                        <th class="px-4 py-3 text-left">Order No</th>
+                        <th class="px-4 py-3 text-left">Order Number</th>
                         <th class="px-4 py-3 text-left">Sales</th>
                         <th class="px-4 py-3 text-left">Customer</th>
                         <th class="px-4 py-3 text-left">Key In</th>
@@ -292,7 +292,7 @@
                     @empty
                         <tr>
                             <td colspan="9" class="px-4 py-10 text-center text-gray-500">
-                                Belum ada sales order.
+                                Belum ada penjualan.
                             </td>
                         </tr>
                     @endforelse

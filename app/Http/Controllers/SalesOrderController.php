@@ -239,6 +239,7 @@ class SalesOrderController extends Controller
             // items
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
+            'items.*.order_no' => ['required', 'string', 'max:50'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.product_price_id' => ['required', 'exists:product_prices,id'],
 
@@ -346,6 +347,7 @@ class SalesOrderController extends Controller
                 ->map(fn($row) => [
                     'product_id' => (int) $row['product_id'],
                     'product_price_id' => (int) $row['product_price_id'], // ✅ new
+                    'order_no' => trim($row['order_no']),
                     'qty' => (int) $row['qty'],
                 ])
                 ->values()
@@ -355,7 +357,7 @@ class SalesOrderController extends Controller
 
             return redirect()
                 ->route('sales-orders.index')
-                ->with('success', 'Sales order berhasil dibuat.');
+                ->with('success', 'Penjualan berhasil dibuat.');
         });
     }
 
@@ -503,6 +505,7 @@ class SalesOrderController extends Controller
 
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
+            'items.*.order_no' => ['required', 'string', 'max:50'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.product_price_id' => ['required', 'exists:product_prices,id'],
 
@@ -603,6 +606,7 @@ class SalesOrderController extends Controller
                 ->map(fn($row) => [
                     'product_id' => (int) $row['product_id'],
                     'product_price_id' => (int) $row['product_price_id'], // ✅ new
+                    'order_no' => trim($row['order_no']),
                     'qty' => (int) $row['qty'],
                 ])
                 ->values()
@@ -613,7 +617,7 @@ class SalesOrderController extends Controller
 
             return redirect()
                 ->route('sales-orders.show', $salesOrder)
-                ->with('success', 'Sales order berhasil diupdate.');
+                ->with('success', 'Penjualan berhasil diupdate.');
         });
     }
 

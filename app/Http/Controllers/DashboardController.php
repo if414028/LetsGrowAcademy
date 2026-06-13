@@ -95,9 +95,7 @@ class DashboardController extends Controller
         // =========================================================
         // CUTOFF WINDOW (untuk semua stat card berbasis Sales Order)
         // =========================================================
-        $cutoff = PerformanceCutoff::query()
-            ->orderByDesc('start_date')   // atau kolom lain yang kamu pakai
-            ->first();
+        $cutoff = PerformanceCutoff::current();
 
         $cutoffStart = $cutoff
             ? Carbon::parse($cutoff->start_date)->startOfDay()
@@ -222,33 +220,26 @@ class DashboardController extends Controller
             }
         }
 
-        // 6) Total Health Planner (Aktif Bulan Ini)
-        $monthStart = now()->startOfMonth();
-        $monthEnd   = now()->endOfMonth();
+        // 6) Total Health Planner aktif di closing date aktif:
+        // HP dianggap aktif jika punya minimal 1 penjualan/SO selesai dalam cutoff aktif.
+        $activeHealthPlannerQuery = User::query()
+            ->role('Health Planner')
+            ->where('users.status', 'Active')
+            ->whereExists(function ($sub) use ($cutoffStart, $cutoffEnd) {
+                $sub->select(DB::raw(1))
+                    ->from('sales_orders')
+                    ->whereColumn('sales_orders.sales_user_id', 'users.id')
+                    ->where('sales_orders.status', 'selesai')
+                    ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd]);
+            });
 
-        if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
-            // ✅ Admin/Head Admin: tampilkan total semua HP aktif (tanpa filter downline & tanpa syarat SO)
-            $totalActiveHealthPlannersThisMonth = (int) User::query()
-                ->role('Health Planner')
-                ->where('users.status', 'Active')
-                ->count();
-        } else {
-            // ✅ selain Admin/Head: hanya HP di bawah user (multi-level) yang membuat minimal 1 SO bulan ini
-            $totalActiveHealthPlannersThisMonth = (int) User::query()
-                ->role('Health Planner')
-                ->where('users.status', 'Active')
-                ->whereIn('users.id', $scopeUserIds) // scope sudah include diri sendiri + downline
-                ->whereExists(function ($sub) use ($monthStart, $monthEnd) {
-                    $sub->select(DB::raw(1))
-                        ->from('sales_orders')
-                        ->whereColumn('sales_orders.sales_user_id', 'users.id')
-                        ->whereBetween('sales_orders.key_in_at', [$monthStart, $monthEnd]);
-                    // kalau mau hanya SO selesai, tambahkan:
-                    // ->where('sales_orders.status', 'selesai');
-                })
-                ->distinct()
-                ->count();
+        if (!$isAdminOrHead) {
+            $activeHealthPlannerQuery->whereIn('users.id', $scopeUserIds);
         }
+
+        $totalActiveHealthPlannersThisMonth = (int) $activeHealthPlannerQuery
+            ->distinct('users.id')
+            ->count('users.id');
 
         // =========================================================
         // HM PERFORMANCE TABLE (HM + Team Units)

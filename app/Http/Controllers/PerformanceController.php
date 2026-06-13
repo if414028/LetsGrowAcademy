@@ -646,15 +646,15 @@ class PerformanceController extends Controller
 
         $sheet->getColumnDimension('A')->setWidth(6);
         $sheet->getColumnDimension('B')->setWidth(28);
-        $sheet->getColumnDimension('C')->setWidth(38);
+        $sheet->getColumnDimension('C')->setWidth(20);
         $sheet->getColumnDimension('D')->setWidth(16);
         $sheet->getColumnDimension('E')->setWidth(16);
         $sheet->getColumnDimension('F')->setWidth(12);
         $sheet->getColumnDimension('G')->setWidth(14);
         $sheet->getColumnDimension('H')->setWidth(16);
         $sheet->getColumnDimension('I')->setWidth(18);
-        $sheet->getColumnDimension('J')->setWidth(42);
-        $sheet->getColumnDimension('K')->setWidth(42);
+        $sheet->getColumnDimension('J')->setWidth(20);
+        $sheet->getColumnDimension('K')->setWidth(16);
 
         $sheet->mergeCells('A1:K1');
         $sheet->setCellValue('A1', $title);
@@ -741,16 +741,36 @@ class PerformanceController extends Controller
 
         $sheet->mergeCells("A{$row}:K{$row}");
         $sheet->setCellValue("A{$row}", "Summary");
-        $sheet->getStyle("A{$row}")->getFont()->setBold(true)->setSize(12);
+        $sheet->getStyle("A{$row}:K{$row}")->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'size' => 12,
+                'color' => ['argb' => 'FFFFFFFF'],
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['argb' => 'FF1E3A8A'],
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['argb' => 'FF1E293B'],
+                ],
+            ],
+        ]);
         $row++;
 
         $summaryRows = [
-            ['Total Key-In', (int)($summary->total_key_in ?? 0), 'FFF9FAFB'],
-            ['Total Recurring', (int)($summary->total_recurring ?? 0), 'FFEFF6FF'],
-            ['Dijadwalkan', (int)($summary->dijadwalkan ?? 0), 'FFFFFBEB'],
-            ['Menunggu Jadwal', (int)($summary->menunggu_jadwal ?? 0), 'FFFFFBEB'],
-            ['Pending', (int)($summary->pending ?? 0), 'FFFAF5FF'],
-            ['Total sudah install (OK)', (int)($summary->total_sudah_install ?? 0), 'FFF0FDF4'],
+            ['Total Key-In', (int)($summary->total_key_in ?? 0), 'FFE5E7EB'],
+            ['Total Recurring', (int)($summary->total_recurring ?? 0), 'FFBFDBFE'],
+            ['Dijadwalkan', (int)($summary->dijadwalkan ?? 0), 'FFFDE68A'],
+            ['Menunggu Jadwal', (int)($summary->menunggu_jadwal ?? 0), 'FFFCD34D'],
+            ['Pending', (int)($summary->pending ?? 0), 'FFD8B4FE'],
+            ['Total sudah install (OK)', (int)($summary->total_sudah_install ?? 0), 'FF86EFAC'],
         ];
 
         foreach ($summaryRows as [$label, $value, $bgColor]) {
@@ -761,6 +781,7 @@ class PerformanceController extends Controller
             $sheet->getStyle("A{$row}:K{$row}")->applyFromArray([
                 'font' => ['bold' => true],
                 'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
                     'vertical' => Alignment::VERTICAL_CENTER,
                 ],
                 'fill' => [
@@ -770,24 +791,65 @@ class PerformanceController extends Controller
                 'borders' => [
                     'allBorders' => [
                         'borderStyle' => Border::BORDER_THIN,
-                        'color' => ['argb' => 'FFE5E7EB'],
+                        'color' => ['argb' => 'FF94A3B8'],
                     ],
                 ],
             ]);
 
-            $sheet->getStyle("K{$row}")
-                ->getAlignment()
-                ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-
             $row++;
         }
 
-        $fileName = 'performance_' . Str::slug($title) . "_{$from}_{$to}.xlsx";
+        $fileName = $this->performanceExportFileName($hasMemberFilter, $baseUser, $from, $to, 'xlsx');
         $tmpPath = storage_path('app/' . Str::uuid()->toString() . '.xlsx');
 
         (new Xlsx($spreadsheet))->save($tmpPath);
 
         return response()->download($tmpPath, $fileName)->deleteFileAfterSend(true);
+    }
+
+    public function exportPdf(Request $request)
+    {
+        $data = $this->buildPerformanceData($request);
+
+        /** @var \App\Models\User $baseUser */
+        $baseUser = $data['baseUser'];
+        $roleName = $baseUser->roles->pluck('name')->first();
+        $userName = strtoupper($baseUser->full_name ?: $baseUser->name);
+
+        $roleMap = [
+            'Health Manager' => 'HM',
+            'Health Planner' => 'HP',
+            'Sales Manager'  => 'SM',
+            'Admin'          => 'Admin',
+            'Head Admin'     => 'Head Admin',
+        ];
+
+        $rolePrefix = $roleMap[$roleName] ?? $roleName ?? '';
+        $title = $data['hasMemberFilter']
+            ? trim("Team {$rolePrefix} {$userName}")
+            : 'Team Performance All';
+        $fileName = $this->performanceExportFileName($data['hasMemberFilter'], $baseUser, $data['from'], $data['to'], 'pdf');
+
+        return view('performances.export-pdf', [
+            'title' => $title,
+            'fileName' => $fileName,
+            'from' => $data['from'],
+            'to' => $data['to'],
+            'summary' => $data['summary'],
+            'teamSheetRows' => $data['teamSheetRows'],
+        ]);
+    }
+
+    private function performanceExportFileName(bool $hasMemberFilter, User $baseUser, string $from, string $to, string $extension): string
+    {
+        $memberName = $hasMemberFilter
+            ? trim((string) ($baseUser->full_name ?: $baseUser->name))
+            : 'ALL';
+
+        $memberName = preg_replace('/[\/\\\\:*?"<>|]+/', '-', $memberName) ?: 'ALL';
+        $dateRange = "{$from} sd {$to}";
+
+        return "Team Performance - {$memberName} - {$dateRange}.{$extension}";
     }
 
     public function updateCutoff(Request $request)

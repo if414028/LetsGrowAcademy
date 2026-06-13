@@ -3,7 +3,7 @@
         <div class="flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl md:text-2xl font-semibold text-gray-900">
-                    Sales Order Detail
+                    Detail Penjualan
                 </h1>
                 <p class="text-sm text-gray-500">
                     {{ $salesOrder->order_no }}
@@ -25,7 +25,7 @@
 
                     <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
-                            <div class="text-xs text-gray-500">Order No</div>
+                            <div class="text-xs text-gray-500">Order Number</div>
                             <div class="mt-1 font-semibold text-gray-900">{{ $salesOrder->order_no }}</div>
                         </div>
 
@@ -101,7 +101,7 @@
                         @endphp
 
                         <div>
-                            <div class="text-xs text-gray-500">Order Status</div>
+                            <div class="text-xs text-gray-500">Status Penjualan</div>
                             <div class="mt-1">
                                 <span class="rounded-full px-2 py-1 text-xs font-semibold {{ $statusClasses }}">
                                     {{ $status ?? '-' }}
@@ -149,11 +149,12 @@
                         </div>
                     </div>
 
-                    <div class="mt-4 overflow-hidden rounded-xl border">
-                        <table class="min-w-full text-sm">
+                    <div class="product-items-table-wrap mt-4 overflow-hidden rounded-xl border">
+                        <table class="product-items-table min-w-full text-sm">
                             <thead class="bg-gray-50 text-xs uppercase text-gray-500">
                                 <tr>
                                     <th class="px-4 py-3 text-left w-20">Image</th>
+                                    <th class="px-4 py-3 text-left w-44">Order Number</th>
                                     <th class="px-4 py-3 text-left">SKU</th>
                                     <th class="px-4 py-3 text-left">Product</th>
                                     <th class="px-4 py-3 text-left w-56">Selected Price</th>
@@ -204,7 +205,7 @@
                                     @endphp
 
                                     <tr>
-                                        <td class="px-4 py-3">
+                                        <td class="px-4 py-3" data-label="Image">
                                             <div class="h-10 w-10 overflow-hidden rounded-lg border bg-white">
                                                 @if ($img)
                                                     <img src="{{ \Illuminate\Support\Str::startsWith($img, ['http://', 'https://']) ? $img : asset('storage/' . $img) }}"
@@ -218,11 +219,15 @@
                                             </div>
                                         </td>
 
-                                        <td class="px-4 py-3 font-medium text-gray-900">
+                                        <td class="px-4 py-3 font-medium text-gray-900" data-label="Order Number">
+                                            {{ $item->order_no ?? '-' }}
+                                        </td>
+
+                                        <td class="px-4 py-3 font-medium text-gray-900" data-label="SKU">
                                             {{ $item->product?->sku ?? '-' }}
                                         </td>
 
-                                        <td class="px-4 py-3">
+                                        <td class="px-4 py-3" data-label="Product">
                                             <div class="font-medium text-gray-900">
                                                 {{ $item->product?->product_name ?? '-' }}
                                             </div>
@@ -233,7 +238,7 @@
                                             @endif
                                         </td>
 
-                                        <td class="px-4 py-3">
+                                        <td class="px-4 py-3" data-label="Selected Price">
                                             <div class="text-sm font-medium text-gray-900">
                                                 {{ $priceLabel }}
                                             </div>
@@ -245,11 +250,11 @@
                                             </div>
                                         </td>
 
-                                        <td class="px-4 py-3 text-right">
+                                        <td class="px-4 py-3 text-right" data-label="Qty">
                                             {{ $qty }}
                                         </td>
 
-                                        <td class="px-4 py-3 text-right font-semibold text-gray-900">
+                                        <td class="px-4 py-3 text-right font-semibold text-gray-900" data-label="Total">
                                             {{ $total ? 'Rp ' . number_format($total, 0, ',', '.') : '-' }}
                                             @if ($isMonthly)
                                                 <span class="text-gray-400">/bln</span>
@@ -258,7 +263,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="6" class="px-4 py-10 text-center text-gray-500">
+                                        <td colspan="7" class="px-4 py-10 text-center text-gray-500">
                                             Belum ada items.
                                         </td>
                                     </tr>

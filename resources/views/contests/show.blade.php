@@ -292,7 +292,7 @@
                 <div class="text-sm text-gray-500">
                     {{ $isQualifier
                         ? 'Pemenang bisa lebih dari satu: semua HP yang memenuhi syarat di setiap bulan.'
-                        : 'Otomatis dihitung dari total qty sales orders “selesai” pada periode kontes.' }}
+                        : 'Otomatis dihitung dari total qty penjualan “selesai” pada periode kontes.' }}
                 </div>
             </div>
 

@@ -29,12 +29,12 @@
 
                     <div>
                         <h3 class="text-lg font-bold text-orange-900">
-                            Peringatan Aktivitas Sales Order
+                            Peringatan Aktivitas Penjualan
                         </h3>
 
                         @if ($isHP)
                             <p class="mt-1 text-sm text-orange-900/80">
-                                Anda sudah <span class="font-semibold">5 bulan</span> tidak membuat Sales Order.
+                                Anda sudah <span class="font-semibold">5 bulan</span> tidak membuat Penjualan.
                                 Jika tidak membuat SO sampai
                                 <span class="font-semibold">
                                     {{ $selfWarning->deactivate_at->translatedFormat('d M Y') }}
@@ -46,7 +46,7 @@
                             </p>
                         @else
                             <p class="mt-1 text-sm text-orange-900/80">
-                                Berikut daftar Health Planner yang sudah 5 bulan tidak membuat Sales Order dan akan
+                                Berikut daftar Health Planner yang sudah 5 bulan tidak membuat Penjualan dan akan
                                 dinonaktifkan pada bulan ke-6.
                             </p>
                         @endif
@@ -378,15 +378,15 @@
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
             <div class="flex items-start justify-between">
                 <div>
-                    <p class="text-sm text-gray-500">Total Health Planner (Aktif Bulan Ini)</p>
+                    <p class="text-sm text-gray-500">Total Health Planner (Aktif Closing Ini)</p>
                     <p class="mt-2 text-3xl font-bold">
                         {{ number_format($totalActiveHealthPlannersThisMonth ?? 0) }} Orang
                     </p>
                     <p class="mt-1 text-xs text-gray-500">
                         @if (auth()->user()->hasAnyRole(['Admin', 'Head Admin']))
-                            Seluruh Health Planner yang membuat minimal 1 SO di bulan ini.
+                            Seluruh Health Planner yang punya minimal 1 SO selesai di closing aktif.
                         @else
-                            Health Planner di bawah Anda yang membuat minimal 1 SO di bulan ini.
+                            Health Planner di bawah Anda yang punya minimal 1 SO selesai di closing aktif.
                         @endif
                     </p>
                 </div>

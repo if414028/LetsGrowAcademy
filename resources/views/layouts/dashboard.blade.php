@@ -81,7 +81,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M9 12h6m-6 4h6M7 6h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z" />
                     </svg>
-                    Sales Orders
+                    Penjualan
                 </a>
 
                 <a href="{{ route('contests.index') }}"
@@ -192,7 +192,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M9 12h6m-6 4h6M7 6h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z" />
                         </svg>
-                        Sales Orders
+                        Penjualan
                     </a>
 
                     <a href="{{ route('contests.index') }}" @click="sidebarOpen=false"

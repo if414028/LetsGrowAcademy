@@ -84,7 +84,7 @@
                     </select>
 
                     <p class="mt-2 text-xs text-gray-500">
-                        Semua kontes dihitung dari total qty (SUM qty) Sales Order “selesai”.
+                        Semua kontes dihitung dari total qty (SUM qty) Penjualan “selesai”.
                         Kontes Team punya syarat bulanan (personal qty + direct active partner).
                     </p>
                 </div>

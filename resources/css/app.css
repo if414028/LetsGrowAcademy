@@ -2,3 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 [x-cloak] { display: none !important; }
+
+@media (max-width: 767px) {
+    .product-items-table-wrap {
+        border: 0;
+        overflow: visible;
+    }
+
+    .product-items-table,
+    .product-items-table tbody,
+    .product-items-table tr,
+    .product-items-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .product-items-table thead {
+        display: none;
+    }
+
+    .product-items-table tbody {
+        border: 0;
+    }
+
+    .product-items-table tbody > :not([hidden]) ~ :not([hidden]) {
+        border-top-width: 0;
+    }
+
+    .product-items-table tr {
+        border: 1px solid rgb(229 231 235);
+        border-radius: 0.75rem;
+        margin-top: 0.75rem;
+        padding: 0.875rem;
+        background: white;
+    }
+
+    .product-items-table tr:first-child {
+        margin-top: 0;
+    }
+
+    .product-items-table td {
+        border: 0;
+        padding: 0.5rem 0;
+        text-align: left;
+    }
+
+    .product-items-table td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 0.35rem;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: rgb(107 114 128);
+    }
+
+    .product-items-table td[data-label=""]::before {
+        display: none;
+    }
+
+    .product-items-table td:not([data-label])::before {
+        display: none;
+    }
+
+    .product-items-table .product-action-cell {
+        padding-top: 0.75rem;
+    }
+
+    .product-items-table .product-action-cell > button,
+    .product-items-table .product-action-cell > a {
+        width: 100%;
+        justify-content: center;
+    }
+}
