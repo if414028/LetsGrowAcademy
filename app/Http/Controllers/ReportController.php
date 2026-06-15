@@ -178,6 +178,7 @@ class ReportController extends Controller
                     'first_key_in_sort' => $leaderboard['first_key_in_at'] ?? '9999-12-31 23:59:59',
                 ];
             })
+            ->filter(fn($row) => $row['units'] > 0)
             ->sortBy([
                 ['units', 'desc'],
                 ['first_key_in_sort', 'asc'],
@@ -250,6 +251,7 @@ class ReportController extends Controller
                     'first_key_in_sort' => $leaderboard['first_key_in_at'] ?? '9999-12-31 23:59:59',
                 ];
             })
+            ->filter(fn($row) => $row['units'] > 0)
             ->sortBy([
                 ['units', 'desc'],
                 ['first_key_in_sort', 'asc'],
