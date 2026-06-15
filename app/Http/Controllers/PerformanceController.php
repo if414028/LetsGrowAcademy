@@ -1219,7 +1219,7 @@ class PerformanceController extends Controller
      * Scope data performance:
      * 1. key_in_at dalam periode
      * 2. atau status selesai + install_date dalam periode
-     * 3. atau ccp_approved_at / updated_at dalam periode (khusus Team Sheet)
+     * 3. atau ccp_approved_at dalam periode (khusus Team Sheet)
      * 4. atau carry over recurring dari periode sebelumnya (khusus cutoff mode)
      */
     private function applyPerformanceScopeFilter(
@@ -1248,18 +1248,12 @@ class PerformanceController extends Controller
                     ->whereDate('so.install_date', '<=', $to);
             });
 
-            // C. SO yang approval CCP atau update datanya masuk periode Team Sheet
+            // C. SO yang approval CCP masuk periode Team Sheet
             if ($includeApprovalAndUpdateDates) {
                 $w->orWhere(function ($a) use ($from, $to) {
                     $a->whereNotNull('so.ccp_approved_at')
                         ->whereDate('so.ccp_approved_at', '>=', $from)
                         ->whereDate('so.ccp_approved_at', '<=', $to);
-                });
-
-                $w->orWhere(function ($a) use ($from, $to) {
-                    $a->whereNotNull('so.updated_at')
-                        ->whereDate('so.updated_at', '>=', $from)
-                        ->whereDate('so.updated_at', '<=', $to);
                 });
             }
 
