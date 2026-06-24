@@ -17,6 +17,8 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class PerformanceController extends Controller
 {
+    private array $salesOrderStatuses = ['menunggu verifikasi', 'menunggu jadwal', 'dijadwalkan', 'dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang', 'selesai'];
+
     public function index(Request $request)
     {
         $authUser = $request->user();
@@ -76,6 +78,9 @@ class PerformanceController extends Controller
         ) && (
             $from !== $defaultFrom || $to !== $defaultTo
         );
+
+        $selectedStatuses = $this->selectedSalesOrderStatuses($request);
+        $statusOptions = $this->salesOrderStatuses;
 
         // ======================================
         // Dropdown options
@@ -260,6 +265,10 @@ class PerformanceController extends Controller
 
         $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange, true);
 
+        if (!empty($selectedStatuses)) {
+            $sheetQ->whereIn('so.status', $selectedStatuses);
+        }
+
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
             ->orderBy('so.key_in_at')
@@ -328,6 +337,8 @@ class PerformanceController extends Controller
             'memberOptions'   => $memberOptions,
             'memberId'        => $hasMemberFilter ? $baseUser->id : null,
             'memberLabel'     => $hasMemberFilter ? ($baseUser->full_name ?: $baseUser->name) : '',
+            'statusOptions'   => $statusOptions,
+            'selectedStatuses' => $selectedStatuses,
             'roadToHm'        => $roadToHm,
         ]);
     }
@@ -450,6 +461,8 @@ class PerformanceController extends Controller
             $from !== $defaultFrom || $to !== $defaultTo
         );
 
+        $selectedStatuses = $this->selectedSalesOrderStatuses($request);
+
         // ======================================
         // Helper units
         // ======================================
@@ -557,6 +570,10 @@ class PerformanceController extends Controller
 
         $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange, true);
 
+        if (!empty($selectedStatuses)) {
+            $sheetQ->whereIn('so.status', $selectedStatuses);
+        }
+
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
             ->orderBy('so.key_in_at')
@@ -609,6 +626,7 @@ class PerformanceController extends Controller
             'summary' => $summary,
             'teamSheetRows' => $teamSheetRows,
             'hasMemberFilter' => $hasMemberFilter,
+            'selectedStatuses' => $selectedStatuses,
         ];
     }
 
@@ -1071,6 +1089,8 @@ class PerformanceController extends Controller
             $from !== $defaultFrom || $to !== $defaultTo
         );
 
+        $selectedStatuses = $this->selectedSalesOrderStatuses($request);
+
         $unitCountExpr = "
             COALESCE(SUM(
                 CASE
@@ -1092,6 +1112,10 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($q, $from, $to, !$manualDateRange, true);
+
+        if (!empty($selectedStatuses)) {
+            $q->whereIn('so.status', $selectedStatuses);
+        }
 
         $rows = $q
             ->select([
@@ -1314,6 +1338,14 @@ class PerformanceController extends Controller
         $this->applyPerformanceScopeFilter($q, $from, $to, false);
     }
 
+    private function selectedSalesOrderStatuses(Request $request): array
+    {
+        return collect((array) $request->input('status', []))
+            ->filter(fn($status) => in_array($status, $this->salesOrderStatuses, true))
+            ->values()
+            ->all();
+    }
+
     private function buildRoadToHmData(User $user): array
     {
         Carbon::setLocale('id');
@@ -1397,58 +1429,15 @@ class PerformanceController extends Controller
             return $count;
         };
 
-        $historyMonths = collect();
-        $cursor = $historyStart->copy();
+        $roadToHmStartMonth = Carbon::create(2026, 4, 1)->startOfMonth();
+        $firstWindowEnd = $roadToHmStartMonth->copy()->addMonthsNoOverflow(3);
 
-        while ($cursor->lte($now)) {
-            $monthKey = $cursor->format('Y-m-01');
+        $activeStartMonth = $now->lte($firstWindowEnd)
+            ? $roadToHmStartMonth->copy()
+            : $now->copy()->subMonthsNoOverflow(3)->startOfMonth();
 
-            $personalAch = $getPersonalAch($monthKey);
-            $teamAch = $getTeamAch($monthKey);
-            $activeHpAch = $getActiveHpAch($monthKey);
-
-            $personalPassed = $personalAch >= $targetPersonal;
-            $teamPassed = $teamAch >= $targetTeam;
-            $activeHpPassed = $activeHpAch >= $targetActiveHp;
-
-            $historyMonths->push([
-                'key' => $monthKey,
-                'date' => $cursor->copy(),
-                'label' => ucfirst($cursor->translatedFormat('F')),
-                'personal_ach' => $personalAch,
-                'team_ach' => $teamAch,
-                'active_hp_ach' => $activeHpAch,
-                'personal_passed' => $personalPassed,
-                'team_passed' => $teamPassed,
-                'active_hp_passed' => $activeHpPassed,
-                'all_passed' => $personalPassed && $teamPassed && $activeHpPassed,
-            ]);
-
-            $cursor->addMonthNoOverflow();
-        }
-
-        $lastFailedIndex = null;
-        foreach ($historyMonths as $index => $month) {
-            if (!$month['all_passed']) {
-                $lastFailedIndex = $index;
-            }
-        }
-
-        if ($lastFailedIndex === null) {
-            $activeStartMonth = $historyMonths->last()['date']->copy();
-            foreach ($historyMonths as $month) {
-                if ($month['all_passed']) {
-                    $activeStartMonth = $month['date']->copy();
-                    break;
-                }
-            }
-        } else {
-            $failedMonthDate = $historyMonths[$lastFailedIndex]['date']->copy();
-            $activeStartMonth = $failedMonthDate->copy()->addMonthNoOverflow();
-
-            if ($activeStartMonth->gt($now)) {
-                $activeStartMonth = $now->copy();
-            }
+        if ($activeStartMonth->lt($roadToHmStartMonth)) {
+            $activeStartMonth = $roadToHmStartMonth->copy();
         }
 
         $months = collect(range(0, 3))->map(function ($i) use ($activeStartMonth) {

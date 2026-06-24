@@ -19,7 +19,7 @@
         <div x-data="{ filterOpen: false }"
             class="flex flex-col gap-3 border-b px-4 py-4 md:flex-row md:items-center md:justify-between">
             @php
-                $activeFilterCount = collect(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type'])
+                $activeFilterCount = collect(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status'])
                     ->filter(fn($key) => $key === 'date_filter_by'
                         ? request()->filled($key) && request($key) !== 'key_in_at'
                         : request()->filled($key))
@@ -55,8 +55,8 @@
                     @endif
                 </button>
 
-                @if (request()->hasAny(['search', 'from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type']))
-                    <a href="{{ route('sales-orders.index', request()->except(['search', 'from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'page'])) }}"
+                @if (request()->hasAny(['search', 'from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status']))
+                    <a href="{{ route('sales-orders.index', request()->except(['search', 'from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'page'])) }}"
                         class="shrink-0 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                         Reset
                     </a>
@@ -78,7 +78,7 @@
                     </div>
 
                     <form method="GET" class="space-y-4 p-5">
-                        @foreach (request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'page']) as $key => $value)
+                        @foreach (request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'page']) as $key => $value)
                             @if (is_array($value))
                                 @foreach ($value as $item)
                                     <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
@@ -142,8 +142,23 @@
                             </select>
                         </div>
 
+                        <div>
+                            <div class="mb-2 block text-sm font-medium text-gray-700">Status</div>
+                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                @foreach ($statuses as $status)
+                                    <label
+                                        class="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                                        <input type="checkbox" name="status[]" value="{{ $status }}"
+                                            @checked(in_array($status, $selectedStatuses ?? [], true))
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                        <span>{{ ucwords($status) }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+
                         <div class="flex items-center justify-end gap-2 border-t pt-4">
-                            <a href="{{ route('sales-orders.index', request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'page'])) }}"
+                            <a href="{{ route('sales-orders.index', request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'page'])) }}"
                                 class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                                 Clear Filter
                             </a>
@@ -155,33 +170,6 @@
                     </form>
                 </div>
             </div>
-        </div>
-
-        {{-- Tabs by Status --}}
-        @php
-            // bawa semua query kecuali page
-            $baseQuery = request()->except('page');
-            $active = $activeStatus ?? (request('status') ?: 'all');
-        @endphp
-
-        <div class="border-b px-4">
-            <nav class="-mb-px flex gap-2 overflow-x-auto py-3">
-                {{-- Semua --}}
-                <a href="{{ route('sales-orders.index', array_filter(array_merge($baseQuery, ['status' => null]), fn($v) => $v !== null && $v !== '')) }}"
-                    class="whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold
-                            {{ $active === 'all' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                    Semua
-                </a>
-
-                {{-- Per Status --}}
-                @foreach ($statuses ?? [] as $st)
-                    <a href="{{ route('sales-orders.index', array_filter(array_merge($baseQuery, ['status' => $st]), fn($v) => $v !== null && $v !== '')) }}"
-                        class="whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold
-                                {{ $active === $st ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}">
-                        {{ ucwords($st) }}
-                    </a>
-                @endforeach
-            </nav>
         </div>
 
         {{-- Table --}}

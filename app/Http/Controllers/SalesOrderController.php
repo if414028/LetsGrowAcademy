@@ -48,8 +48,13 @@ class SalesOrderController extends Controller
         }
 
         // status
-        if ($request->filled('status') && in_array($request->status, $this->statuses, true)) {
-            $q->where('status', $request->status);
+        $selectedStatuses = collect((array) $request->input('status', []))
+            ->filter(fn($status) => in_array($status, $this->statuses, true))
+            ->values()
+            ->all();
+
+        if (!empty($selectedStatuses)) {
+            $q->whereIn('status', $selectedStatuses);
         }
 
         // ccp_status
@@ -97,7 +102,6 @@ class SalesOrderController extends Controller
         }
 
         $salesOrders = $q->latest('key_in_at')->paginate(10)->withQueryString();
-        $activeStatus = $request->filled('status') ? $request->status : 'all';
         $statuses = $this->statuses;
         $customerTypes = $this->customerTypes;
         $dateFilterOptions = [
@@ -109,7 +113,7 @@ class SalesOrderController extends Controller
         return view('sales-orders.index', compact(
             'salesOrders',
             'statuses',
-            'activeStatus',
+            'selectedStatuses',
             'customerTypes',
             'dateFilterBy',
             'dateFilterOptions',

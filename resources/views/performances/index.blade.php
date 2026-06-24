@@ -196,66 +196,126 @@
 
         {{-- Table --}}
         {{-- Table (Excel-like Sheet) --}}
-        <div class="mt-6 rounded-2xl border bg-white shadow-sm">
+        <div class="mt-6 rounded-2xl border bg-white shadow-sm" x-data="{ filterOpen: false }">
             <div class="relative flex items-center justify-between gap-4 p-5 flex-wrap">
-                <h2 class="text-lg font-semibold text-gray-900">Team Sheet</h2>
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">Team Sheet</h2>
+                    @if (!empty($selectedStatuses))
+                        <div class="mt-1 text-sm text-gray-500">
+                            Status: {{ collect($selectedStatuses)->map(fn($status) => ucwords($status))->implode(', ') }}
+                        </div>
+                    @endif
+                </div>
 
-                {{-- form filter kamu tetap --}}
-                <form method="GET" class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end sm:gap-3">
-                    {{-- Date From --}}
-                    <div class="w-full sm:w-auto">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">From</label>
-                        <input type="date" name="from" value="{{ $from }}"
-                            class="w-full sm:w-40 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none
-                    focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                @php
+                    $activeFilterCount = collect(['from', 'to', 'member_id', 'status'])
+                        ->filter(fn($key) => request()->filled($key))
+                        ->count();
+                @endphp
+
+                <button type="button" @click="filterOpen = true"
+                    class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                        stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0m-9.75 0h9.75" />
+                    </svg>
+                    Filter
+                    @if ($activeFilterCount > 0)
+                        <span class="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
+                            {{ $activeFilterCount }}
+                        </span>
+                    @endif
+                </button>
+            </div>
+
+            <div x-show="filterOpen" x-cloak class="fixed inset-0 z-50">
+                <div class="absolute inset-0 bg-black/40" @click="filterOpen = false"></div>
+                <div
+                    class="absolute left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-xl">
+                    <div class="flex items-center justify-between border-b px-5 py-4">
+                        <h2 class="text-base font-semibold text-gray-900">Filter Team Sheet</h2>
+                        <button type="button" @click="filterOpen = false"
+                            class="rounded-lg px-2 py-1 text-xl leading-none text-gray-500 hover:bg-gray-100">&times;</button>
                     </div>
 
-                    {{-- Date To --}}
-                    <div class="w-full sm:w-auto">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">To</label>
-                        <input type="date" name="to" value="{{ $to }}"
-                            class="w-full sm:w-40 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none
-                    focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
-                    </div>
+                    <form method="GET" class="max-h-[75vh] space-y-4 overflow-y-auto p-5">
+                        @foreach (request()->except(['from', 'to', 'member_id', 'status', 'page']) as $key => $value)
+                            @if (is_array($value))
+                                @foreach ($value as $item)
+                                    <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
+                                @endforeach
+                            @else
+                                <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                            @endif
+                        @endforeach
 
-                    {{-- Member (searchable dropdown) --}}
-                    <div class="w-full sm:w-auto" x-data="memberSelect(window.performanceMemberOptions, @js($memberId ?? null), @js($memberLabel ?? ''))">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Partner</label>
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-gray-700">From</label>
+                                <input type="date" name="from" value="{{ $from }}"
+                                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
 
-                        <input type="hidden" name="member_id" :value="selectedId">
+                            <div>
+                                <label class="mb-1 block text-sm font-medium text-gray-700">To</label>
+                                <input type="date" name="to" value="{{ $to }}"
+                                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                        </div>
 
-                        <div class="relative">
-                            <input type="text" x-model="query" @focus="open = true" @click="open = true"
-                                @input="open = true" @keydown.escape="open = false" placeholder="Pilih partner..."
-                                class="w-full sm:w-64 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none
-                   focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                        <div x-data="memberSelect(window.performanceMemberOptions, @js($memberId ?? null), @js($memberLabel ?? ''))">
+                            <label class="mb-1 block text-sm font-medium text-gray-700">Partner</label>
+                            <input type="hidden" name="member_id" :value="selectedId">
 
-                            <div x-show="open" x-cloak @click.outside="open = false"
-                                class="absolute z-[9999] mt-2 w-full max-h-56 overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
-                                <template x-for="m in filtered()" :key="m.id">
-                                    <button type="button" class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                                        @click="choose(m)">
-                                        <span x-text="m.label"></span>
-                                    </button>
-                                </template>
+                            <div class="relative">
+                                <input type="text" x-model="query" @focus="open = true" @click="open = true"
+                                    @input="open = true" @keydown.escape="open = false" placeholder="Pilih partner..."
+                                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
 
-                                <div x-show="filtered().length === 0" class="px-3 py-2 text-sm text-gray-500">
-                                    Tidak ada hasil.
+                                <div x-show="open" x-cloak @click.outside="open = false"
+                                    class="absolute z-[9999] mt-2 max-h-56 w-full overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                                    <template x-for="m in filtered()" :key="m.id">
+                                        <button type="button" class="w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                                            @click="choose(m)">
+                                            <span x-text="m.label"></span>
+                                        </button>
+                                    </template>
+
+                                    <div x-show="filtered().length === 0" class="px-3 py-2 text-sm text-gray-500">
+                                        Tidak ada hasil.
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <button type="submit"
-                        class="w-full sm:w-auto rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                        Apply
-                    </button>
+                        <div>
+                            <div class="mb-2 block text-sm font-medium text-gray-700">Status Team Sheet</div>
+                            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                @foreach ($statusOptions as $status)
+                                    <label
+                                        class="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                                        <input type="checkbox" name="status[]" value="{{ $status }}"
+                                            @checked(in_array($status, $selectedStatuses ?? [], true))
+                                            class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                        <span>{{ ucwords($status) }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
 
-                    <a href="{{ route('performance.index') }}"
-                        class="w-full sm:w-auto text-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                        Reset
-                    </a>
-                </form>
+                        <div class="flex items-center justify-end gap-2 border-t pt-4">
+                            <a href="{{ route('performance.index') }}"
+                                class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                                Reset
+                            </a>
+                            <button type="submit"
+                                class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                                Apply Filter
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <div class="overflow-x-auto">
