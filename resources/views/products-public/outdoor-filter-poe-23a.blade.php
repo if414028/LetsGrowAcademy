@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 @php
+    $whatsappOrderBase = 'https://wa.me/62811920291';
+
     $productCategories = [
         [
             'name' => 'Air Purifier',
@@ -91,14 +93,14 @@
             'price' => 'Rp 15.000.000',
             'items' => ['Tipe: Cash', 'Periode Service: -', 'Tagihan Bulanan: -', 'Periode Tagihan: -', 'Service & Filter: -'],
             'active' => true,
-            'href' => 'https://wa.me/6281247843500?text=Hallo..%0A%0ASaya%20ingin%20order%20Produk%20outdoor%0ANama%3A%20*Coway%20Outdoor%20Filter*%0AModel%3A%20*POE-23A*%0APackage%3A%20*Product%20Only*',
+            'href' => $whatsappOrderBase . '?text=Hallo..%0A%0ASaya%20ingin%20order%20Produk%20outdoor%0ANama%3A%20*Coway%20Outdoor%20Filter*%0AModel%3A%20*POE-23A*%0APackage%3A%20*Product%20Only*',
         ],
         [
             'name' => 'Package 84',
             'price' => 'Rp 24.360.000',
             'items' => ['Tipe: Installment', 'Periode Service: 84 Bulan', 'Tagihan Bulanan: Rp 290.000', 'Periode Tagihan: 84 Bulan', 'Service & Filter: Gratis'],
             'active' => false,
-            'href' => 'https://wa.me/6281247843500?text=Hallo..%0A%0ASaya%20ingin%20order%20Water%20Purifier%0ANama%3A%20*Coway%20Outdoor%20Filter*%0AModel%3A%20*POE-23A*%0APackage%3A%20*84*',
+            'href' => $whatsappOrderBase . '?text=Hallo..%0A%0ASaya%20ingin%20order%20Water%20Purifier%0ANama%3A%20*Coway%20Outdoor%20Filter*%0AModel%3A%20*POE-23A*%0APackage%3A%20*84*',
         ],
     ];
 @endphp
@@ -380,7 +382,7 @@
                     @endforeach
                 </div>
                 <div class="mt-12 text-center">
-                    <a href="https://wa.me/6281247843500" target="_blank" rel="noopener" class="inline-flex h-14 items-center justify-center rounded bg-emerald-500 px-8 text-base font-extrabold uppercase tracking-wide text-white transition hover:bg-emerald-600">Pesan Sekarang</a>
+                    <a href="{{ $whatsappOrderBase }}" target="_blank" rel="noopener" class="inline-flex h-14 items-center justify-center rounded bg-emerald-500 px-8 text-base font-extrabold uppercase tracking-wide text-white transition hover:bg-emerald-600">Pesan Sekarang</a>
                 </div>
             </div>
         </section>
