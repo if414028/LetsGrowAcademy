@@ -11,14 +11,14 @@
         ],
         [
             'name' => 'Water Purifier',
-            'href' => '#water-purifier',
+            'href' => route('public.products.water-purifier'),
             'image' => asset('images/coway-water-purifier-core-slim.jpg'),
             'gradient' => 'from-cyan-400 via-sky-500 to-blue-900',
             'items' => ['SLIM STAND CHP-5730R', 'VILLAEM III CHP-7320R', 'KRISTAL ICE CHPI-7520L', 'CINNAMON P-6320R', 'NEO PLUS CHP-264L', 'OMBAK CHP-7310R', 'VILLAEM II CHP-18AR', 'CORE CHP-671R'],
         ],
         [
             'name' => 'Outdoor',
-            'href' => '#outdoor',
+            'href' => route('public.products.outdoor'),
             'image' => asset('images/coway-outdoor-water-filter.jpg'),
             'gradient' => 'from-cyan-400 via-sky-600 to-teal-700',
             'items' => ['OUTDOOR FILTER POE-23A'],
@@ -189,14 +189,14 @@
         </section>
 
         <section class="grid md:grid-cols-2">
-            <a id="water-purifier" href="{{ url('/') }}#water-purifier" class="group relative min-h-[300px] overflow-hidden bg-[#057db1] px-8 py-12 text-white sm:px-16">
+            <a id="water-purifier" href="{{ route('public.products.water-purifier') }}" class="group relative min-h-[300px] overflow-hidden bg-[#057db1] px-8 py-12 text-white sm:px-16">
                 <div class="relative z-10 flex h-full flex-col justify-center">
                     <p class="text-lg font-extrabold uppercase tracking-wide">Water Purifier</p>
                     <span class="mt-7 inline-flex h-10 w-max items-center justify-center rounded-full border border-white/70 px-6 text-xs font-extrabold uppercase tracking-wide transition group-hover:bg-white group-hover:text-[#057db1]">Lihat Produk</span>
                 </div>
                 <img src="{{ asset('images/water-purifier-products.webp') }}" alt="Water Purifier Coway" class="absolute bottom-0 right-8 h-[90%] w-auto object-contain transition duration-300 group-hover:scale-105" loading="lazy">
             </a>
-            <a id="outdoor" href="{{ url('/') }}#outdoor" class="group relative min-h-[300px] overflow-hidden bg-[#0d4f8f] px-8 py-12 text-white sm:px-16">
+            <a id="outdoor" href="{{ route('public.products.outdoor') }}" class="group relative min-h-[300px] overflow-hidden bg-[#0d4f8f] px-8 py-12 text-white sm:px-16">
                 <div class="relative z-10 flex h-full flex-col justify-center">
                     <p class="text-lg font-extrabold uppercase tracking-wide">Outdoor</p>
                     <span class="mt-7 inline-flex h-10 w-max items-center justify-center rounded-full border border-white/70 px-6 text-xs font-extrabold uppercase tracking-wide transition group-hover:bg-white group-hover:text-[#0d4f8f]">Lihat Produk</span>

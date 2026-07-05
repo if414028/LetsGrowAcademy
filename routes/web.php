@@ -34,6 +34,14 @@ Route::get('/produk/air-purifier', function () {
     return view('products-public.air-purifier');
 })->name('public.products.air-purifier');
 
+Route::get('/produk/water-purifier', function () {
+    return view('products-public.water-purifier');
+})->name('public.products.water-purifier');
+
+Route::get('/produk/outdoor/outdoor-filter-poe-23a', function () {
+    return view('products-public.outdoor-filter-poe-23a');
+})->name('public.products.outdoor');
+
 Route::get('/about-coway/{page}', function (string $page) {
     $aboutPages = config('coway_public.about_pages', []);
 

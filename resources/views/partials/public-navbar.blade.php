@@ -10,14 +10,14 @@
         ],
         [
             'name' => 'Water Purifier',
-            'href' => '#water-purifier',
+            'href' => route('public.products.water-purifier'),
             'image' => asset('images/coway-water-purifier-core-slim.jpg'),
             'gradient' => 'from-cyan-400 via-sky-500 to-blue-900',
             'items' => ['SLIM STAND CHP-5730R', 'VILLAEM III CHP-7320R', 'KRISTAL ICE CHPI-7520L', 'CINNAMON P-6320R', 'NEO PLUS CHP-264L', 'OMBAK CHP-7310R', 'VILLAEM II CHP-18AR', 'CORE CHP-671R'],
         ],
         [
             'name' => 'Outdoor',
-            'href' => '#outdoor',
+            'href' => route('public.products.outdoor'),
             'image' => asset('images/coway-outdoor-water-filter.jpg'),
             'gradient' => 'from-cyan-400 via-sky-600 to-teal-700',
             'items' => ['OUTDOOR FILTER POE-23A'],
