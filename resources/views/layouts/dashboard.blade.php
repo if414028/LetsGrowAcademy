@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ config('app.name', 'Lets Grow Academy') }}</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}">
+    @include('partials.nunito-font')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 

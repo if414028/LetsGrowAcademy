@@ -15,8 +15,35 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return Auth::check()
         ? redirect()->route('dashboard')
-        : redirect()->route('login');
+        : view('welcome');
 });
+
+Route::get('/heart-service', function () {
+    return view('services.heart');
+})->name('heart-service');
+
+Route::get('/cody-services', function () {
+    return view('services.cody');
+})->name('cody-services');
+
+Route::get('/support', function () {
+    return view('support');
+})->name('support');
+
+Route::get('/produk/air-purifier', function () {
+    return view('products-public.air-purifier');
+})->name('public.products.air-purifier');
+
+Route::get('/about-coway/{page}', function (string $page) {
+    $aboutPages = config('coway_public.about_pages', []);
+
+    abort_unless(array_key_exists($page, $aboutPages), 404);
+
+    return view('about-coway.show', [
+        'page' => $aboutPages[$page],
+        'aboutPages' => array_values($aboutPages),
+    ]);
+})->name('about-coway.show');
 
 
 Route::get('/dashboard', [DashboardController::class, 'index'])

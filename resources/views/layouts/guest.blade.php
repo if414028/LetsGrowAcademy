@@ -7,6 +7,7 @@
         <title>{{ config('app.name', 'Laravel') }}</title>
         <link rel="icon" href="{{ asset('favicon.ico') }}">
 
+        @include('partials.nunito-font')
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="font-sans text-gray-900 antialiased">
