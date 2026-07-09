@@ -101,21 +101,18 @@ class PerformanceController extends Controller
         // ======================================
         $joinUnits = function ($q, string $soAlias = 'so') {
             return $q
-                ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
-                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
+                ->leftJoin('sales_order_items as soi', function ($join) use ($soAlias) {
+                    $join->on('soi.sales_order_id', '=', "{$soAlias}.id")
+                        ->whereNull('soi.parent_item_id');
+                })
+                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id');
         };
 
         $unitsExpr = "
-            COALESCE(SUM(
-                CASE
-                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                    ELSE soi.qty
-                END
-            ), 0)
+            COALESCE(SUM(soi.qty), 0)
         ";
 
-        $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
+        $rowUnitExpr = "soi.qty";
 
         // ======================================
         // TEAM PERFORMANCE
@@ -239,16 +236,11 @@ class PerformanceController extends Controller
         // TEAM SHEET
         // ======================================
         $soiAgg = DB::table('sales_order_items as soi')
+            ->whereNull('soi.parent_item_id')
             ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
             ->selectRaw("
                 soi.sales_order_id,
-                COALESCE(SUM(
-                    CASE
-                        WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                        ELSE soi.qty
-                    END
-                ),0) as ns_units
+                COALESCE(SUM(soi.qty),0) as ns_units
             ")
             ->groupBy('soi.sales_order_id');
 
@@ -375,16 +367,13 @@ class PerformanceController extends Controller
         if ($to)   $totalUnitsQ->whereDate('so.install_date', '<=', $to);
 
         $totalUnits = (int) $totalUnitsQ
-            ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->leftJoin('sales_order_items as soi', function ($join) {
+                $join->on('soi.sales_order_id', '=', 'so.id')
+                    ->whereNull('soi.parent_item_id');
+            })
             ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
             ->selectRaw("
-                COALESCE(SUM(
-                    CASE
-                        WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                        ELSE soi.qty
-                    END
-                ),0) as units
+                COALESCE(SUM(soi.qty),0) as units
             ")
             ->value('units');
 
@@ -468,12 +457,14 @@ class PerformanceController extends Controller
         // ======================================
         $joinUnits = function ($q, string $soAlias = 'so') {
             return $q
-                ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
-                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
+                ->leftJoin('sales_order_items as soi', function ($join) use ($soAlias) {
+                    $join->on('soi.sales_order_id', '=', "{$soAlias}.id")
+                        ->whereNull('soi.parent_item_id');
+                })
+                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id');
         };
 
-        $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
+        $rowUnitExpr = "soi.qty";
 
         // ======================================
         // SUMMARY
@@ -544,16 +535,11 @@ class PerformanceController extends Controller
         // TEAM SHEET
         // ======================================
         $soiAgg = DB::table('sales_order_items as soi')
+            ->whereNull('soi.parent_item_id')
             ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
             ->selectRaw("
                 soi.sales_order_id,
-                COALESCE(SUM(
-                    CASE
-                        WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                        ELSE soi.qty
-                    END
-                ),0) as ns_units
+                COALESCE(SUM(soi.qty),0) as ns_units
             ")
             ->groupBy('soi.sales_order_id');
 
@@ -1092,19 +1078,16 @@ class PerformanceController extends Controller
         $selectedStatuses = $this->selectedSalesOrderStatuses($request);
 
         $unitCountExpr = "
-            COALESCE(SUM(
-                CASE
-                    WHEN p.type = 'bundle' THEN soi.qty * COALESCE(bi.qty, 1)
-                    ELSE soi.qty
-                END
-            ), 0) as unit_count
+            COALESCE(SUM(soi.qty), 0) as unit_count
         ";
 
         $q = DB::table('sales_orders as so')
             ->join('users as u', 'u.id', '=', 'so.sales_user_id')
-            ->join('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->join('sales_order_items as soi', function ($join) {
+                $join->on('soi.sales_order_id', '=', 'so.id')
+                    ->whereNull('soi.parent_item_id');
+            })
             ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
             ->leftJoin('customers as c', function ($j) {
                 $j->on('c.id', '=', 'so.customer_id')->whereNull('c.deleted_at');
             })
@@ -1370,18 +1353,15 @@ class PerformanceController extends Controller
         $trackedUserIds = $downlines->pluck('id')->push($user->id)->unique()->values();
 
         $unitsExpr = "
-            COALESCE(SUM(
-                CASE
-                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                    ELSE soi.qty
-                END
-            ), 0)
+            COALESCE(SUM(soi.qty), 0)
         ";
 
         $monthlyUnitsRaw = DB::table('sales_orders as so')
-            ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->leftJoin('sales_order_items as soi', function ($join) {
+                $join->on('soi.sales_order_id', '=', 'so.id')
+                    ->whereNull('soi.parent_item_id');
+            })
             ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
             ->whereNull('so.deleted_at')
             ->where('so.status', 'selesai')
             ->whereIn('so.sales_user_id', $trackedUserIds)

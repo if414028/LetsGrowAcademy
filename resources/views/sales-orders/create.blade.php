@@ -394,6 +394,48 @@
                                                         <span x-show="!row.product_id">Wajib pilih product dari
                                                             dropdown.</span>
                                                     </div>
+
+                                                    <div x-show="row.type === 'bundle'" x-transition
+                                                        class="mt-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                                                        <div class="mb-2 flex items-center justify-between gap-3">
+                                                            <div class="text-xs font-semibold text-blue-900">Isi Bundle</div>
+                                                            <div class="text-xs text-blue-700">
+                                                                Qty bundle: <span class="font-semibold" x-text="bundleActiveQty(row)"></span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="space-y-2">
+                                                            <template x-for="(child, childIdx) in row.bundle_items" :key="child.product_id">
+                                                                <div class="grid grid-cols-1 gap-2 rounded-lg border border-blue-100 bg-white p-2 md:grid-cols-12">
+                                                                    <input type="hidden" :name="`items[${idx}][bundle_items][${childIdx}][product_id]`" :value="child.product_id">
+                                                                    <input type="hidden" :name="`items[${idx}][bundle_items][${childIdx}][qty]`" :value="child.qty">
+                                                                    <input type="hidden" :name="`items[${idx}][bundle_items][${childIdx}][is_cancelled]`" value="0">
+
+                                                                    <div class="md:col-span-5">
+                                                                        <div class="text-xs font-semibold text-gray-900" x-text="child.label"></div>
+                                                                        <div class="text-[11px] text-gray-500" x-text="child.sku"></div>
+                                                                    </div>
+                                                                    <div class="md:col-span-3">
+                                                                        <input type="text"
+                                                                            class="w-full rounded-lg border-gray-200 text-sm focus:border-blue-500 focus:ring-blue-500"
+                                                                            :name="`items[${idx}][bundle_items][${childIdx}][order_no]`"
+                                                                            x-model="child.order_no"
+                                                                            placeholder="Order number item..." />
+                                                                    </div>
+                                                                    <div class="md:col-span-1">
+                                                                        <input type="number"
+                                                                            class="w-full rounded-lg border-gray-200 bg-gray-50 text-sm text-gray-600"
+                                                                            :value="child.qty" disabled>
+                                                                    </div>
+                                                                    <div class="md:col-span-3">
+                                                                        <input type="text"
+                                                                            class="w-full rounded-lg border-gray-200 bg-gray-50 text-sm text-gray-400"
+                                                                            value="" placeholder="Price bundle" disabled>
+                                                                    </div>
+                                                                </div>
+                                                            </template>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </td>
 
@@ -405,9 +447,12 @@
                                             </td>
 
                                             <td class="px-4 py-3 align-top" data-label="Qty">
+                                                <input type="hidden" :name="row.type === 'bundle' ? `items[${idx}][qty]` : null" :value="row.qty"
+                                                    x-show="row.type === 'bundle'">
                                                 <input type="number" min="1"
                                                     class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-                                                    :name="`items[${idx}][qty]`" x-model.number="row.qty" required />
+                                                    :name="row.type === 'bundle' ? null : `items[${idx}][qty]`"
+                                                    x-model.number="row.qty" :disabled="row.type === 'bundle'" required />
                                             </td>
 
                                             <td class="px-4 py-3 align-top" data-label="Price">
@@ -648,11 +693,20 @@
             const mappedProducts = (products || []).map(p => ({
                 id: p.id,
                 label: `${p.product_name} (${p.sku}${p.model ? ` • ${p.model}` : ''})`,
+                type: p.type || 'regular',
                 prices: (p.prices || []).map(pr => ({
                     id: pr.id,
                     // label price yang enak dibaca
                     label: `${pr.label} • ${pr.billing_type === 'monthly' ? 'Monthly' : 'One Time'}${pr.duration_months ? ` (${pr.duration_months} bln)` : ''} • Rp${Number(pr.amount || 0).toLocaleString('id-ID')}`
-                }))
+                })),
+                bundle_items: (p.bundle_items || []).map(item => ({
+                    product_id: item.id,
+                    label: item.product_name || '-',
+                    sku: item.sku || '',
+                    qty: Number(item.pivot?.qty || 1),
+                    order_no: '',
+                    is_cancelled: false,
+                })),
             }));
 
             function byId(id) {
@@ -681,12 +735,14 @@
                         product_id: pid,
                         product_price_id: r.product_price_id ?? '', // ✅ new
                         order_no: r.order_no ?? '',
-                        qty: r.qty ?? 1,
+                        qty: p?.type === 'bundle' ? bundleQtyFrom(r.bundle_items || p.bundle_items || []) : (r.qty ?? 1),
                         query: pid ? labelById(pid) : '',
                         open: false,
                         items: [],
                         lastFetch: '',
+                        type: p?.type || 'regular',
                         prices: p ? (p.prices || []) : [], // ✅ new
+                        bundle_items: normalizeBundleItems(r.bundle_items || p?.bundle_items || []),
                     };
                 }) : [{
                     product_id: '',
@@ -697,8 +753,27 @@
                     open: false,
                     items: [],
                     lastFetch: '',
+                    type: 'regular',
                     prices: [],
+                    bundle_items: [],
                 }];
+
+            function normalizeBundleItems(items) {
+                return (items || []).map(item => ({
+                    product_id: item.product_id ?? item.id,
+                    label: item.label ?? item.product_name ?? '-',
+                    sku: item.sku ?? '',
+                    qty: Number(item.qty ?? item.pivot?.qty ?? 1),
+                    order_no: item.order_no ?? '',
+                    is_cancelled: Boolean(item.is_cancelled ?? false),
+                }));
+            }
+
+            function bundleQtyFrom(items) {
+                return normalizeBundleItems(items)
+                    .filter(item => !item.is_cancelled)
+                    .reduce((sum, item) => sum + Number(item.qty || 0), 0);
+            }
 
             return {
                 rows,
@@ -720,7 +795,9 @@
                         open: false,
                         items: [],
                         lastFetch: '',
+                        type: 'regular',
                         prices: [],
+                        bundle_items: [],
                     });
                 },
 
@@ -736,6 +813,8 @@
                     row.product_id = '';
                     row.product_price_id = '';
                     row.prices = [];
+                    row.type = 'regular';
+                    row.bundle_items = [];
 
                     const q = (row.query || '').trim();
                     if (!q) {
@@ -759,12 +838,20 @@
                     row.query = p.label;
                     row.items = [];
                     row.open = false;
+                    row.type = p.type || 'regular';
 
                     // ✅ set prices dropdown sesuai product terpilih
                     row.prices = p.prices || [];
+                    row.bundle_items = normalizeBundleItems(p.bundle_items || []);
+                    row.qty = row.type === 'bundle' ? bundleQtyFrom(row.bundle_items) : 1;
 
                     // ✅ auto pilih price pertama kalau tersedia
                     row.product_price_id = row.prices.length ? row.prices[0].id : '';
+                },
+
+                bundleActiveQty(row) {
+                    row.qty = row.type === 'bundle' ? bundleQtyFrom(row.bundle_items || []) : row.qty;
+                    return row.qty;
                 },
             }
         }

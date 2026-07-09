@@ -145,7 +145,7 @@
                         <h2 class="text-sm font-semibold text-gray-900">Items</h2>
                         <div class="text-sm text-gray-500">
                             Total item: <span
-                                class="font-semibold text-gray-700">{{ $salesOrder->items->count() }}</span>
+                                class="font-semibold text-gray-700">{{ $salesOrder->parentItems->count() }}</span>
                         </div>
                     </div>
 
@@ -169,7 +169,7 @@
                                     $monthlyTotal = 0;
                                 @endphp
 
-                                @forelse($salesOrder->items as $item)
+                                @forelse($salesOrder->parentItems as $item)
                                     @php
                                         $pp = $item->productPrice;
 
@@ -261,6 +261,46 @@
                                             @endif
                                         </td>
                                     </tr>
+                                    @if ($item->childItems->count())
+                                        <tr class="bg-blue-50/40">
+                                            <td class="px-4 py-3"></td>
+                                            <td colspan="6" class="px-4 py-3">
+                                                <div class="space-y-2">
+                                                    @foreach ($item->childItems as $child)
+                                                        <div class="grid grid-cols-1 gap-2 rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm md:grid-cols-12 {{ $child->is_cancelled ? 'opacity-60' : '' }}">
+                                                            <div class="md:col-span-4">
+                                                                <div class="font-semibold text-gray-900">
+                                                                    {{ $child->product?->product_name ?? '-' }}
+                                                                </div>
+                                                                <div class="text-xs text-gray-500">
+                                                                    {{ $child->product?->sku ?? '-' }}
+                                                                </div>
+                                                            </div>
+                                                            <div class="md:col-span-3">
+                                                                <div class="text-xs text-gray-500">Order Number</div>
+                                                                <div class="font-medium text-gray-900">{{ $child->order_no ?? '-' }}</div>
+                                                            </div>
+                                                            <div class="md:col-span-2">
+                                                                <div class="text-xs text-gray-500">Qty</div>
+                                                                <div class="font-medium text-gray-900">{{ $child->qty }}</div>
+                                                            </div>
+                                                            <div class="md:col-span-2">
+                                                                <div class="text-xs text-gray-500">Price</div>
+                                                                <div class="font-medium text-gray-400">Pakai harga bundle</div>
+                                                            </div>
+                                                            <div class="md:col-span-1">
+                                                                @if ($child->is_cancelled)
+                                                                    <span class="rounded-full bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">Cancel</span>
+                                                                @else
+                                                                    <span class="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">Aktif</span>
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    @endif
                                 @empty
                                     <tr>
                                         <td colspan="7" class="px-4 py-10 text-center text-gray-500">
@@ -272,7 +312,7 @@
                         </table>
                     </div>
 
-                    @if ($salesOrder->items->count())
+                    @if ($salesOrder->parentItems->count())
                         @php
                             $grandTotalAll = $oneTimeTotal + $monthlyTotal;
                         @endphp
@@ -281,7 +321,7 @@
                             <div>
                                 Total Qty:
                                 <span class="font-semibold text-gray-900">
-                                    {{ $salesOrder->items->sum('qty') }}
+                                    {{ $salesOrder->parentItems->sum('qty') }}
                                 </span>
                             </div>
 

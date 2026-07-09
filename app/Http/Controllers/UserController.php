@@ -765,12 +765,14 @@ class UserController extends Controller
 
         $joinUnits = function ($q, string $soAlias = 'so') {
             return $q
-                ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', "{$soAlias}.id")
-                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
+                ->leftJoin('sales_order_items as soi', function ($join) use ($soAlias) {
+                    $join->on('soi.sales_order_id', '=', "{$soAlias}.id")
+                        ->whereNull('soi.parent_item_id');
+                })
+                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id');
         };
 
-        $rowUnitExpr = "CASE WHEN p.type = 'bundle' THEN soi.qty * bi.qty ELSE soi.qty END";
+        $rowUnitExpr = "soi.qty";
 
         $metricsQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')

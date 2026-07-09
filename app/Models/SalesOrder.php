@@ -63,6 +63,12 @@ class SalesOrder extends Model
         return $this->hasMany(\App\Models\SalesOrderItem::class);
     }
 
+    public function parentItems()
+    {
+        return $this->hasMany(\App\Models\SalesOrderItem::class)
+            ->whereNull('parent_item_id');
+    }
+
     // app/Models/SalesOrder.php
 
     public function getPaymentMethodLabelAttribute(): string

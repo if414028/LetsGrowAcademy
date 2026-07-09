@@ -109,18 +109,15 @@ class ReportController extends Controller
         }
 
         $unitsExpr = "
-            COALESCE(SUM(
-                CASE
-                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                    ELSE soi.qty
-                END
-            ), 0)
+            COALESCE(SUM(soi.qty), 0)
         ";
 
         $unitsPerSeller = DB::table('sales_orders as so')
-            ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->leftJoin('sales_order_items as soi', function ($join) {
+                $join->on('soi.sales_order_id', '=', 'so.id')
+                    ->whereNull('soi.parent_item_id');
+            })
             ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
             ->whereNull('so.deleted_at')
             ->where('so.status', 'selesai')
             ->whereNotNull('so.install_date')
@@ -209,18 +206,15 @@ class ReportController extends Controller
         }
 
         $unitsExpr = "
-            COALESCE(SUM(
-                CASE
-                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                    ELSE soi.qty
-                END
-            ), 0)
+            COALESCE(SUM(soi.qty), 0)
         ";
 
         $rows = DB::table('sales_orders as so')
-            ->leftJoin('sales_order_items as soi', 'soi.sales_order_id', '=', 'so.id')
+            ->leftJoin('sales_order_items as soi', function ($join) {
+                $join->on('soi.sales_order_id', '=', 'so.id')
+                    ->whereNull('soi.parent_item_id');
+            })
             ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-            ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id')
             ->whereNull('so.deleted_at')
             ->where('so.status', 'selesai')
             ->whereNotNull('so.install_date')

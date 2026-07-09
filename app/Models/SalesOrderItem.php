@@ -11,14 +11,17 @@ class SalesOrderItem extends Model
 
     protected $fillable = [
         'sales_order_id',
+        'parent_item_id',
         'product_id',
         'product_price_id',
         'order_no',
-        'qty'
+        'qty',
+        'is_cancelled',
     ];  
 
     protected $casts = [
         'qty' => 'integer',
+        'is_cancelled' => 'boolean',
     ];
 
     /**
@@ -40,6 +43,16 @@ class SalesOrderItem extends Model
     public function productPrice()
     {
         return $this->belongsTo(\App\Models\ProductPrice::class, 'product_price_id');
+    }
+
+    public function parentItem()
+    {
+        return $this->belongsTo(self::class, 'parent_item_id');
+    }
+
+    public function childItems()
+    {
+        return $this->hasMany(self::class, 'parent_item_id');
     }
 
 }

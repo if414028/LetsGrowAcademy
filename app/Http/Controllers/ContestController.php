@@ -964,17 +964,12 @@ class ContestController extends Controller
         $productMinQtysRaw = (array) ($rules['product_min_qtys'] ?? []);
         $productMinQtys = $this->normalizeContestProductMinQtys($rawIds, $productMinQtysRaw);
 
-        // total isi bundle per bundle_id
-        $bundleQtySubquery = DB::table('bundle_items')
-            ->selectRaw('bundle_id, COALESCE(SUM(qty), 0) as bundle_total_qty')
-            ->groupBy('bundle_id');
-
         $baseQuery = DB::table('sales_orders')
-            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
-            ->join('products', 'products.id', '=', 'sales_order_items.product_id')
-            ->leftJoinSub($bundleQtySubquery, 'bundle_qty_map', function ($join) {
-                $join->on('bundle_qty_map.bundle_id', '=', 'sales_order_items.product_id');
+            ->join('sales_order_items', function ($join) {
+                $join->on('sales_order_items.sales_order_id', '=', 'sales_orders.id')
+                    ->whereNull('sales_order_items.parent_item_id');
             })
+            ->join('products', 'products.id', '=', 'sales_order_items.product_id')
             ->whereIn('sales_orders.sales_user_id', $hpIds)
             ->where('sales_orders.status', 'selesai')
             ->whereBetween('sales_orders.key_in_at', [$from, $to])
@@ -984,16 +979,8 @@ class ContestController extends Controller
         // filter produk untuk specific / exclude
         $this->applyContestProductFilter($baseQuery, $rules);
 
-        // qty efektif:
-        // - produk biasa => sales_order_items.qty
-        // - bundle => sales_order_items.qty * total isi bundle
-        $effectiveQtyExpr = "
-        CASE
-            WHEN products.type = 'bundle'
-                THEN sales_order_items.qty * COALESCE(NULLIF(bundle_qty_map.bundle_total_qty, 0), 1)
-            ELSE sales_order_items.qty
-        END
-    ";
+        // Parent item bundle sudah menyimpan total qty child aktif; child/cancelled row tidak dihitung.
+        $effectiveQtyExpr = 'sales_order_items.qty';
 
         // kalau bukan specific, atau tidak ada min qty produk, cukup jumlahkan qty efektif
         if ($filterType !== 'specific' || empty($productIds) || empty($productMinQtys)) {

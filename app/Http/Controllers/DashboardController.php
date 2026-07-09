@@ -32,18 +32,12 @@ class DashboardController extends Controller
             ->leftJoinSub($lastSoSub, 'so', function ($join) {
                 $join->on('so.sales_user_id', '=', 'users.id');
             })
-
-            // join hierarchy untuk ambil parent (Health Manager) dari HP
-            ->leftJoin('user_hierarchies as uh', 'uh.child_user_id', '=', 'users.id')
-            ->leftJoin('users as hm', 'hm.id', '=', 'uh.parent_user_id')
-
             ->select([
                 'users.id',
                 'users.name',
                 'users.email',
                 'users.dst_code',
                 DB::raw('COALESCE(so.last_so_at, users.created_at) as last_activity_at'),
-                DB::raw('hm.name as health_manager_name'),
             ])
             ->whereRaw(
                 'COALESCE(so.last_so_at, users.created_at) <= ? AND COALESCE(so.last_so_at, users.created_at) > ?',
@@ -55,36 +49,21 @@ class DashboardController extends Controller
         // Scope by role
         // =========================
         if ($user->hasRole('Sales Manager')) {
-            // ambil Health Manager yang direct child dari Sales Manager
-            $healthManagerIds = $user->childrenUsers()
-                ->role('Health Manager')
-                ->pluck('users.id');
-
-            // ambil Health Planner yang parent nya adalah HM di atas
-            $hpIds = UserHierarchy::query()
-                ->whereIn('parent_user_id', $healthManagerIds)
-                ->pluck('child_user_id');
-
-            $warningsQuery->whereIn('users.id', $hpIds);
+            $downlineIds = $this->getAllDescendantUserIds((int) $user->id);
+            $warningsQuery->whereIn('users.id', $downlineIds ?: [0]);
         } elseif ($user->hasRole('Health Manager')) {
-            // bawahan langsung HM (HP)
-            $childHpIds = $user->childrenUsers()
-                ->role('Health Planner')
-                ->pluck('users.id');
-
-            $warningsQuery->whereIn('users.id', $childHpIds);
-
-            // supaya nama HM di tabel selalu konsisten
-            $warningsQuery->addSelect(DB::raw("'" . addslashes($user->name) . "' as health_manager_name"));
+            $downlineIds = $this->getAllDescendantUserIds((int) $user->id);
+            $warningsQuery->whereIn('users.id', $downlineIds ?: [0]);
         } elseif ($user->hasRole('Health Planner')) {
             $warningsQuery->where('users.id', $user->id);
-        } elseif (!$user->hasRole('Admin')) {
+        } elseif (!$user->hasAnyRole(['Admin', 'Head Admin'])) {
             $warningsQuery->whereRaw('1=0');
         }
 
         $soDeactivationWarnings = $warningsQuery->get()->map(function ($u) {
             $u->last_activity_at = \Carbon\Carbon::parse($u->last_activity_at);
             $u->deactivate_at = $u->last_activity_at->copy()->addMonths(6);
+            $u->health_manager_name = $this->nearestHealthManagerName((int) $u->id) ?? '-';
             return $u;
         });
 
@@ -114,22 +93,20 @@ class DashboardController extends Controller
         $scopeUserIds = array_values(array_unique(array_merge([(int) $user->id], $descendantIds)));
 
         // ======================================
-        // HELPER HITUNG UNITS (expand bundling)
+        // HELPER HITUNG UNITS
+        // Bundle parent qty sudah berisi total child aktif; child/cancelled row tidak dihitung.
         // ======================================
         $applyUnitsJoinsAndSelect = function ($q) {
             return $q
-                ->join('sales_order_items as soi', 'soi.sales_order_id', '=', 'sales_orders.id')
-                ->join('products as p', 'p.id', '=', 'soi.product_id')
-                ->leftJoin('bundle_items as bi', 'bi.bundle_id', '=', 'p.id');
+                ->join('sales_order_items as soi', function ($join) {
+                    $join->on('soi.sales_order_id', '=', 'sales_orders.id')
+                        ->whereNull('soi.parent_item_id');
+                })
+                ->join('products as p', 'p.id', '=', 'soi.product_id');
         };
 
         $unitsSelectExpr = "
-            COALESCE(SUM(
-                CASE
-                    WHEN p.type = 'bundle' THEN soi.qty * bi.qty
-                    ELSE soi.qty
-                END
-            ), 0) as units
+            COALESCE(SUM(soi.qty), 0) as units
         ";
 
         $calcUnits = function ($q) use ($applyUnitsJoinsAndSelect, $unitsSelectExpr) {
@@ -162,7 +139,10 @@ class DashboardController extends Controller
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
             ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
-            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+            ->join('sales_order_items', function ($join) {
+                $join->on('sales_order_items.sales_order_id', '=', 'sales_orders.id')
+                    ->whereNull('sales_order_items.parent_item_id');
+            })
             ->join('products', 'products.id', '=', 'sales_order_items.product_id')
             ->where('products.type', 'regular')
             ->sum('sales_order_items.qty');
@@ -173,7 +153,10 @@ class DashboardController extends Controller
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
             ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
-            ->join('sales_order_items', 'sales_order_items.sales_order_id', '=', 'sales_orders.id')
+            ->join('sales_order_items', function ($join) {
+                $join->on('sales_order_items.sales_order_id', '=', 'sales_orders.id')
+                    ->whereNull('sales_order_items.parent_item_id');
+            })
             ->join('products as bundle', 'bundle.id', '=', 'sales_order_items.product_id')
             ->where('bundle.type', 'bundle')
             ->sum('sales_order_items.qty');
@@ -513,5 +496,43 @@ class DashboardController extends Controller
         }
 
         return array_keys($visited);
+    }
+
+    private function nearestHealthManagerName(int $userId): ?string
+    {
+        $visited = [];
+        $current = $userId;
+
+        while ($current) {
+            if (isset($visited[$current])) {
+                break;
+            }
+
+            $visited[$current] = true;
+
+            $parentId = UserHierarchy::query()
+                ->where('child_user_id', $current)
+                ->value('parent_user_id');
+
+            if (!$parentId) {
+                return null;
+            }
+
+            $parent = User::query()
+                ->with('roles')
+                ->find($parentId, ['id', 'name', 'full_name']);
+
+            if (!$parent) {
+                return null;
+            }
+
+            if ($parent->hasRole('Health Manager')) {
+                return trim((string) ($parent->full_name ?: $parent->name));
+            }
+
+            $current = (int) $parentId;
+        }
+
+        return null;
     }
 }

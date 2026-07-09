@@ -133,7 +133,13 @@ class SalesOrderController extends Controller
             abort_unless($visibleSalesUserIds->contains((int) $salesOrder->sales_user_id), 403);
         }
 
-        $salesOrder->load(['customer', 'salesUser', 'items.product', 'items.productPrice']);
+        $salesOrder->load([
+            'customer',
+            'salesUser',
+            'parentItems.product',
+            'parentItems.productPrice',
+            'parentItems.childItems.product',
+        ]);
         return view('sales-orders.show', compact('salesOrder'));
     }
 
@@ -151,9 +157,9 @@ class SalesOrderController extends Controller
                 $q->where('is_active', true)
                     ->orderBy('billing_type')
                     ->orderBy('duration_months');
-            }])
+            }, 'bundleItems'])
             ->orderBy('product_name')
-            ->get(['id', 'sku', 'product_name', 'model']);
+            ->get(['id', 'sku', 'product_name', 'model', 'type']);
 
         // maintain value saat validation error (Admin)
         $oldSalesUser = null;
@@ -246,6 +252,11 @@ class SalesOrderController extends Controller
             'items.*.order_no' => ['nullable', 'string', 'max:50'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.product_price_id' => ['required', 'exists:product_prices,id'],
+            'items.*.bundle_items' => ['nullable', 'array'],
+            'items.*.bundle_items.*.product_id' => ['required', 'exists:products,id'],
+            'items.*.bundle_items.*.order_no' => ['nullable', 'string', 'max:50'],
+            'items.*.bundle_items.*.qty' => ['required', 'integer', 'min:1'],
+            'items.*.bundle_items.*.is_cancelled' => ['nullable', 'boolean'],
 
             'status_reason' => [
                 Rule::requiredIf(fn() => in_array($request->input('status'), ['dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang'], true)),
@@ -276,22 +287,8 @@ class SalesOrderController extends Controller
             }
         }
 
-        foreach ($request->input('items', []) as $i => $row) {
-            $pid = $row['product_id'] ?? null;
-            $priceId = $row['product_price_id'] ?? null;
-
-            if ($pid && $priceId) {
-                $ok = ProductPrice::query()
-                    ->where('id', $priceId)
-                    ->where('product_id', $pid)
-                    ->exists();
-
-                if (!$ok) {
-                    return back()
-                        ->withErrors(["items.$i.product_price_id" => "Price tidak sesuai dengan product yang dipilih."])
-                        ->withInput();
-                }
-            }
+        if ($error = $this->validateSalesOrderItemsPayload($request->input('items', []))) {
+            return back()->withErrors($error)->withInput();
         }
 
 
@@ -346,18 +343,7 @@ class SalesOrderController extends Controller
                 'status_reason' => $validated['status_reason'],
             ]);
 
-            // ITEMS: validated sudah aman
-            $itemsPayload = collect($validated['items'])
-                ->map(fn($row) => [
-                    'product_id' => (int) $row['product_id'],
-                    'product_price_id' => (int) $row['product_price_id'], // ✅ new
-                    'order_no' => filled($row['order_no'] ?? null) ? trim((string) $row['order_no']) : null,
-                    'qty' => (int) $row['qty'],
-                ])
-                ->values()
-                ->all();
-
-            $so->items()->createMany($itemsPayload);
+            $this->persistSalesOrderItems($so, $validated['items']);
 
             return redirect()
                 ->route('sales-orders.index')
@@ -413,10 +399,16 @@ class SalesOrderController extends Controller
         $statuses = $this->statuses;
         $ccpStatuses = $this->ccpStatuses;
 
-        $salesOrder->load(['customer', 'salesUser', 'items.productPrice']);
+        $salesOrder->load([
+            'customer',
+            'salesUser',
+            'parentItems.product.bundleItems',
+            'parentItems.productPrice',
+            'parentItems.childItems.product',
+        ]);
 
         // Ambil semua price_id yang sudah kepilih di order ini
-        $selectedPriceIds = $salesOrder->items->pluck('product_price_id')->filter()->unique()->values();
+        $selectedPriceIds = $salesOrder->parentItems->pluck('product_price_id')->filter()->unique()->values();
 
         $products = Product::query()
             ->where('is_active', true)
@@ -427,9 +419,9 @@ class SalesOrderController extends Controller
                 })
                     ->orderBy('billing_type')
                     ->orderBy('duration_months');
-            }])
+            }, 'bundleItems'])
             ->orderBy('product_name')
-            ->get(['id', 'sku', 'product_name', 'model']);
+            ->get(['id', 'sku', 'product_name', 'model', 'type']);
 
         $oldSalesUser = $salesOrder->salesUser;
         if (old('sales_user_id')) {
@@ -512,6 +504,11 @@ class SalesOrderController extends Controller
             'items.*.order_no' => ['nullable', 'string', 'max:50'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.product_price_id' => ['required', 'exists:product_prices,id'],
+            'items.*.bundle_items' => ['nullable', 'array'],
+            'items.*.bundle_items.*.product_id' => ['required', 'exists:products,id'],
+            'items.*.bundle_items.*.order_no' => ['nullable', 'string', 'max:50'],
+            'items.*.bundle_items.*.qty' => ['required', 'integer', 'min:1'],
+            'items.*.bundle_items.*.is_cancelled' => ['nullable', 'boolean'],
 
             'status_reason' => [
                 Rule::requiredIf(fn() => in_array($request->input('status'), ['dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang'], true)),
@@ -542,22 +539,8 @@ class SalesOrderController extends Controller
             }
         }
 
-        foreach ($request->input('items', []) as $i => $row) {
-            $pid = $row['product_id'] ?? null;
-            $priceId = $row['product_price_id'] ?? null;
-
-            if ($pid && $priceId) {
-                $ok = ProductPrice::query()
-                    ->where('id', $priceId)
-                    ->where('product_id', $pid)
-                    ->exists();
-
-                if (!$ok) {
-                    return back()
-                        ->withErrors(["items.$i.product_price_id" => "Price tidak sesuai dengan product yang dipilih."])
-                        ->withInput();
-                }
-            }
+        if ($error = $this->validateSalesOrderItemsPayload($request->input('items', []))) {
+            return back()->withErrors($error)->withInput();
         }
 
         if (!in_array($validated['status'], ['dibatalkan', 'ditunda', 'gagal penelponan', 'tinjau ulang'], true)) {
@@ -606,18 +589,8 @@ class SalesOrderController extends Controller
                 'status_reason' => $validated['status_reason'],
             ]);
 
-            $itemsPayload = collect($validated['items'])
-                ->map(fn($row) => [
-                    'product_id' => (int) $row['product_id'],
-                    'product_price_id' => (int) $row['product_price_id'], // ✅ new
-                    'order_no' => filled($row['order_no'] ?? null) ? trim((string) $row['order_no']) : null,
-                    'qty' => (int) $row['qty'],
-                ])
-                ->values()
-                ->all();
-
             $salesOrder->items()->delete();
-            $salesOrder->items()->createMany($itemsPayload);
+            $this->persistSalesOrderItems($salesOrder, $validated['items']);
 
             return redirect()
                 ->route('sales-orders.show', $salesOrder)
@@ -630,6 +603,106 @@ class SalesOrderController extends Controller
      * - kalau customer_id ada => pakai itu, optional update fields kalau $allowUpdateExisting = true
      * - kalau tidak ada => cari existing by (lower(full_name), phone optional) lalu create jika belum ada
      */
+    private function validateSalesOrderItemsPayload(array $items): ?array
+    {
+        $productIds = collect($items)
+            ->pluck('product_id')
+            ->filter()
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $products = Product::query()
+            ->with('bundleItems')
+            ->whereIn('id', $productIds)
+            ->get()
+            ->keyBy('id');
+
+        foreach ($items as $i => $row) {
+            $product = $products->get((int) ($row['product_id'] ?? 0));
+            $priceId = $row['product_price_id'] ?? null;
+
+            if (!$product) {
+                continue;
+            }
+
+            if ($priceId) {
+                $ok = ProductPrice::query()
+                    ->where('id', $priceId)
+                    ->where('product_id', $product->id)
+                    ->exists();
+
+                if (!$ok) {
+                    return ["items.$i.product_price_id" => "Price tidak sesuai dengan product yang dipilih."];
+                }
+            }
+
+            if ($product->type !== 'bundle') {
+                continue;
+            }
+
+            $bundleItems = collect($row['bundle_items'] ?? []);
+            if ($bundleItems->isEmpty()) {
+                return ["items.$i.bundle_items" => "Bundle wajib memiliki list product di dalamnya."];
+            }
+
+            $allowed = $product->bundleItems->mapWithKeys(fn($item) => [
+                (int) $item->id => (int) $item->pivot->qty,
+            ]);
+
+            foreach ($bundleItems as $childIndex => $child) {
+                $childProductId = (int) ($child['product_id'] ?? 0);
+                if (!$allowed->has($childProductId)) {
+                    return ["items.$i.bundle_items.$childIndex.product_id" => "Product child tidak termasuk dalam bundle yang dipilih."];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function persistSalesOrderItems(SalesOrder $salesOrder, array $items): void
+    {
+        $products = Product::query()
+            ->with('bundleItems')
+            ->whereIn('id', collect($items)->pluck('product_id')->filter()->unique())
+            ->get()
+            ->keyBy('id');
+
+        foreach ($items as $row) {
+            $product = $products->get((int) $row['product_id']);
+            $children = collect($row['bundle_items'] ?? [])->values();
+            $isBundle = $product && $product->type === 'bundle';
+            $activeChildQty = $children
+                ->reject(fn($child) => (bool) ($child['is_cancelled'] ?? false))
+                ->sum(fn($child) => max(1, (int) ($child['qty'] ?? 1)));
+
+            $parent = $salesOrder->items()->create([
+                'parent_item_id' => null,
+                'product_id' => (int) $row['product_id'],
+                'product_price_id' => (int) $row['product_price_id'],
+                'order_no' => filled($row['order_no'] ?? null) ? trim((string) $row['order_no']) : null,
+                'qty' => $isBundle ? max(0, (int) $activeChildQty) : max(1, (int) $row['qty']),
+                'is_cancelled' => false,
+            ]);
+
+            if (!$isBundle) {
+                continue;
+            }
+
+            foreach ($children as $child) {
+                $salesOrder->items()->create([
+                    'parent_item_id' => $parent->id,
+                    'product_id' => (int) $child['product_id'],
+                    'product_price_id' => null,
+                    'order_no' => filled($child['order_no'] ?? null) ? trim((string) $child['order_no']) : null,
+                    'qty' => max(1, (int) ($child['qty'] ?? 1)),
+                    'is_cancelled' => (bool) ($child['is_cancelled'] ?? false),
+                ]);
+            }
+        }
+    }
+
     private function resolveCustomerId(array $validated, bool $allowUpdateExisting = false): int
     {
         $customerId = $validated['customer_id'] ?? null;
