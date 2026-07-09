@@ -115,11 +115,24 @@ class DashboardController extends Controller
                 ->value('units');
         };
 
-        // base query untuk scope + cutoff + status
-        $baseSoQuery = SalesOrder::query()
+        // base query untuk scope + cutoff + status.
+        // Samakan dengan Performance Total NS: selesai dan masuk periode via key-in atau install date.
+        $applyNetSalesDateScope = function ($q) use ($cutoffStart, $cutoffEnd) {
+            return $q->where(function ($dateScope) use ($cutoffStart, $cutoffEnd) {
+                $dateScope
+                    ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
+                    ->orWhere(function ($installScope) use ($cutoffStart, $cutoffEnd) {
+                        $installScope
+                            ->whereNotNull('sales_orders.install_date')
+                            ->whereDate('sales_orders.install_date', '>=', $cutoffStart->toDateString())
+                            ->whereDate('sales_orders.install_date', '<=', $cutoffEnd->toDateString());
+                    });
+            });
+        };
+
+        $baseSoQuery = $applyNetSalesDateScope(SalesOrder::query()
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
-            ->where('sales_orders.status', 'selesai')
-            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd]);
+            ->where('sales_orders.status', 'selesai'));
 
         // 1) Total unit terjual (SO selesai)
         $totalUnitsSold = $calcUnits(clone $baseSoQuery);
@@ -138,7 +151,7 @@ class DashboardController extends Controller
         $totalSalesProductSatuan = (int) SalesOrder::query()
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
-            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
+            ->tap($applyNetSalesDateScope)
             ->join('sales_order_items', function ($join) {
                 $join->on('sales_order_items.sales_order_id', '=', 'sales_orders.id')
                     ->whereNull('sales_order_items.parent_item_id');
@@ -152,7 +165,7 @@ class DashboardController extends Controller
         $totalSalesProductBundling = (int) SalesOrder::query()
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
             ->where('sales_orders.status', 'selesai')
-            ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
+            ->tap($applyNetSalesDateScope)
             ->join('sales_order_items', function ($join) {
                 $join->on('sales_order_items.sales_order_id', '=', 'sales_orders.id')
                     ->whereNull('sales_order_items.parent_item_id');
@@ -250,15 +263,14 @@ class DashboardController extends Controller
             }
 
             // hitung total units (SO selesai) untuk tiap HM + tim multi-level
-            $healthManagerPerformance = $healthManagers->map(function ($hm) use ($cutoffStart, $cutoffEnd, $calcUnits) {
+            $healthManagerPerformance = $healthManagers->map(function ($hm) use ($calcUnits, $applyNetSalesDateScope) {
                 $descendantIds = $this->getAllDescendantUserIds((int) $hm->id);
                 $scopeIds = array_values(array_unique(array_merge([(int) $hm->id], $descendantIds)));
 
                 $units = $calcUnits(
-                    SalesOrder::query()
+                    $applyNetSalesDateScope(SalesOrder::query()
                         ->whereIn('sales_orders.sales_user_id', $scopeIds)
-                        ->where('sales_orders.status', 'selesai')
-                        ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd])
+                        ->where('sales_orders.status', 'selesai'))
                 );
 
                 return (object) [
