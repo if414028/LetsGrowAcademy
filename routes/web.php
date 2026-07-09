@@ -34,6 +34,10 @@ Route::get('/produk/air-purifier', function () {
     return view('products-public.air-purifier');
 })->name('public.products.air-purifier');
 
+Route::get('/produk/air-purifier-squarebig-ap-2425h', function () {
+    return view('products-public.air-purifier-squarebig-ap-2425h');
+})->name('public.products.air-purifier-squarebig');
+
 Route::get('/produk/water-purifier', function () {
     return view('products-public.water-purifier');
 })->name('public.products.water-purifier');

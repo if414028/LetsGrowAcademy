@@ -26,7 +26,7 @@
     ];
 
     $products = [
-        ['name' => 'SQUAREBIG', 'model' => 'AP-2425H', 'price' => 'Rp 11.280.000', 'image' => asset('images/air-squarebig-ap-2425h.webp'), 'speed' => asset('images/air-purifier-3-speed-icon.png')],
+        ['name' => 'SQUAREBIG', 'model' => 'AP-2425H', 'price' => 'Rp 11.280.000', 'image' => asset('images/air-squarebig-ap-2425h.webp'), 'speed' => asset('images/air-purifier-3-speed-icon.png'), 'href' => route('public.products.air-purifier-squarebig')],
         ['name' => 'SQUAREFIT', 'model' => 'AP-1125G', 'price' => 'Rp 8.400.000', 'image' => asset('images/air-squarefit-ap-1125g.webp'), 'speed' => asset('images/air-purifier-3-speed-icon.png')],
         ['name' => 'NOBLE 2', 'model' => 'AP-2023K', 'price' => 'Rp 17.582.400', 'image' => asset('images/air-noble-2-ap-2023k.webp'), 'speed' => asset('images/air-purifier-3-speed-icon.png')],
         ['name' => 'NEXT STORM', 'model' => 'AP-2025A', 'price' => 'Rp 11.280.000', 'image' => asset('images/air-next-storm-ap-2025a.webp'), 'speed' => asset('images/air-purifier-3-speed-icon.png')],
@@ -123,7 +123,11 @@
                 <h2 class="text-4xl font-extrabold uppercase tracking-wide sm:text-5xl">Products</h2>
                 <div class="mt-16 grid gap-x-20 gap-y-16 sm:grid-cols-2 lg:grid-cols-3">
                     @foreach ($products as $product)
-                        <article class="group flex cursor-pointer flex-col items-center text-center transition duration-300 hover:-translate-y-2">
+                        @if (isset($product['href']))
+                            <a href="{{ $product['href'] }}" class="group flex cursor-pointer flex-col items-center text-center transition duration-300 hover:-translate-y-2">
+                        @else
+                            <article class="group flex cursor-pointer flex-col items-center text-center transition duration-300 hover:-translate-y-2">
+                        @endif
                             <img src="{{ $product['speed'] }}" alt="Speed {{ $product['name'] }}" class="h-4 w-auto object-contain transition duration-300 group-hover:scale-110" loading="lazy">
                             <div class="mt-4 flex h-52 w-full items-end justify-center overflow-visible">
                                 <img src="{{ $product['image'] }}" alt="{{ $product['name'] }} {{ $product['model'] }}" class="max-h-52 w-auto object-contain drop-shadow-sm transition duration-500 ease-out group-hover:scale-110 group-hover:drop-shadow-xl" loading="lazy">
@@ -131,7 +135,11 @@
                             <h3 class="mt-6 text-2xl font-extrabold uppercase tracking-wide transition duration-300 group-hover:text-white">{{ $product['name'] }}</h3>
                             <p class="mt-2 inline-flex rounded border border-white/80 px-3 py-1 text-sm font-extrabold uppercase tracking-wide text-white transition duration-300 group-hover:bg-white group-hover:text-[#72b494]">{{ $product['model'] }}</p>
                             <p class="mt-4 text-lg font-extrabold transition duration-300 group-hover:text-white">{{ $product['price'] }}</p>
-                        </article>
+                        @if (isset($product['href']))
+                            </a>
+                        @else
+                            </article>
+                        @endif
                     @endforeach
                 </div>
             </div>
