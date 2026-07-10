@@ -1214,7 +1214,7 @@ class PerformanceController extends Controller
 
     /**
      * Scope data performance:
-     * 1. key_in_at dalam periode
+     * 1. key_in_at dalam periode untuk SO yang belum selesai
      * 2. atau status selesai + install_date dalam periode
      * 3. atau ccp_approved_at dalam periode (khusus Team Sheet)
      * 4. atau carry over recurring dari periode sebelumnya (khusus cutoff mode)
@@ -1230,11 +1230,17 @@ class PerformanceController extends Controller
         $carryFrom = Carbon::parse($from)->subMonthNoOverflow()->toDateString();
 
         $q->where(function ($w) use ($from, $to, $carryFrom, $withCarryOver, $includeApprovalAndUpdateDates) {
-            // A. SO key-in dalam periode
+            // A. SO key-in dalam periode. Jika sudah selesai, gunakan install_date supaya SO install bulan lain
+            // tidak ikut masuk ke report range ini.
             $w->where(function ($a) use ($from, $to) {
                 $a->whereNotNull('so.key_in_at')
                     ->whereDate('so.key_in_at', '>=', $from)
-                    ->whereDate('so.key_in_at', '<=', $to);
+                    ->whereDate('so.key_in_at', '<=', $to)
+                    ->where(function ($statusScope) {
+                        $statusScope
+                            ->whereNull('so.status')
+                            ->orWhere('so.status', '!=', 'selesai');
+                    });
             });
 
             // B. SO selesai dan install dalam periode
@@ -1250,7 +1256,12 @@ class PerformanceController extends Controller
                 $w->orWhere(function ($a) use ($from, $to) {
                     $a->whereNotNull('so.ccp_approved_at')
                         ->whereDate('so.ccp_approved_at', '>=', $from)
-                        ->whereDate('so.ccp_approved_at', '<=', $to);
+                        ->whereDate('so.ccp_approved_at', '<=', $to)
+                        ->where(function ($statusScope) {
+                            $statusScope
+                                ->whereNull('so.status')
+                                ->orWhere('so.status', '!=', 'selesai');
+                        });
                 });
             }
 
