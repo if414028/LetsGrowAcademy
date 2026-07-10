@@ -100,19 +100,16 @@ class PerformanceController extends Controller
         // Helper units
         // ======================================
         $joinUnits = function ($q, string $soAlias = 'so') {
-            return $q
-                ->leftJoin('sales_order_items as soi', function ($join) use ($soAlias) {
-                    $join->on('soi.sales_order_id', '=', "{$soAlias}.id")
-                        ->whereNull('soi.parent_item_id');
-                })
-                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id');
+            return $q->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) use ($soAlias) {
+                $join->on('sou.sales_order_id', '=', "{$soAlias}.id");
+            });
         };
 
         $unitsExpr = "
-            COALESCE(SUM(soi.qty), 0)
+            COALESCE(SUM(sou.unit_count), 0)
         ";
 
-        $rowUnitExpr = "soi.qty";
+        $rowUnitExpr = "COALESCE(sou.unit_count, 0)";
 
         // ======================================
         // TEAM PERFORMANCE
@@ -235,22 +232,13 @@ class PerformanceController extends Controller
         // ======================================
         // TEAM SHEET
         // ======================================
-        $soiAgg = DB::table('sales_order_items as soi')
-            ->whereNull('soi.parent_item_id')
-            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-            ->selectRaw("
-                soi.sales_order_id,
-                COALESCE(SUM(soi.qty),0) as ns_units
-            ")
-            ->groupBy('soi.sales_order_id');
-
         $sheetQ = DB::table('sales_orders as so')
             ->join('users as u', 'u.id', '=', 'so.sales_user_id')
             ->leftJoin('customers as c', function ($j) {
                 $j->on('c.id', '=', 'so.customer_id')->whereNull('c.deleted_at');
             })
-            ->leftJoinSub($soiAgg, 'soi', function ($j) {
-                $j->on('soi.sales_order_id', '=', 'so.id');
+            ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($j) {
+                $j->on('sou.sales_order_id', '=', 'so.id');
             })
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
@@ -285,7 +273,7 @@ class PerformanceController extends Controller
                     ) as remarks
                 "),
                 'so.ccp_approved_at',
-                DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
+                DB::raw("COALESCE(sou.unit_count, 0) as ns_units"),
             ])
             ->selectRaw("
                 CASE
@@ -367,13 +355,11 @@ class PerformanceController extends Controller
         if ($to)   $totalUnitsQ->whereDate('so.install_date', '<=', $to);
 
         $totalUnits = (int) $totalUnitsQ
-            ->leftJoin('sales_order_items as soi', function ($join) {
-                $join->on('soi.sales_order_id', '=', 'so.id')
-                    ->whereNull('soi.parent_item_id');
+            ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {
+                $join->on('sou.sales_order_id', '=', 'so.id');
             })
-            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
             ->selectRaw("
-                COALESCE(SUM(soi.qty),0) as units
+                COALESCE(SUM(sou.unit_count),0) as units
             ")
             ->value('units');
 
@@ -456,15 +442,12 @@ class PerformanceController extends Controller
         // Helper units
         // ======================================
         $joinUnits = function ($q, string $soAlias = 'so') {
-            return $q
-                ->leftJoin('sales_order_items as soi', function ($join) use ($soAlias) {
-                    $join->on('soi.sales_order_id', '=', "{$soAlias}.id")
-                        ->whereNull('soi.parent_item_id');
-                })
-                ->leftJoin('products as p', 'p.id', '=', 'soi.product_id');
+            return $q->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) use ($soAlias) {
+                $join->on('sou.sales_order_id', '=', "{$soAlias}.id");
+            });
         };
 
-        $rowUnitExpr = "soi.qty";
+        $rowUnitExpr = "COALESCE(sou.unit_count, 0)";
 
         // ======================================
         // SUMMARY
@@ -534,22 +517,13 @@ class PerformanceController extends Controller
         // ======================================
         // TEAM SHEET
         // ======================================
-        $soiAgg = DB::table('sales_order_items as soi')
-            ->whereNull('soi.parent_item_id')
-            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
-            ->selectRaw("
-                soi.sales_order_id,
-                COALESCE(SUM(soi.qty),0) as ns_units
-            ")
-            ->groupBy('soi.sales_order_id');
-
         $sheetQ = DB::table('sales_orders as so')
             ->join('users as u', 'u.id', '=', 'so.sales_user_id')
             ->leftJoin('customers as c', function ($j) {
                 $j->on('c.id', '=', 'so.customer_id')->whereNull('c.deleted_at');
             })
-            ->leftJoinSub($soiAgg, 'soi', function ($j) {
-                $j->on('soi.sales_order_id', '=', 'so.id');
+            ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($j) {
+                $j->on('sou.sales_order_id', '=', 'so.id');
             })
             ->whereNull('so.deleted_at')
             ->whereIn('so.sales_user_id', $scopeUserIds);
@@ -584,7 +558,7 @@ class PerformanceController extends Controller
                     ) as remarks
                 "),
                 'so.ccp_approved_at',
-                DB::raw("COALESCE(soi.ns_units, 0) as ns_units"),
+                DB::raw("COALESCE(sou.unit_count, 0) as ns_units"),
             ])
             ->selectRaw("
                 CASE
@@ -1078,7 +1052,16 @@ class PerformanceController extends Controller
         $selectedStatuses = $this->selectedSalesOrderStatuses($request);
 
         $unitCountExpr = "
-            COALESCE(SUM(soi.qty), 0) as unit_count
+            COALESCE(MAX(
+                CASE
+                    WHEN p.type = 'bundle'
+                    THEN COALESCE(
+                        nf_active_child_units.active_child_qty,
+                        soi.qty * COALESCE(nf_bundle_definition_units.bundle_unit_qty, 1)
+                    )
+                    ELSE soi.qty
+                END
+            ), 0) as unit_count
         ";
 
         $q = DB::table('sales_orders as so')
@@ -1088,10 +1071,17 @@ class PerformanceController extends Controller
                     ->whereNull('soi.parent_item_id');
             })
             ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
+            ->leftJoinSub($this->activeBundleChildUnitSubquery(), 'nf_active_child_units', function ($join) {
+                $join->on('nf_active_child_units.parent_item_id', '=', 'soi.id');
+            })
+            ->leftJoinSub($this->bundleDefinitionUnitSubquery(), 'nf_bundle_definition_units', function ($join) {
+                $join->on('nf_bundle_definition_units.bundle_id', '=', 'soi.product_id');
+            })
             ->leftJoin('customers as c', function ($j) {
                 $j->on('c.id', '=', 'so.customer_id')->whereNull('c.deleted_at');
             })
             ->whereNull('so.deleted_at')
+            ->whereRaw('COALESCE(soi.is_cancelled, 0) = 0')
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($q, $from, $to, !$manualDateRange, true);
@@ -1321,6 +1311,50 @@ class PerformanceController extends Controller
         $this->applyPerformanceScopeFilter($q, $from, $to, false);
     }
 
+    private function activeBundleChildUnitSubquery()
+    {
+        return DB::table('sales_order_items as child_soi')
+            ->whereNotNull('child_soi.parent_item_id')
+            ->whereRaw('COALESCE(child_soi.is_cancelled, 0) = 0')
+            ->selectRaw('child_soi.parent_item_id, COALESCE(SUM(child_soi.qty), 0) as active_child_qty')
+            ->groupBy('child_soi.parent_item_id');
+    }
+
+    private function bundleDefinitionUnitSubquery()
+    {
+        return DB::table('bundle_items as bundle_unit')
+            ->selectRaw('bundle_unit.bundle_id, COALESCE(SUM(bundle_unit.qty), 0) as bundle_unit_qty')
+            ->groupBy('bundle_unit.bundle_id');
+    }
+
+    private function salesOrderUnitSubquery()
+    {
+        return DB::table('sales_order_items as parent_soi')
+            ->whereNull('parent_soi.parent_item_id')
+            ->whereRaw('COALESCE(parent_soi.is_cancelled, 0) = 0')
+            ->leftJoin('products as unit_product', 'unit_product.id', '=', 'parent_soi.product_id')
+            ->leftJoinSub($this->activeBundleChildUnitSubquery(), 'active_child_units', function ($join) {
+                $join->on('active_child_units.parent_item_id', '=', 'parent_soi.id');
+            })
+            ->leftJoinSub($this->bundleDefinitionUnitSubquery(), 'bundle_definition_units', function ($join) {
+                $join->on('bundle_definition_units.bundle_id', '=', 'parent_soi.product_id');
+            })
+            ->selectRaw("
+                parent_soi.sales_order_id,
+                COALESCE(SUM(
+                    CASE
+                        WHEN unit_product.type = 'bundle'
+                        THEN COALESCE(
+                            active_child_units.active_child_qty,
+                            parent_soi.qty * COALESCE(bundle_definition_units.bundle_unit_qty, 1)
+                        )
+                        ELSE parent_soi.qty
+                    END
+                ), 0) as unit_count
+            ")
+            ->groupBy('parent_soi.sales_order_id');
+    }
+
     private function selectedSalesOrderStatuses(Request $request): array
     {
         return collect((array) $request->input('status', []))
@@ -1352,16 +1386,10 @@ class PerformanceController extends Controller
 
         $trackedUserIds = $downlines->pluck('id')->push($user->id)->unique()->values();
 
-        $unitsExpr = "
-            COALESCE(SUM(soi.qty), 0)
-        ";
-
         $monthlyUnitsRaw = DB::table('sales_orders as so')
-            ->leftJoin('sales_order_items as soi', function ($join) {
-                $join->on('soi.sales_order_id', '=', 'so.id')
-                    ->whereNull('soi.parent_item_id');
+            ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {
+                $join->on('sou.sales_order_id', '=', 'so.id');
             })
-            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
             ->whereNull('so.deleted_at')
             ->where('so.status', 'selesai')
             ->whereIn('so.sales_user_id', $trackedUserIds)
@@ -1371,7 +1399,7 @@ class PerformanceController extends Controller
             ->selectRaw("
                 so.sales_user_id,
                 DATE_FORMAT(so.install_date, '%Y-%m-01') as month_key,
-                {$unitsExpr} as units
+                COALESCE(SUM(sou.unit_count), 0) as units
             ")
             ->groupBy('so.sales_user_id', DB::raw("DATE_FORMAT(so.install_date, '%Y-%m-01')"))
             ->get();
