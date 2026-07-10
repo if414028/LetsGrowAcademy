@@ -174,11 +174,6 @@ class PerformanceController extends Controller
         $this->applyPerformanceScopeFilter($summaryQ, $from, $to, !$manualDateRange);
 
         $summaryQ = $joinUnits($summaryQ, 'so');
-        $summaryQ->leftJoinSub($this->salesOrderParentQtySubquery(), 'sop', function ($join) {
-            $join->on('sop.sales_order_id', '=', 'so.id');
-        });
-
-        $statusRowUnitExpr = "COALESCE(sop.parent_qty, 0)";
 
         $summary = $summaryQ->selectRaw("
             COALESCE(SUM(
@@ -186,7 +181,7 @@ class PerformanceController extends Controller
                     WHEN COALESCE(so.is_recurring, 0) = 0
                     AND so.ccp_status = 'menunggu pengecekan'
                     AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
-                    THEN {$statusRowUnitExpr} ELSE 0
+                    THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as total_key_in,
 
@@ -195,7 +190,7 @@ class PerformanceController extends Controller
                     WHEN COALESCE(so.is_recurring, 0) = 1
                     AND so.ccp_status = 'menunggu pengecekan'
                     AND so.status = 'menunggu verifikasi'
-                    THEN {$statusRowUnitExpr} ELSE 0
+                    THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as total_recurring,
 
@@ -204,7 +199,7 @@ class PerformanceController extends Controller
                     WHEN COALESCE(so.is_recurring, 0) = 1
                     AND so.ccp_status = 'disetujui'
                     AND so.status = 'menunggu jadwal'
-                    THEN {$statusRowUnitExpr} ELSE 0
+                    THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as menunggu_jadwal,
 
@@ -213,7 +208,7 @@ class PerformanceController extends Controller
                     WHEN COALESCE(so.is_recurring, 0) = 1
                     AND so.ccp_status = 'disetujui'
                     AND so.status = 'dijadwalkan'
-                    THEN {$statusRowUnitExpr} ELSE 0
+                    THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as dijadwalkan,
 
@@ -222,7 +217,7 @@ class PerformanceController extends Controller
                     WHEN COALESCE(so.is_recurring, 0) = 1
                     AND so.ccp_status = 'disetujui'
                     AND so.status IN ('ditunda', 'gagal penelponan', 'tinjau ulang')
-                    THEN {$statusRowUnitExpr} ELSE 0
+                    THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as pending,
 
@@ -464,11 +459,6 @@ class PerformanceController extends Controller
         $this->applyPerformanceScopeFilter($summaryQ, $from, $to, !$manualDateRange);
 
         $summaryQ = $joinUnits($summaryQ, 'so');
-        $summaryQ->leftJoinSub($this->salesOrderParentQtySubquery(), 'sop', function ($join) {
-            $join->on('sop.sales_order_id', '=', 'so.id');
-        });
-
-        $statusRowUnitExpr = "COALESCE(sop.parent_qty, 0)";
 
         $summary = $summaryQ->selectRaw("
             COALESCE(SUM(
@@ -476,7 +466,7 @@ class PerformanceController extends Controller
                     WHEN COALESCE(so.is_recurring, 0) = 0
                     AND so.ccp_status = 'menunggu pengecekan'
                     AND (so.status = 'menunggu verifikasi' OR so.status = 'dibatalkan')
-                    THEN {$statusRowUnitExpr} ELSE 0
+                    THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as total_key_in,
 
@@ -485,7 +475,7 @@ class PerformanceController extends Controller
                     WHEN COALESCE(so.is_recurring, 0) = 1
                     AND so.ccp_status = 'menunggu pengecekan'
                     AND so.status = 'menunggu verifikasi'
-                    THEN {$statusRowUnitExpr} ELSE 0
+                    THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as total_recurring,
 
@@ -494,7 +484,7 @@ class PerformanceController extends Controller
                     WHEN COALESCE(so.is_recurring, 0) = 1
                     AND so.ccp_status = 'disetujui'
                     AND so.status = 'menunggu jadwal'
-                    THEN {$statusRowUnitExpr} ELSE 0
+                    THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as menunggu_jadwal,
 
@@ -503,7 +493,7 @@ class PerformanceController extends Controller
                     WHEN COALESCE(so.is_recurring, 0) = 1
                     AND so.ccp_status = 'disetujui'
                     AND so.status = 'dijadwalkan'
-                    THEN {$statusRowUnitExpr} ELSE 0
+                    THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as dijadwalkan,
 
@@ -512,7 +502,7 @@ class PerformanceController extends Controller
                     WHEN COALESCE(so.is_recurring, 0) = 1
                     AND so.ccp_status = 'disetujui'
                     AND so.status IN ('ditunda', 'gagal penelponan', 'tinjau ulang')
-                    THEN {$statusRowUnitExpr} ELSE 0
+                    THEN {$rowUnitExpr} ELSE 0
                 END
             ),0) as pending,
 
@@ -1374,15 +1364,6 @@ class PerformanceController extends Controller
                 ), 0) as unit_count
             ")
             ->groupBy('parent_soi.sales_order_id');
-    }
-
-    private function salesOrderParentQtySubquery()
-    {
-        return DB::table('sales_order_items as parent_qty_soi')
-            ->whereNull('parent_qty_soi.parent_item_id')
-            ->whereRaw('COALESCE(parent_qty_soi.is_cancelled, 0) = 0')
-            ->selectRaw('parent_qty_soi.sales_order_id, COALESCE(SUM(parent_qty_soi.qty), 0) as parent_qty')
-            ->groupBy('parent_qty_soi.sales_order_id');
     }
 
     private function selectedSalesOrderStatuses(Request $request): array
