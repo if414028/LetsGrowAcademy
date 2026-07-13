@@ -102,80 +102,61 @@ class ReportController extends Controller
      */
     private function buildLeaderboardWithDescendants($targets, string $from, string $to)
     {
-        $targetIds = $targets->pluck('id')->map(fn($v) => (int) $v)->values();
-
-        if ($targetIds->isEmpty()) {
+        if ($targets->isEmpty()) {
             return collect();
         }
 
-        $unitsExpr = "
-            COALESCE(SUM(soi.qty), 0)
-        ";
+        $scopeByTarget = $targets
+            ->mapWithKeys(function ($target) {
+                $scopeIds = $target->downlineUserIds()
+                    ->push((int) $target->id)
+                    ->unique()
+                    ->values();
 
-        $unitsPerSeller = DB::table('sales_orders as so')
-            ->leftJoin('sales_order_items as soi', function ($join) {
-                $join->on('soi.sales_order_id', '=', 'so.id')
-                    ->whereNull('soi.parent_item_id');
+                return [(int) $target->id => $scopeIds];
+            });
+
+        $allScopeIds = $scopeByTarget
+            ->flatMap(fn($scopeIds) => $scopeIds)
+            ->unique()
+            ->values();
+
+        $sellerStats = DB::table('sales_orders as so')
+            ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {
+                $join->on('sou.sales_order_id', '=', 'so.id');
             })
-            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
             ->whereNull('so.deleted_at')
             ->where('so.status', 'selesai')
             ->whereNotNull('so.install_date')
             ->whereDate('so.install_date', '>=', $from)
             ->whereDate('so.install_date', '<=', $to)
+            ->whereIn('so.sales_user_id', $allScopeIds->all())
             ->groupBy('so.sales_user_id')
             ->select(
                 'so.sales_user_id',
-                DB::raw("{$unitsExpr} as units"),
+                DB::raw('COALESCE(SUM(sou.unit_count), 0) as units'),
                 DB::raw('MIN(so.key_in_at) as first_key_in_at')
-            );
-
-        $targetsInline = '(' . $targetIds->implode(',') . ')';
-
-        $cteSql = "
-            WITH RECURSIVE descendants AS (
-                SELECT u.id AS ancestor_id, u.id AS descendant_id
-                FROM users u
-                WHERE u.id IN {$targetsInline}
-
-                UNION ALL
-
-                SELECT d.ancestor_id, uh.child_user_id AS descendant_id
-                FROM descendants d
-                JOIN user_hierarchies uh
-                    ON uh.parent_user_id = d.descendant_id
             )
-            SELECT
-                d.ancestor_id,
-                COALESCE(SUM(u.units), 0) AS units,
-                MIN(u.first_key_in_at) AS first_key_in_at
-            FROM descendants d
-            LEFT JOIN (
-                " . $unitsPerSeller->toSql() . "
-            ) u
-                ON u.sales_user_id = d.descendant_id
-            GROUP BY d.ancestor_id
-        ";
-
-        $rows = DB::select($cteSql, $unitsPerSeller->getBindings());
-
-        $leaderboardMap = collect($rows)
-            ->mapWithKeys(fn($r) => [(int) $r->ancestor_id => [
-                'units' => (int) $r->units,
-                'first_key_in_at' => $r->first_key_in_at,
-            ]]);
+            ->get()
+            ->keyBy(fn($row) => (int) $row->sales_user_id);
 
         return $targets
-            ->map(function ($t) use ($leaderboardMap) {
+            ->map(function ($t) use ($scopeByTarget, $sellerStats) {
                 $id = (int) $t->id;
-                $leaderboard = $leaderboardMap[$id] ?? ['units' => 0, 'first_key_in_at' => null];
+                $scopeIds = $scopeByTarget->get($id, collect([$id]));
+                $units = $scopeIds->sum(fn($sellerId) => (int) optional($sellerStats->get((int) $sellerId))->units);
+                $firstKeyIn = $scopeIds
+                    ->map(fn($sellerId) => optional($sellerStats->get((int) $sellerId))->first_key_in_at)
+                    ->filter()
+                    ->sort()
+                    ->first();
 
                 return [
                     'id' => $id,
                     'name' => (string) ($t->full_name ?: $t->name),
-                    'units' => (int) $leaderboard['units'],
-                    'first_key_in_at' => $leaderboard['first_key_in_at'],
-                    'first_key_in_sort' => $leaderboard['first_key_in_at'] ?? '9999-12-31 23:59:59',
+                    'units' => (int) $units,
+                    'first_key_in_at' => $firstKeyIn,
+                    'first_key_in_sort' => $firstKeyIn ?? '9999-12-31 23:59:59',
                 ];
             })
             ->filter(fn($row) => $row['units'] > 0)
@@ -205,16 +186,10 @@ class ReportController extends Controller
             return collect();
         }
 
-        $unitsExpr = "
-            COALESCE(SUM(soi.qty), 0)
-        ";
-
         $rows = DB::table('sales_orders as so')
-            ->leftJoin('sales_order_items as soi', function ($join) {
-                $join->on('soi.sales_order_id', '=', 'so.id')
-                    ->whereNull('soi.parent_item_id');
+            ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {
+                $join->on('sou.sales_order_id', '=', 'so.id');
             })
-            ->leftJoin('products as p', 'p.id', '=', 'soi.product_id')
             ->whereNull('so.deleted_at')
             ->where('so.status', 'selesai')
             ->whereNotNull('so.install_date')
@@ -224,7 +199,7 @@ class ReportController extends Controller
             ->groupBy('so.sales_user_id')
             ->select(
                 'so.sales_user_id',
-                DB::raw("{$unitsExpr} as units"),
+                DB::raw('COALESCE(SUM(sou.unit_count), 0) as units'),
                 DB::raw('MIN(so.key_in_at) as first_key_in_at')
             )
             ->get();
@@ -261,6 +236,50 @@ class ReportController extends Controller
                 'name' => $row['name'],
                 'units' => $row['units'],
             ]);
+    }
+
+    private function activeBundleChildUnitSubquery()
+    {
+        return DB::table('sales_order_items as child_soi')
+            ->whereNotNull('child_soi.parent_item_id')
+            ->whereRaw('COALESCE(child_soi.is_cancelled, 0) = 0')
+            ->selectRaw('child_soi.parent_item_id, COALESCE(SUM(child_soi.qty), 0) as active_child_qty')
+            ->groupBy('child_soi.parent_item_id');
+    }
+
+    private function bundleDefinitionUnitSubquery()
+    {
+        return DB::table('bundle_items as bundle_unit')
+            ->selectRaw('bundle_unit.bundle_id, COALESCE(SUM(bundle_unit.qty), 0) as bundle_unit_qty')
+            ->groupBy('bundle_unit.bundle_id');
+    }
+
+    private function salesOrderUnitSubquery()
+    {
+        return DB::table('sales_order_items as parent_soi')
+            ->whereNull('parent_soi.parent_item_id')
+            ->whereRaw('COALESCE(parent_soi.is_cancelled, 0) = 0')
+            ->leftJoin('products as unit_product', 'unit_product.id', '=', 'parent_soi.product_id')
+            ->leftJoinSub($this->activeBundleChildUnitSubquery(), 'active_child_units', function ($join) {
+                $join->on('active_child_units.parent_item_id', '=', 'parent_soi.id');
+            })
+            ->leftJoinSub($this->bundleDefinitionUnitSubquery(), 'bundle_definition_units', function ($join) {
+                $join->on('bundle_definition_units.bundle_id', '=', 'parent_soi.product_id');
+            })
+            ->selectRaw("
+                parent_soi.sales_order_id,
+                COALESCE(SUM(
+                    CASE
+                        WHEN unit_product.type = 'bundle'
+                        THEN COALESCE(
+                            active_child_units.active_child_qty,
+                            parent_soi.qty * COALESCE(bundle_definition_units.bundle_unit_qty, 1)
+                        )
+                        ELSE parent_soi.qty
+                    END
+                ), 0) as unit_count
+            ")
+            ->groupBy('parent_soi.sales_order_id');
     }
 
     private function normalizeDateRange(?string $from, ?string $to): array
