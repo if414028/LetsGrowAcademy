@@ -10,13 +10,24 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="bg-gray-50 text-gray-900" x-data="{ sidebarOpen: false }">
+<body class="app-dashboard bg-gray-50 text-gray-900 antialiased" x-data="{ sidebarOpen: false }">
     <div class="flex min-h-screen md:h-screen">
 
         {{-- Sidebar (Desktop) --}}
-        <aside class="w-64 hidden md:flex flex-col border-r bg-white h-full overflow-y-auto">
-            <div class="h-16 flex items-center px-6 border-b shrink-0">
-                <span class="text-xl font-semibold text-blue-600">Let's Grow Academy</span>
+        <aside class="dashboard-sidebar w-64 hidden md:flex flex-col border-r bg-white h-full overflow-y-auto">
+            <div class="h-20 flex items-center px-6 border-b shrink-0">
+                <a href="{{ route('dashboard') }}" class="flex items-center gap-3" aria-label="Let's Grow Academy">
+                    <img
+                        src="{{ asset('images/coway_logo.png') }}"
+                        alt=""
+                        class="h-12 w-12 shrink-0 object-contain"
+                        aria-hidden="true"
+                    >
+                    <span class="leading-tight">
+                        <span class="block text-base font-extrabold tracking-tight text-slate-900">Let's Grow</span>
+                        <span class="block text-[10px] font-bold uppercase tracking-[0.2em] text-sky-600">Academy</span>
+                    </span>
+                </a>
             </div>
 
             <nav class="p-4 space-y-1">
@@ -222,7 +233,7 @@
         {{-- Main --}}
         <div class="flex-1 min-w-0 flex flex-col md:h-screen">
             <header
-                class="h-16 bg-white border-b flex items-center justify-between px-4 md:px-8 gap-4 shrink-0 sticky top-0 z-40">
+                class="dashboard-topbar h-20 bg-white border-b flex items-center justify-between px-4 md:px-8 gap-4 shrink-0 sticky top-0 z-40">
                 {{-- Hamburger (Mobile) --}}
                 <button class="md:hidden p-2 rounded-xl hover:bg-gray-100" @click="sidebarOpen = true"
                     aria-label="Open menu">
@@ -295,8 +306,10 @@
                 </div>
             </header>
 
-            <main class="flex-1 overflow-y-auto p-6 md:p-10">
-                {{ $slot }}
+            <main class="dashboard-main flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:px-8 md:py-8 xl:px-10">
+                <div class="mx-auto w-full max-w-[1600px]">
+                    {{ $slot }}
+                </div>
             </main>
         </div>
     </div>

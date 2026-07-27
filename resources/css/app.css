@@ -131,9 +131,50 @@
 }
 
 @layer base {
+    :root {
+        --color-primary: #0284c7;
+        --color-primary-strong: #0369a1;
+        --color-secondary: #06b6d4;
+        --color-accent: #0891b2;
+        --color-background: #f0f9ff;
+        --color-surface: #ffffff;
+        --color-foreground: #0f172a;
+        --color-muted: #64748b;
+        --color-border: #dbeafe;
+        --color-ring: #0284c7;
+        --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 12px 32px rgb(2 132 199 / 0.06);
+    }
+
     html,
     body {
         font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif !important;
+        color: var(--color-foreground);
+        scroll-behavior: smooth;
+    }
+
+    body {
+        min-width: 320px;
+        background: #f8fafc;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        letter-spacing: -0.025em;
+        text-wrap: balance;
+    }
+
+    p {
+        text-wrap: pretty;
+    }
+
+    a,
+    button,
+    input,
+    select,
+    textarea {
+        -webkit-tap-highlight-color: transparent;
     }
 
     button,
@@ -143,9 +184,229 @@
     textarea {
         font-family: inherit;
     }
+
+    button,
+    [role="button"],
+    select,
+    summary {
+        cursor: pointer;
+    }
+
+    :focus-visible {
+        outline: 3px solid rgb(2 132 199 / 0.3);
+        outline-offset: 2px;
+    }
+
+    ::selection {
+        background: #bae6fd;
+        color: #0c4a6e;
+    }
+
+    img {
+        height: auto;
+    }
 }
 
 [x-cloak] { display: none !important; }
+
+@layer components {
+    /* Dashboard shell */
+    .app-dashboard {
+        background:
+            radial-gradient(circle at 100% 0%, rgb(186 230 253 / 0.35), transparent 28rem),
+            #f8fafc;
+    }
+
+    .dashboard-sidebar {
+        width: 17rem;
+        border-color: #e0f2fe;
+        background: rgb(255 255 255 / 0.94);
+        box-shadow: 12px 0 36px rgb(14 116 144 / 0.04);
+    }
+
+    .dashboard-sidebar nav > a {
+        min-height: 2.75rem;
+        border: 1px solid transparent;
+        border-radius: 0.875rem;
+        padding: 0.625rem 0.875rem;
+        transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .dashboard-sidebar nav > a:hover {
+        border-color: #e0f2fe;
+        background: #f0f9ff;
+        color: #0369a1;
+    }
+
+    .dashboard-sidebar nav > a[class*="bg-blue-50"] {
+        border-color: #bae6fd;
+        background: linear-gradient(135deg, #e0f2fe, #ecfeff);
+        color: #0369a1;
+        box-shadow: 0 8px 24px rgb(14 165 233 / 0.1);
+    }
+
+    .dashboard-topbar {
+        border-color: #e0f2fe;
+        background: rgb(255 255 255 / 0.88);
+        backdrop-filter: blur(18px);
+    }
+
+    .dashboard-main > div > :first-child h1,
+    .dashboard-main h1 {
+        color: #0f172a;
+        font-weight: 800;
+    }
+
+    /* Makes existing dashboard cards, forms and data views feel coherent. */
+    .app-dashboard main .bg-white {
+        border-color: #e2e8f0;
+    }
+
+    .app-dashboard main .shadow,
+    .app-dashboard main .shadow-sm,
+    .app-dashboard main .shadow-md,
+    .app-dashboard main .shadow-lg {
+        box-shadow: var(--shadow-card);
+    }
+
+    .app-dashboard main table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .app-dashboard main thead {
+        background: #f8fafc;
+        color: #475569;
+    }
+
+    .app-dashboard main th {
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.045em;
+        text-transform: uppercase;
+    }
+
+    .app-dashboard main tbody tr {
+        transition: background-color 160ms ease;
+    }
+
+    .app-dashboard main tbody tr:hover {
+        background-color: rgb(240 249 255 / 0.7);
+    }
+
+    .app-dashboard main input:not([type="checkbox"]):not([type="radio"]),
+    .app-dashboard main select,
+    .app-dashboard main textarea,
+    .app-shell input:not([type="checkbox"]):not([type="radio"]),
+    .app-shell select,
+    .app-shell textarea {
+        min-height: 2.75rem;
+        border-color: #cbd5e1;
+        border-radius: 0.75rem;
+        background-color: #fff;
+        transition: border-color 180ms ease, box-shadow 180ms ease;
+    }
+
+    .app-dashboard main input:focus,
+    .app-dashboard main select:focus,
+    .app-dashboard main textarea:focus,
+    .app-shell input:focus,
+    .app-shell select:focus,
+    .app-shell textarea:focus {
+        border-color: var(--color-ring);
+        box-shadow: 0 0 0 3px rgb(2 132 199 / 0.14);
+    }
+
+    .app-dashboard main label,
+    .app-shell label {
+        color: #334155;
+        font-weight: 700;
+    }
+
+    /* Auth pages */
+    .auth-shell > div {
+        position: relative;
+        isolation: isolate;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at 15% 20%, rgb(34 211 238 / 0.18), transparent 23rem),
+            radial-gradient(circle at 90% 85%, rgb(14 165 233 / 0.18), transparent 28rem),
+            linear-gradient(145deg, #f0f9ff, #fff 48%, #ecfeff);
+    }
+
+    .auth-shell > div::before {
+        position: absolute;
+        z-index: -1;
+        width: 24rem;
+        height: 24rem;
+        border: 1px solid rgb(14 165 233 / 0.12);
+        border-radius: 9999px;
+        content: "";
+        transform: translate(-46vw, -24vh);
+    }
+
+    .auth-shell form {
+        accent-color: var(--color-primary);
+    }
+
+    .auth-shell .bg-white {
+        border: 1px solid rgb(224 242 254 / 0.9);
+        border-radius: 1.25rem;
+        box-shadow: 0 24px 70px rgb(3 105 161 / 0.12);
+    }
+
+    /* Public site polish, shared by all public pages. */
+    body:not(.app-dashboard):not(.auth-shell):not(.app-shell) > header.fixed {
+        border-color: rgb(224 242 254 / 0.9);
+        background: rgb(255 255 255 / 0.9);
+        box-shadow: 0 8px 28px rgb(15 23 42 / 0.04);
+        backdrop-filter: blur(18px);
+    }
+
+    body:not(.app-dashboard):not(.auth-shell):not(.app-shell) > header.fixed nav a,
+    body:not(.app-dashboard):not(.auth-shell):not(.app-shell) > header.fixed nav button {
+        transition-duration: 180ms;
+    }
+
+    body:not(.app-dashboard):not(.auth-shell):not(.app-shell) section {
+        scroll-margin-top: 5.5rem;
+    }
+
+    body:not(.app-dashboard):not(.auth-shell):not(.app-shell) a.rounded-full,
+    body:not(.app-dashboard):not(.auth-shell):not(.app-shell) button.rounded-full {
+        box-shadow: 0 8px 22px rgb(2 132 199 / 0.12);
+    }
+}
+
+@media (max-width: 767px) {
+    .dashboard-main {
+        padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+    }
+
+    .app-dashboard main h1 {
+        font-size: clamp(1.75rem, 9vw, 2.25rem);
+        line-height: 1.15;
+    }
+
+    .app-dashboard main .rounded-2xl {
+        border-radius: 1rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
 
 @media (max-width: 767px) {
     .product-items-table-wrap {

@@ -274,6 +274,18 @@
                                         </option>
                                     @endforeach
                                 </select>
+
+                                <div x-show="hasInvalidCcpDowngrade" x-transition
+                                    class="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                                    role="alert" aria-live="polite">
+                                    <div class="font-semibold">Status instalasi perlu diubah terlebih dahulu.</div>
+                                    <p class="mt-1">
+                                        CCP yang sudah disetujui tidak dapat diubah menjadi ditolak, dibatalkan,
+                                        atau menunggu pengecekan saat instalasi masih dijadwalkan atau sudah selesai.
+                                        Pilih status instalasi <span class="font-semibold">Dibatalkan</span> atau
+                                        <span class="font-semibold">Menunggu Jadwal</span> untuk melanjutkan.
+                                    </p>
+                                </div>
                             </div>
 
                             <div class="mt-4" x-show="showCcpRemarks" x-transition>
@@ -336,8 +348,9 @@
                             </div>
                         </div>
 
-                        <button type="submit"
-                            class="mt-6 w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                        <button type="submit" :disabled="hasInvalidCcpDowngrade"
+                            :aria-disabled="hasInvalidCcpDowngrade"
+                            class="mt-6 w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600">
                             Update Penjualan
                         </button>
                     </div>
@@ -944,6 +957,7 @@
                 reason: @json(old('status_reason', $salesOrder->status_reason ?? '')),
 
                 ccpStatus: @json(old('ccp_status', $salesOrder->ccp_status ?? 'menunggu pengecekan')),
+                originalCcpStatus: @json($salesOrder->ccp_status ?? 'menunggu pengecekan'),
                 ccpRemarks: @json(old('ccp_remarks', $salesOrder->ccp_remarks ?? '')),
                 ccpApprovedAt: @json(old(
                         'ccp_approved_at',
@@ -958,6 +972,15 @@
 
                 get disabledAll() {
                     return !this.isRecurring;
+                },
+
+                get hasInvalidCcpDowngrade() {
+                    const wasApproved = this.normalizeCcp(this.originalCcpStatus) === 'disetujui';
+                    const isDowngraded = this.normalizeCcp(this.ccpStatus) !== 'disetujui';
+                    const installationBlocksChange = ['dijadwalkan', 'selesai']
+                        .includes(this.normalizeStatus(this.status));
+
+                    return !this.disabledAll && wasApproved && isDowngraded && installationBlocksChange;
                 },
 
                 get showInstallDate() {

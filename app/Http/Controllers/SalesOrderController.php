@@ -518,6 +518,17 @@ class SalesOrderController extends Controller
             ],
         ]);
 
+        $isDowngradingApprovedCcp = $salesOrder->ccp_status === 'disetujui'
+            && $validated['ccp_status'] !== 'disetujui';
+
+        if ($isDowngradingApprovedCcp && in_array($validated['status'], ['dijadwalkan', 'selesai'], true)) {
+            return back()
+                ->withErrors([
+                    'ccp_status' => 'CCP status tidak dapat diubah dari disetujui selama status instalasi masih dijadwalkan atau selesai. Ubah status instalasi menjadi dibatalkan atau menunggu jadwal terlebih dahulu.',
+                ])
+                ->withInput();
+        }
+
         if ($isPrivileged) {
             $isHealthPlanner = User::role('Health Planner')
                 ->whereKey($validated['sales_user_id'])
