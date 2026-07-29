@@ -67,17 +67,18 @@
                 Total: <span class="font-semibold text-gray-700">{{ $salesOrders->total() }}</span>
             </div>
 
-            <div x-show="filterOpen" x-cloak class="fixed inset-0 z-50">
+            <div x-show="filterOpen" x-cloak @keydown.escape.window="filterOpen = false"
+                class="fixed inset-0 z-50 flex items-center justify-center p-4 [padding-top:max(1rem,env(safe-area-inset-top))] [padding-bottom:max(1rem,env(safe-area-inset-bottom))]">
                 <div class="absolute inset-0 bg-black/40" @click="filterOpen = false"></div>
                 <div
-                    class="absolute left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-xl">
-                    <div class="flex items-center justify-between border-b px-5 py-4">
+                    class="relative flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+                    <div class="flex shrink-0 items-center justify-between border-b px-5 py-4">
                         <h2 class="text-base font-semibold text-gray-900">Filter Penjualan</h2>
                         <button type="button" @click="filterOpen = false"
                             class="rounded-lg px-2 py-1 text-xl leading-none text-gray-500 hover:bg-gray-100">&times;</button>
                     </div>
 
-                    <form method="GET" class="space-y-4 p-5">
+                    <form method="GET" class="mobile-modal-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
                         @foreach (request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'page']) as $key => $value)
                             @if (is_array($value))
                                 @foreach ($value as $item)

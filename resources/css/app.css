@@ -383,6 +383,11 @@
         padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
     }
 
+    .mobile-modal-scroll {
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+    }
+
     .app-dashboard main h1 {
         font-size: clamp(1.75rem, 9vw, 2.25rem);
         line-height: 1.15;
