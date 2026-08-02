@@ -18,6 +18,7 @@ class SalesOrder extends Model
         'key_in_at',
         'install_date',
         'is_recurring',
+        'guarantee_letter',
         'payment_method',
         'payment_method_remarks',
         'status',
@@ -31,6 +32,7 @@ class SalesOrder extends Model
         'key_in_at'     => 'datetime',
         'install_date'  => 'date',
         'is_recurring'  => 'boolean',
+        'guarantee_letter' => 'boolean',
         'ccp_approved_at'  => 'datetime',
     ];
 

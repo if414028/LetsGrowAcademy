@@ -124,6 +124,15 @@
 
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
+                                <label for="customer_birth_date" class="text-xs font-medium text-gray-600">
+                                    Tanggal Lahir <span class="text-red-500">*</span>
+                                </label>
+                                <input id="customer_birth_date" type="date" name="customer_birth_date"
+                                    x-model="birthDate" max="{{ now()->format('Y-m-d') }}" required
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
+                            </div>
+
+                            <div>
                                 <label class="text-xs font-medium text-gray-600">
                                     Order Number <span class="text-red-500">*</span>
                                 </label>
@@ -177,6 +186,13 @@
                                     @checked(old('is_recurring', $salesOrder->is_recurring))
                                     class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                 <label for="is_recurring" class="text-sm text-gray-700">Recurring</label>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <input id="guarantee_letter" type="checkbox" name="guarantee_letter" value="1"
+                                    @checked(old('guarantee_letter', $salesOrder->guarantee_letter))
+                                    class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                <label for="guarantee_letter" class="text-sm text-gray-700">Guarantee Letter</label>
                             </div>
                         </div>
 
@@ -724,6 +740,7 @@
         function customerPickerEdit() {
             return {
                 query: @json(old('customer_name', $salesOrder->customer?->full_name ?? '')),
+                birthDate: @json(old('customer_birth_date', $salesOrder->customer?->date_of_birth?->format('Y-m-d') ?? '')),
                 phone: @json(old('customer_phone', $salesOrder->customer?->phone_number ?? '')),
                 address: @json(old('customer_address', $salesOrder->customer?->address ?? '')),
                 open: false,
@@ -759,6 +776,7 @@
                 choose(c) {
                     this.selectedId = c.id;
                     this.query = c.full_name;
+                    this.birthDate = c.date_of_birth || '';
                     this.phone = c.phone_number || '';
                     this.address = c.address || '';
                     this.open = false;

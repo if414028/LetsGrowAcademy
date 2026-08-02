@@ -21,7 +21,14 @@ class CustomerController extends Controller
             ->orWhere('phone_number', 'like', "%{$q}%")
             ->orderBy('full_name')
             ->limit(10)
-            ->get(['id', 'full_name', 'phone_number', 'address']);
+            ->get(['id', 'full_name', 'date_of_birth', 'phone_number', 'address'])
+            ->map(fn(Customer $customer) => [
+                'id' => $customer->id,
+                'full_name' => $customer->full_name,
+                'date_of_birth' => $customer->date_of_birth?->format('Y-m-d'),
+                'phone_number' => $customer->phone_number,
+                'address' => $customer->address,
+            ]);
 
         return response()->json($customers);
     }

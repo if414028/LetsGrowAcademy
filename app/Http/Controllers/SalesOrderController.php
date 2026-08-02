@@ -84,6 +84,10 @@ class SalesOrderController extends Controller
             $q->where('customer_type', $request->customer_type);
         }
 
+        if ($request->boolean('guarantee_letter')) {
+            $q->where('guarantee_letter', true);
+        }
+
         $canFilterHealthManager = $user->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']);
         $healthManagerOptions = $this->healthManagerFilterOptionsFor($user);
 
@@ -203,6 +207,7 @@ class SalesOrderController extends Controller
             // customer input
             'customer_id' => ['nullable', 'exists:customers,id'],
             'customer_name' => ['required', 'string', 'max:255'],
+            'customer_birth_date' => ['required', 'date', 'before_or_equal:today'],
             'customer_phone' => ['nullable', 'string', 'max:30'],
             'customer_address' => ['required', 'string', 'max:500'],
 
@@ -219,6 +224,7 @@ class SalesOrderController extends Controller
                 'date',
             ],
             'is_recurring' => ['nullable', 'boolean'],
+            'guarantee_letter' => ['nullable', 'boolean'],
             'payment_method' => ['nullable', Rule::in(array_keys($this->paymentMethods))],
             'payment_method_remarks' => [
                 // opsional, tapi hanya boleh ada kalau Admin/Head Admin DAN payment_method = outright (POA)
@@ -334,6 +340,7 @@ class SalesOrderController extends Controller
                 'key_in_at' => $validated['key_in_at'] ?? now(),
                 'install_date' => $installDate,
                 'is_recurring' => (bool) ($validated['is_recurring'] ?? false),
+                'guarantee_letter' => (bool) ($validated['guarantee_letter'] ?? false),
                 'payment_method' => $validated['payment_method'] ?? null,
                 'payment_method_remarks' => $validated['payment_method_remarks'] ?? null,
                 'status' => $validated['status'],
@@ -464,6 +471,7 @@ class SalesOrderController extends Controller
             'customer_id' => ['nullable', 'exists:customers,id'],
             'customer_type' => ['required', Rule::in($this->customerTypes)],
             'customer_name' => ['required', 'string', 'max:255'],
+            'customer_birth_date' => ['required', 'date', 'before_or_equal:today'],
             'customer_phone' => ['nullable', 'string', 'max:30'],
             'customer_address' => ['required', 'string', 'max:500'],
 
@@ -475,6 +483,7 @@ class SalesOrderController extends Controller
                 'date',
             ],
             'is_recurring' => ['nullable', 'boolean'],
+            'guarantee_letter' => ['nullable', 'boolean'],
             'payment_method' => ['nullable', Rule::in(array_keys($this->paymentMethods))],
             'payment_method_remarks' => [
                 Rule::prohibitedIf(fn() => !$isPrivileged || $request->input('payment_method') !== 'outright'),
@@ -591,6 +600,7 @@ class SalesOrderController extends Controller
                 'key_in_at' => $validated['key_in_at'] ?? $salesOrder->key_in_at ?? now(),
                 'install_date' => $installDate,
                 'is_recurring' => (bool) ($validated['is_recurring'] ?? false),
+                'guarantee_letter' => (bool) ($validated['guarantee_letter'] ?? false),
                 'payment_method' => $validated['payment_method'] ?? null,
                 'payment_method_remarks' => $validated['payment_method_remarks'] ?? null,
                 'status' => $validated['status'],
@@ -722,13 +732,19 @@ class SalesOrderController extends Controller
         $phone = trim((string) ($validated['customer_phone'] ?? ''));
 
         if ($customerId) {
+            $customerData = [
+                'date_of_birth' => $validated['customer_birth_date'],
+            ];
+
             if ($allowUpdateExisting) {
-                Customer::whereKey($customerId)->update([
+                $customerData = array_merge($customerData, [
                     'full_name' => $name,
                     'phone_number' => $validated['customer_phone'] ?? null,
                     'address' => $validated['customer_address'] ?? null,
                 ]);
             }
+
+            Customer::whereKey($customerId)->update($customerData);
             return (int) $customerId;
         }
 
@@ -738,11 +754,16 @@ class SalesOrderController extends Controller
             ->first();
 
         if ($existing) {
+            $existing->update([
+                'date_of_birth' => $validated['customer_birth_date'],
+            ]);
+
             return (int) $existing->id;
         }
 
         $customer = Customer::create([
             'full_name' => $name,
+            'date_of_birth' => $validated['customer_birth_date'],
             'phone_number' => $validated['customer_phone'] ?? null,
             'address' => $validated['customer_address'] ?? null,
         ]);

@@ -57,6 +57,17 @@
                         </div>
 
                         <div>
+                            <div class="text-xs text-gray-500">Guarantee Letter</div>
+                            <div class="mt-1">
+                                @if ($salesOrder->guarantee_letter)
+                                    <span class="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">Yes</span>
+                                @else
+                                    <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">No</span>
+                                @endif
+                            </div>
+                        </div>
+
+                        <div>
                             <div class="text-xs text-gray-500">Payment Method</div>
                             <div class="mt-1 text-gray-900">
                                 {{ $salesOrder->payment_method_label ?? '-' }}

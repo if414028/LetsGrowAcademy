@@ -19,7 +19,7 @@
         <div x-data="{ filterOpen: false }"
             class="flex flex-col gap-3 border-b px-4 py-4 md:flex-row md:items-center md:justify-between">
             @php
-                $activeFilterCount = collect(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status'])
+                $activeFilterCount = collect(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'guarantee_letter'])
                     ->filter(fn($key) => $key === 'date_filter_by'
                         ? request()->filled($key) && request($key) !== 'key_in_at'
                         : request()->filled($key))
@@ -55,8 +55,8 @@
                     @endif
                 </button>
 
-                @if (request()->hasAny(['search', 'from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status']))
-                    <a href="{{ route('sales-orders.index', request()->except(['search', 'from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'page'])) }}"
+                @if (request()->hasAny(['search', 'from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'guarantee_letter']))
+                    <a href="{{ route('sales-orders.index', request()->except(['search', 'from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'guarantee_letter', 'page'])) }}"
                         class="shrink-0 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                         Reset
                     </a>
@@ -79,7 +79,7 @@
                     </div>
 
                     <form method="GET" class="mobile-modal-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
-                        @foreach (request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'page']) as $key => $value)
+                        @foreach (request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'guarantee_letter', 'page']) as $key => $value)
                             @if (is_array($value))
                                 @foreach ($value as $item)
                                     <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
@@ -158,8 +158,15 @@
                             </div>
                         </div>
 
+                        <label class="flex items-center gap-3 rounded-xl border border-gray-200 px-3 py-3 text-sm text-gray-700 hover:bg-gray-50">
+                            <input type="checkbox" name="guarantee_letter" value="1"
+                                @checked(request()->boolean('guarantee_letter'))
+                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <span>Tampilkan hanya penjualan dengan Guarantee Letter</span>
+                        </label>
+
                         <div class="flex items-center justify-end gap-2 border-t pt-4">
-                            <a href="{{ route('sales-orders.index', request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'page'])) }}"
+                            <a href="{{ route('sales-orders.index', request()->except(['from', 'to', 'date_filter_by', 'health_manager_id', 'customer_type', 'status', 'guarantee_letter', 'page'])) }}"
                                 class="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
                                 Clear Filter
                             </a>
@@ -183,6 +190,7 @@
                         <th class="px-4 py-3 text-left">Customer</th>
                         <th class="px-4 py-3 text-left">Key In</th>
                         <th class="px-4 py-3 text-left">Recurring</th>
+                        <th class="px-4 py-3 text-left">Guarantee Letter</th>
                         <th class="px-4 py-3 text-left">CCP</th>
                         <th class="px-4 py-3 text-left">Status</th>
                         <th class="px-4 py-3 text-right">Action</th>
@@ -214,6 +222,14 @@
                                 @else
                                     <span
                                         class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">No</span>
+                                @endif
+                            </td>
+
+                            <td class="px-4 py-3">
+                                @if ($so->guarantee_letter)
+                                    <span class="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">Yes</span>
+                                @else
+                                    <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-700">No</span>
                                 @endif
                             </td>
 

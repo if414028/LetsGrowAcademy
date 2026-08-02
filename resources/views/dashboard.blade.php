@@ -6,6 +6,60 @@
         </div>
     </div>
 
+    @if (request()->user()->hasRole('Health Planner'))
+        <section class="mt-6 overflow-hidden rounded-2xl border border-pink-200 bg-gradient-to-br from-pink-50 via-white to-amber-50 shadow-sm"
+            aria-labelledby="customer-birthdays-heading">
+            <div class="flex flex-col gap-2 border-b border-pink-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-full bg-pink-100 text-lg" aria-hidden="true">🎂</span>
+                        <div>
+                            <h2 id="customer-birthdays-heading" class="font-bold text-gray-900">Ulang Tahun Customer Hari Ini</h2>
+                            <p class="text-sm text-gray-500">Sapa customer dan buat hari spesialnya lebih berkesan.</p>
+                        </div>
+                    </div>
+                </div>
+                <span class="w-fit rounded-full bg-pink-100 px-3 py-1 text-xs font-semibold text-pink-700">
+                    {{ $customerBirthdays->count() }} customer
+                </span>
+            </div>
+
+            @if ($customerBirthdays->isEmpty())
+                <div class="px-5 py-6 text-sm text-gray-500">
+                    Belum ada customer Anda yang berulang tahun hari ini.
+                </div>
+            @else
+                <div class="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
+                    @foreach ($customerBirthdays as $customer)
+                        <article class="flex flex-col justify-between gap-4 rounded-xl border border-pink-100 bg-white p-4 shadow-sm">
+                            <div class="flex items-start gap-3">
+                                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pink-100 font-bold text-pink-700">
+                                    {{ mb_strtoupper(mb_substr($customer->full_name, 0, 1)) }}
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="truncate font-semibold text-gray-900">{{ $customer->full_name }}</h3>
+                                    <p class="mt-0.5 text-xs text-gray-500">{{ $customer->birthday_date_label }}</p>
+                                    <p class="mt-1 text-sm text-gray-600">{{ $customer->phone_number ?: 'Nomor WhatsApp belum tersedia' }}</p>
+                                </div>
+                            </div>
+
+                            @if ($customer->whatsapp_birthday_url)
+                                <a href="{{ $customer->whatsapp_birthday_url }}" target="_blank" rel="noopener noreferrer"
+                                    class="inline-flex items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                                    Kirim Ucapan via WhatsApp
+                                </a>
+                            @else
+                                <span class="inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-400">
+                                    Nomor WhatsApp tidak valid
+                                </span>
+                            @endif
+                        </article>
+                    @endforeach
+                </div>
+            @endif
+        </section>
+    @endif
+
     {{-- Deactivation warning (Month-5) --}}
     @php
         $authUser = request()->user();

@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Contest;
 use Carbon\Carbon;
 use App\Models\PerformanceCutoff;
+use App\Models\Customer;
 
 class DashboardController extends Controller
 {
@@ -455,6 +456,35 @@ class DashboardController extends Controller
                 return $u;
             });
 
+        $customerBirthdays = collect();
+
+        if ($user->hasRole('Health Planner')) {
+            $customerBirthdays = Customer::query()
+                ->whereNotNull('date_of_birth')
+                ->whereMonth('date_of_birth', now()->month)
+                ->whereDay('date_of_birth', now()->day)
+                ->whereHas('salesOrders', fn($query) => $query->where('sales_user_id', $user->id))
+                ->orderBy('full_name')
+                ->get()
+                ->map(function (Customer $customer) {
+                    $phone = preg_replace('/\D+/', '', (string) $customer->phone_number);
+
+                    if (str_starts_with($phone, '0')) {
+                        $phone = '62' . substr($phone, 1);
+                    } elseif (str_starts_with($phone, '8')) {
+                        $phone = '62' . $phone;
+                    }
+
+                    $message = "Selamat ulang tahun, {$customer->full_name}! 🎉 Semoga selalu sehat, bahagia, dan segala harapannya tercapai.";
+                    $customer->birthday_date_label = $customer->date_of_birth->translatedFormat('d F');
+                    $customer->whatsapp_birthday_url = str_starts_with($phone, '62')
+                        ? 'https://wa.me/' . $phone . '?text=' . rawurlencode($message)
+                        : null;
+
+                    return $customer;
+                });
+        }
+
         return view('dashboard', compact(
             'soDeactivationWarnings',
             'selfWarning',
@@ -475,6 +505,7 @@ class DashboardController extends Controller
             'activeContests',
             'todayBirthdays',
             'isBirthdayToday',
+            'customerBirthdays',
         ));
     }
 
