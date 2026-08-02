@@ -6,6 +6,45 @@
         </div>
     </div>
 
+    @php
+        $dashboardSubscription = request()->user()->activeSubscription();
+        $pendingDashboardSubscription = request()->user()->pendingSubscription();
+        $subscriptionWarningDays = config('subscription.warning_days', 7);
+        $subscriptionExpiringSoon = $dashboardSubscription
+            && now()->diffInDays($dashboardSubscription->ends_at, false) <= $subscriptionWarningDays;
+    @endphp
+
+    <section class="mt-6 overflow-hidden rounded-2xl border {{ $dashboardSubscription ? 'border-amber-200 bg-gradient-to-r from-amber-50 to-white' : ($pendingDashboardSubscription ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white') }} p-5 shadow-sm sm:p-6">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-start gap-4">
+                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full {{ $dashboardSubscription ? 'bg-amber-100 text-amber-700' : ($pendingDashboardSubscription ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500') }}">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 15.24 7.2 17.76l.92-5.34-3.88-3.78 5.36-.78L12 3z" /></svg>
+                </div>
+                <div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Status subscription</p>
+                    @if ($dashboardSubscription)
+                        <h2 class="mt-1 text-lg font-extrabold text-slate-900">Subscriber aktif</h2>
+                        <p class="mt-1 text-sm text-slate-600">Akses premium aktif sampai {{ $dashboardSubscription->ends_at->translatedFormat('d F Y') }}.</p>
+                        @if ($subscriptionExpiringSoon)
+                            <p class="mt-2 inline-flex items-center gap-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700">
+                                Masa aktif akan habis dalam {{ max(0, now()->diffInDays($dashboardSubscription->ends_at, false)) }} hari. Segera perpanjang subscription.
+                            </p>
+                        @endif
+                    @elseif ($pendingDashboardSubscription)
+                        <h2 class="mt-1 text-lg font-extrabold text-slate-900">Menunggu pengecekan admin</h2>
+                        <p class="mt-1 text-sm text-slate-600">Pembayaran kamu sedang diverifikasi secara manual.</p>
+                    @else
+                        <h2 class="mt-1 text-lg font-extrabold text-slate-900">Belum berlangganan</h2>
+                        <p class="mt-1 text-sm text-slate-600">Berlangganan untuk membuka Selling Kit dan dokumen premium lainnya.</p>
+                    @endif
+                </div>
+            </div>
+            <a href="{{ route('subscriptions.index') }}" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl {{ $dashboardSubscription ? 'bg-amber-400 text-slate-950 hover:bg-amber-300' : 'bg-blue-600 text-white hover:bg-blue-700' }} px-5 py-2.5 text-sm font-extrabold transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                {{ $dashboardSubscription ? 'Kelola Subscription' : ($pendingDashboardSubscription ? 'Lihat Status' : 'Subscribe Sekarang') }}
+            </a>
+        </div>
+    </section>
+
     {{-- Deactivation warning (Month-5) --}}
     @php
         $authUser = request()->user();

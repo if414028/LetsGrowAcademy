@@ -41,6 +41,45 @@
                     Overview
                 </a>
 
+                <a href="{{ route('subscriptions.index') }}"
+                    class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+                        {{ request()->routeIs('subscriptions.*', 'selling-kit.*') ? 'bg-amber-50 text-amber-700' : 'text-gray-700 hover:bg-gray-50' }}">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 15.24 7.2 17.76l.92-5.34-3.88-3.78 5.36-.78L12 3z" />
+                    </svg>
+                    Subscription
+                </a>
+
+                @if (auth()->user()->hasActiveSubscription())
+                    <div class="ml-5 border-l-2 border-amber-200 pl-3">
+                        <p class="px-3 pb-1 pt-2 text-[9px] font-extrabold uppercase tracking-[0.16em] text-amber-600">
+                            Khusus subscriber
+                        </p>
+                        <a href="{{ route('selling-kit.index') }}" aria-current="{{ request()->routeIs('selling-kit.*') ? 'page' : 'false' }}"
+                            class="flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition
+                                {{ request()->routeIs('selling-kit.*') ? 'bg-amber-100 text-amber-800' : 'text-gray-600 hover:bg-amber-50 hover:text-amber-700' }}">
+                            <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 3h7l5 5v13H7V3z" />
+                            </svg>
+                            <span class="flex-1">Selling Kit</span>
+                            <svg class="h-3.5 w-3.5 text-amber-500" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M12 2.75l2.73 5.53 6.1.89-4.42 4.3 1.04 6.08L12 16.68l-5.45 2.87 1.04-6.08-4.42-4.3 6.1-.89L12 2.75z" />
+                            </svg>
+                        </a>
+                    </div>
+                @endif
+
+                @role('Admin|Head Admin')
+                    <a href="{{ route('admin.subscriptions.index') }}"
+                        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+                            {{ request()->routeIs('admin.subscriptions.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5-4.5A11 11 0 0112 3a11 11 0 01-8 2.5V11c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5.5z" />
+                        </svg>
+                        Verifikasi Subscription
+                    </a>
+                @endrole
+
                 <a href="{{ route('performance.index') }}"
                     class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                         {{ request()->routeIs('performance.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
@@ -153,6 +192,38 @@
                         Overview
                     </a>
 
+                    <a href="{{ route('subscriptions.index') }}" @click="sidebarOpen=false"
+                        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+                            {{ request()->routeIs('subscriptions.*', 'selling-kit.*') ? 'bg-amber-50 text-amber-700' : 'text-gray-700 hover:bg-gray-50' }}">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 15.24 7.2 17.76l.92-5.34-3.88-3.78 5.36-.78L12 3z" /></svg>
+                        Subscription
+                    </a>
+
+                    @if (auth()->user()->hasActiveSubscription())
+                        <div class="ml-5 border-l-2 border-amber-200 pl-3">
+                            <p class="px-3 pb-1 pt-2 text-[9px] font-extrabold uppercase tracking-[0.16em] text-amber-600">
+                                Khusus subscriber
+                            </p>
+                            <a href="{{ route('selling-kit.index') }}" @click="sidebarOpen=false"
+                                aria-current="{{ request()->routeIs('selling-kit.*') ? 'page' : 'false' }}"
+                                class="flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition
+                                    {{ request()->routeIs('selling-kit.*') ? 'bg-amber-100 text-amber-800' : 'text-gray-600 hover:bg-amber-50 hover:text-amber-700' }}">
+                                <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 3h7l5 5v13H7V3z" /></svg>
+                                <span class="flex-1">Selling Kit</span>
+                                <svg class="h-3.5 w-3.5 text-amber-500" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.75l2.73 5.53 6.1.89-4.42 4.3 1.04 6.08L12 16.68l-5.45 2.87 1.04-6.08-4.42-4.3 6.1-.89L12 2.75z" /></svg>
+                            </a>
+                        </div>
+                    @endif
+
+                    @role('Admin|Head Admin')
+                        <a href="{{ route('admin.subscriptions.index') }}" @click="sidebarOpen=false"
+                            class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
+                                {{ request()->routeIs('admin.subscriptions.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
+                            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5-4.5A11 11 0 0112 3a11 11 0 01-8 2.5V11c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5.5z" /></svg>
+                            Verifikasi Subscription
+                        </a>
+                    @endrole
+
                     <a href="{{ route('performance.index') }}" @click="sidebarOpen=false"
                         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                             {{ request()->routeIs('performance.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
@@ -255,8 +326,11 @@
                         </div>
 
                         <div class="leading-tight hidden sm:block text-left">
-                            <div class="text-sm font-semibold">
+                            <div class="flex items-center gap-2 text-sm font-semibold">
                                 {{ auth()->user()->name ?? 'User' }}
+                                @if (auth()->user()->hasActiveSubscription())
+                                    <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-700">Subscriber</span>
+                                @endif
                             </div>
                             <div class="text-xs text-gray-500">
                                 {{ auth()->user()->getRoleNames()->first() ?? '-' }}

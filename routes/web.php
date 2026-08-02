@@ -9,6 +9,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -63,6 +64,18 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
  * Authenticated routes
  */
 Route::middleware('auth', 'active')->group(function () {
+    Route::get('/subscription', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+    Route::post('/subscription/confirm-transfer', [SubscriptionController::class, 'store'])->name('subscriptions.store');
+
+    Route::middleware('role:Admin|Head Admin')->group(function () {
+        Route::get('/admin/subscriptions', [SubscriptionController::class, 'adminIndex'])->name('admin.subscriptions.index');
+        Route::patch('/admin/subscriptions/{subscription}/approve', [SubscriptionController::class, 'approve'])->name('admin.subscriptions.approve');
+        Route::patch('/admin/subscriptions/{subscription}/reject', [SubscriptionController::class, 'reject'])->name('admin.subscriptions.reject');
+    });
+
+    Route::get('/selling-kit', fn () => view('selling-kit.index'))
+        ->middleware('subscriber')
+        ->name('selling-kit.index');
 
     // Profile (semua role): redirect ke halaman detail user yang login
     Route::get('/profile', function (\Illuminate\Http\Request $request) {

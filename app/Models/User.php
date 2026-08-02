@@ -116,6 +116,33 @@ class User extends Authenticatable
         return $this->hasMany(SalesKpiDaily::class, 'sales_user_id');
     }
 
+    public function subscriptions()
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    public function activeSubscription(): ?Subscription
+    {
+        return $this->subscriptions()
+            ->where('status', 'active')
+            ->where('ends_at', '>', now())
+            ->latest('ends_at')
+            ->first();
+    }
+
+    public function pendingSubscription(): ?Subscription
+    {
+        return $this->subscriptions()
+            ->where('status', 'pending')
+            ->latest('submitted_at')
+            ->first();
+    }
+
+    public function hasActiveSubscription(): bool
+    {
+        return $this->activeSubscription() !== null;
+    }
+
     /* =========================
      | CONTEST RELATIONS
      ========================= */

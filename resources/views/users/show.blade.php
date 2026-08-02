@@ -34,7 +34,15 @@
 
 
                     <div class="min-w-0">
-                        <p class="text-lg font-semibold text-gray-900 truncate">{{ $user->name }}</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <p class="text-lg font-semibold text-gray-900 truncate">{{ $user->name }}</p>
+                            @if ($user->hasActiveSubscription())
+                                <span class="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider text-amber-700">
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 15.24 7.2 17.76l.92-5.34-3.88-3.78 5.36-.78L12 3z" /></svg>
+                                    Subscriber
+                                </span>
+                            @endif
+                        </div>
                         <p class="text-sm text-gray-500 truncate">{{ $user->email }}</p>
                     </div>
                 </div>

@@ -763,6 +763,14 @@ class UserController extends Controller
             ->get()
             ->keyBy('id');
 
+        $subscriberIds = DB::table('subscriptions')
+            ->whereIn('user_id', $userIds)
+            ->where('status', 'active')
+            ->where('ends_at', '>', now())
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+
         $joinUnits = function ($q, string $soAlias = 'so') {
             return $q
                 ->leftJoin('sales_order_items as soi', function ($join) use ($soAlias) {
@@ -815,7 +823,7 @@ class UserController extends Controller
             $childrenByParent[$r->parent_user_id][] = $r->child_user_id;
         }
 
-        $buildNode = function ($userId) use (&$buildNode, $users, $childrenByParent, $metricsRows) {
+        $buildNode = function ($userId) use (&$buildNode, $users, $childrenByParent, $metricsRows, $subscriberIds) {
             $u = $users->get($userId);
 
             if (!$u) {
@@ -836,6 +844,7 @@ class UserController extends Controller
                 'phone_number' => $u->phone_number ?? '-',
                 'photo' => $u->photo,
                 'role' => $u->getRoleNames()->first(),
+                'is_subscriber' => $subscriberIds->has((int) $u->id),
                 'total_key_in' => (int) ($metric->total_key_in ?? 0),
                 'total_net_sales' => (int) ($metric->total_net_sales ?? 0),
                 'children' => $children,

@@ -60,13 +60,26 @@
         class="w-52 rounded-2xl bg-white shadow-sm border px-4 py-4 hover:shadow transition">
         <div class="flex flex-col items-center text-center">
             {{-- Avatar (mirip profile card kiri) --}}
-            <div class="h-12 w-12 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
-                @if ($photoUrl)
-                    <img src="{{ $photoUrl }}" alt="{{ $node['name'] }}" class="h-full w-full object-cover">
-                @else
+            <div class="relative">
+                <div class="h-12 w-12 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+                    @if ($photoUrl)
+                        <img src="{{ $photoUrl }}" alt="{{ $node['name'] }}" class="h-full w-full object-cover">
+                    @else
+                        <span
+                            class="text-lg font-bold text-white bg-blue-600 h-full w-full flex items-center justify-center">
+                            {{ $initial }}
+                        </span>
+                    @endif
+                </div>
+
+                @if (!empty($node['is_subscriber']))
                     <span
-                        class="text-lg font-bold text-white bg-blue-600 h-full w-full flex items-center justify-center">
-                        {{ $initial }}
+                        class="absolute -right-2 -top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-amber-400 text-amber-950 shadow-sm"
+                        title="Subscriber aktif"
+                        aria-label="Subscriber aktif">
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12 2.75l2.73 5.53 6.1.89-4.42 4.3 1.04 6.08L12 16.68l-5.45 2.87 1.04-6.08-4.42-4.3 6.1-.89L12 2.75z" />
+                        </svg>
                     </span>
                 @endif
             </div>

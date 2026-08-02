@@ -8,15 +8,15 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('contests', function (Blueprint $table) {
-            $table->text('description')->nullable()->change();
+        Schema::table('subscriptions', function (Blueprint $table) {
+            $table->string('payment_proof')->nullable()->after('amount');
         });
     }
 
     public function down(): void
     {
-        Schema::table('contests', function (Blueprint $table) {
-            $table->string('description')->nullable()->change();
+        Schema::table('subscriptions', function (Blueprint $table) {
+            $table->dropColumn('payment_proof');
         });
     }
 };
