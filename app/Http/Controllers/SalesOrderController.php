@@ -207,7 +207,7 @@ class SalesOrderController extends Controller
             // customer input
             'customer_id' => ['nullable', 'exists:customers,id'],
             'customer_name' => ['required', 'string', 'max:255'],
-            'customer_birth_date' => ['required', 'date', 'before_or_equal:today'],
+            'customer_birth_date' => ['nullable', 'date', 'before_or_equal:today'],
             'customer_phone' => ['nullable', 'string', 'max:30'],
             'customer_address' => ['required', 'string', 'max:500'],
 
@@ -471,7 +471,7 @@ class SalesOrderController extends Controller
             'customer_id' => ['nullable', 'exists:customers,id'],
             'customer_type' => ['required', Rule::in($this->customerTypes)],
             'customer_name' => ['required', 'string', 'max:255'],
-            'customer_birth_date' => ['required', 'date', 'before_or_equal:today'],
+            'customer_birth_date' => ['nullable', 'date', 'before_or_equal:today'],
             'customer_phone' => ['nullable', 'string', 'max:30'],
             'customer_address' => ['required', 'string', 'max:500'],
 
@@ -732,9 +732,11 @@ class SalesOrderController extends Controller
         $phone = trim((string) ($validated['customer_phone'] ?? ''));
 
         if ($customerId) {
-            $customerData = [
-                'date_of_birth' => $validated['customer_birth_date'],
-            ];
+            $customerData = [];
+
+            if ($allowUpdateExisting || !empty($validated['customer_birth_date'])) {
+                $customerData['date_of_birth'] = $validated['customer_birth_date'] ?? null;
+            }
 
             if ($allowUpdateExisting) {
                 $customerData = array_merge($customerData, [
@@ -744,7 +746,9 @@ class SalesOrderController extends Controller
                 ]);
             }
 
-            Customer::whereKey($customerId)->update($customerData);
+            if (!empty($customerData)) {
+                Customer::whereKey($customerId)->update($customerData);
+            }
             return (int) $customerId;
         }
 
@@ -754,16 +758,18 @@ class SalesOrderController extends Controller
             ->first();
 
         if ($existing) {
-            $existing->update([
-                'date_of_birth' => $validated['customer_birth_date'],
-            ]);
+            if (!empty($validated['customer_birth_date'])) {
+                $existing->update([
+                    'date_of_birth' => $validated['customer_birth_date'],
+                ]);
+            }
 
             return (int) $existing->id;
         }
 
         $customer = Customer::create([
             'full_name' => $name,
-            'date_of_birth' => $validated['customer_birth_date'],
+            'date_of_birth' => $validated['customer_birth_date'] ?? null,
             'phone_number' => $validated['customer_phone'] ?? null,
             'address' => $validated['customer_address'] ?? null,
         ]);

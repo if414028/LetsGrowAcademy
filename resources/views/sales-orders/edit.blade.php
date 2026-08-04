@@ -125,10 +125,10 @@
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
                                 <label for="customer_birth_date" class="text-xs font-medium text-gray-600">
-                                    Tanggal Lahir <span class="text-red-500">*</span>
+                                    Tanggal Lahir <span class="font-normal text-gray-400">(Opsional)</span>
                                 </label>
                                 <input id="customer_birth_date" type="date" name="customer_birth_date"
-                                    x-model="birthDate" max="{{ now()->format('Y-m-d') }}" required
+                                    x-model="birthDate" max="{{ now()->format('Y-m-d') }}"
                                     class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500" />
                             </div>
 
