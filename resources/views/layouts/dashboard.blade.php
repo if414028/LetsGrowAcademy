@@ -61,7 +61,7 @@
                     Reports
                 </a>
 
-                @role('Admin|Head Admin')
+                @hasanyrole('Admin|Head Admin|Health Manager')
                     <a href="{{ route('users.index') }}"
                         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                               {{ request()->routeIs('users.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
@@ -71,7 +71,9 @@
                         </svg>
                         Users
                     </a>
+                @endhasanyrole
 
+                @role('Admin|Head Admin')
                     <a href="{{ route('products.index') }}"
                         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                               {{ request()->routeIs('products.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
@@ -173,7 +175,7 @@
                         Reports
                     </a>
 
-                    @role('Admin|Head Admin')
+                    @hasanyrole('Admin|Head Admin|Health Manager')
                         <a href="{{ route('users.index') }}" @click="sidebarOpen=false"
                             class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                                   {{ request()->routeIs('users.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
@@ -183,7 +185,9 @@
                             </svg>
                             Users
                         </a>
+                    @endhasanyrole
 
+                    @role('Admin|Head Admin')
                         <a href="{{ route('products.index') }}" @click="sidebarOpen=false"
                             class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                                   {{ request()->routeIs('products.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">

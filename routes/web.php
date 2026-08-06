@@ -76,7 +76,7 @@ Route::middleware('auth', 'active')->group(function () {
         Route::post('/users', [UserController::class, 'store'])->name('users.store');
 
         Route::resource('users', UserController::class)
-            ->except(['show', 'edit', 'update', 'create', 'store']);
+            ->only(['destroy']);
 
         Route::get('/users/referrers/search', [UserController::class, 'searchReferrers'])
             ->name('users.referrers.search');
@@ -94,6 +94,10 @@ Route::middleware('auth', 'active')->group(function () {
         Route::get('/sales-orders/health-planners/list', [SalesOrderController::class, 'listHealthPlanners'])
             ->name('sales-orders.health-planners.list');
     });
+
+    Route::get('/users', [UserController::class, 'index'])
+        ->middleware('role:Admin|Head Admin|Health Manager')
+        ->name('users.index');
 
     Route::middleware('role:Admin|Head Admin')->group(function () {
         Route::get('/users/bulk-upload', [UserController::class, 'bulkUploadForm'])->name('users.bulk.form');
@@ -126,6 +130,12 @@ Route::middleware('auth', 'active')->group(function () {
 
     // Sales Orders
     Route::get('/sales-orders', [SalesOrderController::class, 'index'])->name('sales-orders.index');
+    Route::middleware('role:Head Admin|Admin|Health Manager')->group(function () {
+        Route::get('/sales-orders/export', [SalesOrderController::class, 'export'])
+            ->name('sales-orders.export');
+        Route::get('/sales-orders/export-pdf', [SalesOrderController::class, 'exportPdf'])
+            ->name('sales-orders.export-pdf');
+    });
     Route::get('/sales-orders/{salesOrder}', [SalesOrderController::class, 'show'])->name('sales-orders.show');
 
     // Autocomplete / Search

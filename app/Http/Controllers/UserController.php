@@ -32,18 +32,51 @@ class UserController extends Controller
 
     public function index(Request $request)
     {
+        $authUser = $request->user();
+        abort_unless($authUser->hasAnyRole(['Admin', 'Head Admin', 'Health Manager']), 403);
+
         $q = trim((string) $request->get('q', ''));
 
         $users = User::query()
             ->with('roles')
+            ->when($authUser->hasRole('Health Manager'), function ($query) use ($authUser) {
+                $query->whereIn('id', $this->downlinerIds((int) $authUser->id));
+            })
             ->when($q !== '', function ($query) use ($q) {
-                $query->where('name', 'like', "%{$q}%");
+                $query->where(function ($search) use ($q) {
+                    $search->where('name', 'like', "%{$q}%")
+                        ->orWhere('full_name', 'like', "%{$q}%")
+                        ->orWhere('email', 'like', "%{$q}%");
+                });
             })
             ->latest()
             ->paginate(10)
             ->appends(['q' => $q]);
 
         return view('users.index', compact('users', 'q'));
+    }
+
+    private function downlinerIds(int $rootUserId)
+    {
+        $visited = collect();
+        $queue = collect([$rootUserId]);
+
+        while ($queue->isNotEmpty()) {
+            $parentIds = $queue->all();
+            $queue = collect();
+
+            $childIds = UserHierarchy::query()
+                ->whereIn('parent_user_id', $parentIds)
+                ->pluck('child_user_id')
+                ->map(fn($id) => (int) $id)
+                ->diff($visited)
+                ->values();
+
+            $visited = $visited->merge($childIds)->unique()->values();
+            $queue = $childIds;
+        }
+
+        return $visited;
     }
 
     public function show(User $user)

@@ -12,6 +12,14 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Models\ProductPrice;
 use App\Models\UserHierarchy;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class SalesOrderController extends Controller
 {
@@ -27,83 +35,13 @@ class SalesOrderController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-
-        $q = SalesOrder::query()->with(['customer', 'salesUser']);
-
-        $visibleSalesUserIds = $this->visibleSalesUserIdsFor($user);
-
-        if ($visibleSalesUserIds !== null) {
-            $q->whereIn('sales_user_id', $visibleSalesUserIds);
-        }
-
-        // 🔎 search
-        if ($request->filled('search')) {
-            $search = $request->search;
-
-            $q->where(function ($qq) use ($search) {
-                $qq->where('order_no', 'like', "%{$search}%")
-                    ->orWhereHas('customer', fn($c) => $c->where('full_name', 'like', "%{$search}%"))
-                    ->orWhereHas('salesUser', fn($u) => $u->where('full_name', 'like', "%{$search}%"));
-            });
-        }
-
-        // status
-        $selectedStatuses = collect((array) $request->input('status', []))
-            ->filter(fn($status) => in_array($status, $this->statuses, true))
-            ->values()
-            ->all();
-
-        if (!empty($selectedStatuses)) {
-            $q->whereIn('status', $selectedStatuses);
-        }
-
-        // ccp_status
-        if ($request->filled('ccp_status') && in_array($request->ccp_status, $this->ccpStatuses, true)) {
-            $q->where('ccp_status', $request->ccp_status);
-        }
-
-        $dateFilterColumns = [
-            'key_in_at' => 'key_in_at',
-            'ccp_approved_at' => 'ccp_approved_at',
-            'install_date' => 'install_date',
-        ];
-        $dateFilterBy = array_key_exists($request->get('date_filter_by'), $dateFilterColumns)
-            ? $request->get('date_filter_by')
-            : 'key_in_at';
-        $dateFilterColumn = $dateFilterColumns[$dateFilterBy];
-
-        if ($request->filled('from')) {
-            $q->whereDate($dateFilterColumn, '>=', $request->from);
-        }
-
-        if ($request->filled('to')) {
-            $q->whereDate($dateFilterColumn, '<=', $request->to);
-        }
-
-        if ($request->filled('customer_type') && in_array($request->customer_type, $this->customerTypes, true)) {
-            $q->where('customer_type', $request->customer_type);
-        }
-
-        if ($request->boolean('guarantee_letter')) {
-            $q->where('guarantee_letter', true);
-        }
-
         $canFilterHealthManager = $user->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']);
         $healthManagerOptions = $this->healthManagerFilterOptionsFor($user);
-
-        if ($canFilterHealthManager && $request->filled('health_manager_id')) {
-            $healthManagerId = (int) $request->health_manager_id;
-            $allowedHealthManagerIds = $healthManagerOptions->pluck('id')->map(fn($id) => (int) $id);
-
-            if ($allowedHealthManagerIds->contains($healthManagerId)) {
-                $hpIds = User::query()
-                    ->role('Health Planner')
-                    ->whereIn('id', $this->descendantUserIds($healthManagerId))
-                    ->pluck('id');
-
-                $q->whereIn('sales_user_id', $hpIds);
-            }
-        }
+        [$q, $selectedStatuses, $dateFilterBy] = $this->filteredSalesOrdersQuery(
+            $request,
+            $canFilterHealthManager,
+            $healthManagerOptions
+        );
 
         $salesOrders = $q->latest('key_in_at')->paginate(10)->withQueryString();
         $statuses = $this->statuses;
@@ -124,6 +62,69 @@ class SalesOrderController extends Controller
             'healthManagerOptions',
             'canFilterHealthManager'
         ));
+    }
+
+    public function export(Request $request)
+    {
+        $salesOrders = $this->salesOrdersForExport($request);
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Penjualan');
+
+        $headers = ['No', 'Order Number', 'Sales', 'Customer', 'No. Telepon', 'Key In', 'Recurring', 'Guarantee Letter', 'CCP', 'Status'];
+        $sheet->fromArray($headers, null, 'A1');
+        $sheet->getStyle('A1:J1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF2563EB']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
+        ]);
+
+        foreach ($salesOrders as $index => $salesOrder) {
+            $row = $index + 2;
+            $sheet->fromArray([
+                $index + 1,
+                $salesOrder->order_no,
+                $salesOrder->salesUser?->full_name ?: ($salesOrder->salesUser?->name ?? '-'),
+                $salesOrder->customer?->full_name ?? '-',
+                $salesOrder->customer?->phone_number ?? '-',
+                $salesOrder->key_in_at?->format('d M Y') ?? '-',
+                $salesOrder->is_recurring ? 'Yes' : 'No',
+                $salesOrder->guarantee_letter ? 'Yes' : 'No',
+                $salesOrder->ccp_status ?? '-',
+                $salesOrder->status ?? '-',
+            ], null, "A{$row}");
+            $sheet->setCellValueExplicit("E{$row}", (string) ($salesOrder->customer?->phone_number ?? '-'), DataType::TYPE_STRING);
+            $sheet->getStyle("A{$row}:J{$row}")->getFill()
+                ->setFillType(Fill::FILL_SOLID)
+                ->getStartColor()
+                ->setARGB($this->salesOrderStatusColor((string) $salesOrder->status));
+        }
+
+        $lastRow = max(2, $salesOrders->count() + 1);
+        $sheet->getStyle("A2:J{$lastRow}")->applyFromArray([
+            'alignment' => ['vertical' => Alignment::VERTICAL_TOP, 'wrapText' => true],
+            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFCBD5E1']]],
+        ]);
+        foreach (['A' => 7, 'B' => 22, 'C' => 26, 'D' => 26, 'E' => 18, 'F' => 16, 'G' => 12, 'H' => 18, 'I' => 22, 'J' => 22] as $column => $width) {
+            $sheet->getColumnDimension($column)->setWidth($width);
+        }
+        $sheet->freezePane('A2');
+        $sheet->setAutoFilter("A1:J{$lastRow}");
+
+        $fileName = $this->salesOrdersExportFileName('xlsx');
+        $tmpPath = storage_path('app/' . Str::uuid() . '.xlsx');
+        (new Xlsx($spreadsheet))->save($tmpPath);
+
+        return response()->download($tmpPath, $fileName)->deleteFileAfterSend(true);
+    }
+
+    public function exportPdf(Request $request)
+    {
+        return view('sales-orders.export-pdf', [
+            'salesOrders' => $this->salesOrdersForExport($request),
+            'fileName' => $this->salesOrdersExportFileName('pdf'),
+        ]);
     }
 
 
@@ -1022,5 +1023,104 @@ class SalesOrderController extends Controller
                 'email' => $hm->email,
             ])
             ->values();
+    }
+
+    private function filteredSalesOrdersQuery(Request $request, bool $canFilterHealthManager, $healthManagerOptions): array
+    {
+        $q = SalesOrder::query()->with(['customer', 'salesUser']);
+        $visibleSalesUserIds = $this->visibleSalesUserIdsFor($request->user());
+
+        if ($visibleSalesUserIds !== null) {
+            $q->whereIn('sales_user_id', $visibleSalesUserIds);
+        }
+
+        if ($request->filled('search')) {
+            $search = (string) $request->search;
+            $q->where(function (Builder $query) use ($search) {
+                $query->where('order_no', 'like', "%{$search}%")
+                    ->orWhereHas('customer', fn(Builder $customer) => $customer->where('full_name', 'like', "%{$search}%"))
+                    ->orWhereHas('salesUser', function (Builder $salesUser) use ($search) {
+                        $salesUser->where('full_name', 'like', "%{$search}%")
+                            ->orWhere('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $selectedStatuses = collect((array) $request->input('status', []))
+            ->filter(fn($status) => in_array($status, $this->statuses, true))
+            ->values()
+            ->all();
+
+        if ($selectedStatuses !== []) {
+            $q->whereIn('status', $selectedStatuses);
+        }
+
+        if ($request->filled('ccp_status') && in_array($request->ccp_status, $this->ccpStatuses, true)) {
+            $q->where('ccp_status', $request->ccp_status);
+        }
+
+        $dateFilterColumns = [
+            'key_in_at' => 'key_in_at',
+            'ccp_approved_at' => 'ccp_approved_at',
+            'install_date' => 'install_date',
+        ];
+        $dateFilterBy = array_key_exists($request->get('date_filter_by'), $dateFilterColumns)
+            ? $request->get('date_filter_by')
+            : 'key_in_at';
+        $dateFilterColumn = $dateFilterColumns[$dateFilterBy];
+
+        if ($request->filled('from')) {
+            $q->whereDate($dateFilterColumn, '>=', $request->from);
+        }
+        if ($request->filled('to')) {
+            $q->whereDate($dateFilterColumn, '<=', $request->to);
+        }
+        if ($request->filled('customer_type') && in_array($request->customer_type, $this->customerTypes, true)) {
+            $q->where('customer_type', $request->customer_type);
+        }
+        if ($request->boolean('guarantee_letter')) {
+            $q->where('guarantee_letter', true);
+        }
+
+        if ($canFilterHealthManager && $request->filled('health_manager_id')) {
+            $healthManagerId = (int) $request->health_manager_id;
+            $allowedIds = $healthManagerOptions->pluck('id')->map(fn($id) => (int) $id);
+
+            if ($allowedIds->contains($healthManagerId)) {
+                $healthPlannerIds = User::query()
+                    ->role('Health Planner')
+                    ->whereIn('id', $this->descendantUserIds($healthManagerId))
+                    ->pluck('id');
+                $q->whereIn('sales_user_id', $healthPlannerIds);
+            }
+        }
+
+        return [$q, $selectedStatuses, $dateFilterBy];
+    }
+
+    private function salesOrdersForExport(Request $request)
+    {
+        abort_unless($request->user()->hasAnyRole(['Head Admin', 'Admin', 'Health Manager']), 403);
+
+        $canFilterHealthManager = $request->user()->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']);
+        $healthManagerOptions = $this->healthManagerFilterOptionsFor($request->user());
+        [$query] = $this->filteredSalesOrdersQuery($request, $canFilterHealthManager, $healthManagerOptions);
+
+        return $query->latest('key_in_at')->get();
+    }
+
+    private function salesOrdersExportFileName(string $extension): string
+    {
+        return 'Data Penjualan - ' . now()->format('Y-m-d') . ".{$extension}";
+    }
+
+    private function salesOrderStatusColor(string $status): string
+    {
+        return match ($status) {
+            'dibatalkan', 'gagal penelponan' => 'FFFEE2E2',
+            'ditunda', 'tinjau ulang' => 'FFFEF3C7',
+            'selesai' => 'FFDCFCE7',
+            default => 'FFF3F4F6',
+        };
     }
 }

@@ -5,12 +5,31 @@
             <p class="text-sm text-gray-500">Kelola daftar penjualan.</p>
         </div>
 
-        @role('Admin|Head Admin')
-            <a href="{{ route('sales-orders.create') }}"
-                class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
-                <span>+ Buat Penjualan</span>
-            </a>
-        @endrole
+        <div class="flex flex-wrap items-center justify-end gap-2">
+            @hasanyrole('Head Admin|Admin|Health Manager')
+                <a href="{{ route('sales-orders.export-pdf', request()->query()) }}" target="_blank"
+                    class="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700">
+                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-7.5A2.25 2.25 0 0017.25 4.5h-10.5A2.25 2.25 0 004.5 6.75v10.5A2.25 2.25 0 006.75 19.5h6.75m0 0l6-6m-6 6v-4.5a1.5 1.5 0 011.5-1.5H19.5" />
+                    </svg>
+                    PDF
+                </a>
+                <a href="{{ route('sales-orders.export', request()->query()) }}"
+                    class="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-700">
+                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5 M7.5 12l4.5 4.5m0 0L16.5 12m-4.5 4.5V3" />
+                    </svg>
+                    Excel
+                </a>
+            @endhasanyrole
+
+            @role('Admin|Head Admin')
+                <a href="{{ route('sales-orders.create') }}"
+                    class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                    <span>+ Buat Penjualan</span>
+                </a>
+            @endrole
+        </div>
     </div>
 
     {{-- Table Card --}}
