@@ -31,7 +31,7 @@
             <thead>
                 <tr>
                     <th>No</th><th>Order Number</th><th>Sales</th><th>Customer</th><th>No. Telepon</th>
-                    <th>Key In</th><th>Recurring</th><th>Guarantee Letter</th><th>CCP</th><th>Status</th>
+                    <th>Key In</th><th>Recurring</th><th>Guarantee Letter</th><th>CCP</th><th>Status</th><th>Total Qty</th>
                 </tr>
             </thead>
             <tbody>
@@ -55,9 +55,10 @@
                         <td class="center">{{ $salesOrder->guarantee_letter ? 'Yes' : 'No' }}</td>
                         <td>{{ $salesOrder->ccp_status ?? '-' }}</td>
                         <td>{{ $salesOrder->status ?? '-' }}</td>
+                        <td class="center">{{ (int) $salesOrder->total_item_units }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="10" class="center">Belum ada data penjualan.</td></tr>
+                    <tr><td colspan="11" class="center">Belum ada data penjualan.</td></tr>
                 @endforelse
             </tbody>
         </table>

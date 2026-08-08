@@ -71,9 +71,9 @@ class SalesOrderController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Penjualan');
 
-        $headers = ['No', 'Order Number', 'Sales', 'Customer', 'No. Telepon', 'Key In', 'Recurring', 'Guarantee Letter', 'CCP', 'Status'];
+        $headers = ['No', 'Order Number', 'Sales', 'Customer', 'No. Telepon', 'Key In', 'Recurring', 'Guarantee Letter', 'CCP', 'Status', 'Total Qty'];
         $sheet->fromArray($headers, null, 'A1');
-        $sheet->getStyle('A1:J1')->applyFromArray([
+        $sheet->getStyle('A1:K1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF2563EB']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
@@ -93,24 +93,25 @@ class SalesOrderController extends Controller
                 $salesOrder->guarantee_letter ? 'Yes' : 'No',
                 $salesOrder->ccp_status ?? '-',
                 $salesOrder->status ?? '-',
+                (int) $salesOrder->total_item_units,
             ], null, "A{$row}");
             $sheet->setCellValueExplicit("E{$row}", (string) ($salesOrder->customer?->phone_number ?? '-'), DataType::TYPE_STRING);
-            $sheet->getStyle("A{$row}:J{$row}")->getFill()
+            $sheet->getStyle("A{$row}:K{$row}")->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()
                 ->setARGB($this->salesOrderStatusColor((string) $salesOrder->status));
         }
 
         $lastRow = max(2, $salesOrders->count() + 1);
-        $sheet->getStyle("A2:J{$lastRow}")->applyFromArray([
+        $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
             'alignment' => ['vertical' => Alignment::VERTICAL_TOP, 'wrapText' => true],
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFCBD5E1']]],
         ]);
-        foreach (['A' => 7, 'B' => 22, 'C' => 26, 'D' => 26, 'E' => 18, 'F' => 16, 'G' => 12, 'H' => 18, 'I' => 22, 'J' => 22] as $column => $width) {
+        foreach (['A' => 7, 'B' => 22, 'C' => 26, 'D' => 26, 'E' => 18, 'F' => 16, 'G' => 12, 'H' => 18, 'I' => 22, 'J' => 22, 'K' => 12] as $column => $width) {
             $sheet->getColumnDimension($column)->setWidth($width);
         }
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter("A1:J{$lastRow}");
+        $sheet->setAutoFilter("A1:K{$lastRow}");
 
         $fileName = $this->salesOrdersExportFileName('xlsx');
         $tmpPath = storage_path('app/' . Str::uuid() . '.xlsx');
@@ -1027,7 +1028,9 @@ class SalesOrderController extends Controller
 
     private function filteredSalesOrdersQuery(Request $request, bool $canFilterHealthManager, $healthManagerOptions): array
     {
-        $q = SalesOrder::query()->with(['customer', 'salesUser']);
+        $q = SalesOrder::query()
+            ->with(['customer', 'salesUser'])
+            ->withSum('parentItems as total_item_units', 'qty');
         $visibleSalesUserIds = $this->visibleSalesUserIdsFor($request->user());
 
         if ($visibleSalesUserIds !== null) {

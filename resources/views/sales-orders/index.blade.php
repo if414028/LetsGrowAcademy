@@ -212,6 +212,7 @@
                         <th class="px-4 py-3 text-left">Guarantee Letter</th>
                         <th class="px-4 py-3 text-left">CCP</th>
                         <th class="px-4 py-3 text-left">Status</th>
+                        <th class="px-4 py-3 text-center">Total Qty</th>
                         <th class="px-4 py-3 text-right">Action</th>
                     </tr>
                 </thead>
@@ -276,6 +277,12 @@
                                 </span>
                             </td>
 
+                            <td class="px-4 py-3 text-center">
+                                <span class="font-semibold text-gray-900">
+                                    {{ (int) $so->total_item_units }}
+                                </span>
+                            </td>
+
                             <td class="px-4 py-3 text-right">
                                 <div class="flex justify-end gap-3">
                                     {{-- Detail --}}
@@ -315,7 +322,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="px-4 py-10 text-center text-gray-500">
+                            <td colspan="10" class="px-4 py-10 text-center text-gray-500">
                                 Belum ada penjualan.
                             </td>
                         </tr>
