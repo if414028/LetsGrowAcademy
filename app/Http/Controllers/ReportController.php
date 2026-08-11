@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PerformanceCutoff;
 use App\Models\User;
+use App\Models\UserHierarchy;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -77,7 +78,8 @@ class ReportController extends Controller
                 ->get();
         }
 
-        $hpLeaderboard = $this->buildPersonalLeaderboard($hpTargets, $from, $to);
+        $hpHealthManagerNames = $this->nearestHealthManagerNames($hpTargets->pluck('id'));
+        $hpLeaderboard = $this->buildPersonalLeaderboard($hpTargets, $from, $to, $hpHealthManagerNames);
 
         return view('reports.index', [
             'from' => $from,
@@ -178,8 +180,9 @@ class ReportController extends Controller
      * Leaderboard personal saja (tanpa bawahan).
      * Dipakai untuk Health Planner.
      */
-    private function buildPersonalLeaderboard($targets, string $from, string $to)
+    private function buildPersonalLeaderboard($targets, string $from, string $to, $healthManagerNames = null)
     {
+        $healthManagerNames ??= collect();
         $targetIds = $targets->pluck('id')->map(fn($v) => (int) $v)->values();
 
         if ($targetIds->isEmpty()) {
@@ -211,13 +214,14 @@ class ReportController extends Controller
             ]]);
 
         return $targets
-            ->map(function ($t) use ($leaderboardMap) {
+            ->map(function ($t) use ($leaderboardMap, $healthManagerNames) {
                 $id = (int) $t->id;
                 $leaderboard = $leaderboardMap[$id] ?? ['units' => 0, 'first_key_in_at' => null];
 
                 return [
                     'id' => $id,
                     'name' => (string) ($t->full_name ?: $t->name),
+                    'health_manager_name' => $healthManagerNames->get($id),
                     'units' => (int) $leaderboard['units'],
                     'first_key_in_at' => $leaderboard['first_key_in_at'],
                     'first_key_in_sort' => $leaderboard['first_key_in_at'] ?? '9999-12-31 23:59:59',
@@ -234,8 +238,68 @@ class ReportController extends Controller
                 'rank' => $idx + 1,
                 'id' => $row['id'],
                 'name' => $row['name'],
+                'health_manager_name' => $row['health_manager_name'],
                 'units' => $row['units'],
             ]);
+    }
+
+    /**
+     * Nama Health Manager terdekat pada jalur upline setiap Health Planner.
+     */
+    private function nearestHealthManagerNames($healthPlannerIds)
+    {
+        $currentByHealthPlanner = $healthPlannerIds
+            ->mapWithKeys(fn($id) => [(int) $id => (int) $id]);
+        $visitedByHealthPlanner = $currentByHealthPlanner
+            ->map(fn($id) => [$id => true])
+            ->all();
+        $names = collect();
+
+        while ($currentByHealthPlanner->isNotEmpty()) {
+            $parentByChild = UserHierarchy::query()
+                ->whereIn('child_user_id', $currentByHealthPlanner->values()->unique()->all())
+                ->pluck('parent_user_id', 'child_user_id')
+                ->mapWithKeys(fn($parentId, $childId) => [(int) $childId => (int) $parentId]);
+
+            if ($parentByChild->isEmpty()) {
+                break;
+            }
+
+            $healthManagers = User::query()
+                ->whereIn('users.id', $parentByChild->values()->unique()->all())
+                ->whereHas('roles', fn($query) => $query->where('name', 'Health Manager'))
+                ->select('users.id', 'users.name', 'users.full_name')
+                ->get()
+                ->mapWithKeys(fn($user) => [
+                    (int) $user->id => trim((string) ($user->full_name ?: $user->name)),
+                ]);
+
+            $next = collect();
+
+            foreach ($currentByHealthPlanner as $healthPlannerId => $currentId) {
+                $parentId = $parentByChild->get($currentId);
+
+                if (!$parentId) {
+                    continue;
+                }
+
+                if ($healthManagers->has($parentId)) {
+                    $names->put((int) $healthPlannerId, $healthManagers->get($parentId));
+                    continue;
+                }
+
+                if (isset($visitedByHealthPlanner[$healthPlannerId][$parentId])) {
+                    continue;
+                }
+
+                $visitedByHealthPlanner[$healthPlannerId][$parentId] = true;
+                $next->put((int) $healthPlannerId, (int) $parentId);
+            }
+
+            $currentByHealthPlanner = $next;
+        }
+
+        return $names;
     }
 
     private function activeBundleChildUnitSubquery()

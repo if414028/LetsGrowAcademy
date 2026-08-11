@@ -145,6 +145,7 @@
                         <tr class="text-left text-gray-500 border-b">
                             <th class="py-3 pr-4">Rank</th>
                             <th class="py-3 pr-4">Health Planner</th>
+                            <th class="py-3 pr-4">Health Manager</th>
                             <th class="py-3 pr-4">Total NS</th>
                         </tr>
                     </thead>
@@ -158,11 +159,14 @@
                                     </span>
                                 </td>
                                 <td class="py-3 pr-4 font-medium">{{ $row['name'] }}</td>
+                                <td class="py-3 pr-4 text-gray-600">
+                                    {{ $row['health_manager_name'] ?: '—' }}
+                                </td>
                                 <td class="py-3 pr-4">{{ number_format($row['units']) }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="3" class="py-6 text-center text-gray-500">
+                                <td colspan="4" class="py-6 text-center text-gray-500">
                                     No data available for selected closing date.
                                 </td>
                             </tr>
