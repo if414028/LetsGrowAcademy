@@ -123,6 +123,27 @@ class ReportController extends Controller
             ->unique()
             ->values();
 
+        // Samakan definisi Active HP dengan Dashboard: user HP berstatus Active
+        // yang memiliki minimal satu SO selesai berdasarkan key-in pada periode terpilih.
+        $activeHealthPlannerIds = User::query()
+            ->role('Health Planner')
+            ->where('users.status', 'Active')
+            ->whereIn('users.id', $allScopeIds->all())
+            ->whereExists(function ($query) use ($from, $to) {
+                $query->select(DB::raw(1))
+                    ->from('sales_orders')
+                    ->whereColumn('sales_orders.sales_user_id', 'users.id')
+                    ->whereNull('sales_orders.deleted_at')
+                    ->where('sales_orders.status', 'selesai')
+                    ->whereBetween('sales_orders.key_in_at', [
+                        Carbon::parse($from)->startOfDay(),
+                        Carbon::parse($to)->endOfDay(),
+                    ]);
+            })
+            ->pluck('users.id')
+            ->map(fn($id) => (int) $id)
+            ->flip();
+
         $sellerStats = DB::table('sales_orders as so')
             ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {
                 $join->on('sou.sales_order_id', '=', 'so.id');
@@ -143,10 +164,13 @@ class ReportController extends Controller
             ->keyBy(fn($row) => (int) $row->sales_user_id);
 
         return $targets
-            ->map(function ($t) use ($scopeByTarget, $sellerStats) {
+            ->map(function ($t) use ($scopeByTarget, $sellerStats, $activeHealthPlannerIds) {
                 $id = (int) $t->id;
                 $scopeIds = $scopeByTarget->get($id, collect([$id]));
                 $units = $scopeIds->sum(fn($sellerId) => (int) optional($sellerStats->get((int) $sellerId))->units);
+                $activeHealthPlanners = $scopeIds
+                    ->filter(fn($userId) => $activeHealthPlannerIds->has((int) $userId))
+                    ->count();
                 $firstKeyIn = $scopeIds
                     ->map(fn($sellerId) => optional($sellerStats->get((int) $sellerId))->first_key_in_at)
                     ->filter()
@@ -157,6 +181,7 @@ class ReportController extends Controller
                     'id' => $id,
                     'name' => (string) ($t->full_name ?: $t->name),
                     'units' => (int) $units,
+                    'active_hp' => $activeHealthPlanners,
                     'first_key_in_at' => $firstKeyIn,
                     'first_key_in_sort' => $firstKeyIn ?? '9999-12-31 23:59:59',
                 ];
@@ -173,6 +198,7 @@ class ReportController extends Controller
                 'id' => $row['id'],
                 'name' => $row['name'],
                 'units' => $row['units'],
+                'active_hp' => $row['active_hp'],
             ]);
     }
 
@@ -188,6 +214,40 @@ class ReportController extends Controller
         if ($targetIds->isEmpty()) {
             return collect();
         }
+
+        $activeHpScopeByTarget = $targets
+            ->mapWithKeys(function ($target) {
+                $scopeIds = $target->downlineUserIds()
+                    ->push((int) $target->id)
+                    ->unique()
+                    ->values();
+
+                return [(int) $target->id => $scopeIds];
+            });
+
+        $allActiveHpScopeIds = $activeHpScopeByTarget
+            ->flatMap(fn($scopeIds) => $scopeIds)
+            ->unique()
+            ->values();
+
+        $activeHealthPlannerIds = User::query()
+            ->role('Health Planner')
+            ->where('users.status', 'Active')
+            ->whereIn('users.id', $allActiveHpScopeIds->all())
+            ->whereExists(function ($query) use ($from, $to) {
+                $query->select(DB::raw(1))
+                    ->from('sales_orders')
+                    ->whereColumn('sales_orders.sales_user_id', 'users.id')
+                    ->whereNull('sales_orders.deleted_at')
+                    ->where('sales_orders.status', 'selesai')
+                    ->whereBetween('sales_orders.key_in_at', [
+                        Carbon::parse($from)->startOfDay(),
+                        Carbon::parse($to)->endOfDay(),
+                    ]);
+            })
+            ->pluck('users.id')
+            ->map(fn($id) => (int) $id)
+            ->flip();
 
         $rows = DB::table('sales_orders as so')
             ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {
@@ -214,15 +274,20 @@ class ReportController extends Controller
             ]]);
 
         return $targets
-            ->map(function ($t) use ($leaderboardMap, $healthManagerNames) {
+            ->map(function ($t) use ($leaderboardMap, $healthManagerNames, $activeHealthPlannerIds, $activeHpScopeByTarget) {
                 $id = (int) $t->id;
                 $leaderboard = $leaderboardMap[$id] ?? ['units' => 0, 'first_key_in_at' => null];
+                $activeHealthPlanners = $activeHpScopeByTarget
+                    ->get($id, collect([$id]))
+                    ->filter(fn($userId) => $activeHealthPlannerIds->has((int) $userId))
+                    ->count();
 
                 return [
                     'id' => $id,
                     'name' => (string) ($t->full_name ?: $t->name),
                     'health_manager_name' => $healthManagerNames->get($id),
                     'units' => (int) $leaderboard['units'],
+                    'active_hp' => $activeHealthPlanners,
                     'first_key_in_at' => $leaderboard['first_key_in_at'],
                     'first_key_in_sort' => $leaderboard['first_key_in_at'] ?? '9999-12-31 23:59:59',
                 ];
@@ -240,6 +305,7 @@ class ReportController extends Controller
                 'name' => $row['name'],
                 'health_manager_name' => $row['health_manager_name'],
                 'units' => $row['units'],
+                'active_hp' => $row['active_hp'],
             ]);
     }
 
