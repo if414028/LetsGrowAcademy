@@ -124,7 +124,7 @@ class ReportController extends Controller
             ->values();
 
         // Samakan definisi Active HP dengan Dashboard: user HP berstatus Active
-        // yang memiliki minimal satu SO selesai berdasarkan key-in pada periode terpilih.
+        // yang memiliki minimal satu SO selesai dengan install date pada periode terpilih.
         $activeHealthPlannerIds = User::query()
             ->role('Health Planner')
             ->where('users.status', 'Active')
@@ -135,10 +135,9 @@ class ReportController extends Controller
                     ->whereColumn('sales_orders.sales_user_id', 'users.id')
                     ->whereNull('sales_orders.deleted_at')
                     ->where('sales_orders.status', 'selesai')
-                    ->whereBetween('sales_orders.key_in_at', [
-                        Carbon::parse($from)->startOfDay(),
-                        Carbon::parse($to)->endOfDay(),
-                    ]);
+                    ->whereNotNull('sales_orders.install_date')
+                    ->whereDate('sales_orders.install_date', '>=', $from)
+                    ->whereDate('sales_orders.install_date', '<=', $to);
             })
             ->pluck('users.id')
             ->map(fn($id) => (int) $id)
@@ -240,10 +239,9 @@ class ReportController extends Controller
                     ->whereColumn('sales_orders.sales_user_id', 'users.id')
                     ->whereNull('sales_orders.deleted_at')
                     ->where('sales_orders.status', 'selesai')
-                    ->whereBetween('sales_orders.key_in_at', [
-                        Carbon::parse($from)->startOfDay(),
-                        Carbon::parse($to)->endOfDay(),
-                    ]);
+                    ->whereNotNull('sales_orders.install_date')
+                    ->whereDate('sales_orders.install_date', '>=', $from)
+                    ->whereDate('sales_orders.install_date', '<=', $to);
             })
             ->pluck('users.id')
             ->map(fn($id) => (int) $id)

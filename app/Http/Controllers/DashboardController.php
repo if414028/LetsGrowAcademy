@@ -218,7 +218,7 @@ class DashboardController extends Controller
         }
 
         // 6) Total Health Planner aktif di closing date aktif:
-        // HP dianggap aktif jika punya minimal 1 penjualan/SO selesai dalam cutoff aktif.
+        // HP dianggap aktif jika minimal 1 SO selesai memiliki install date dalam cutoff aktif.
         $activeHealthPlannerQuery = User::query()
             ->role('Health Planner')
             ->where('users.status', 'Active')
@@ -227,7 +227,9 @@ class DashboardController extends Controller
                     ->from('sales_orders')
                     ->whereColumn('sales_orders.sales_user_id', 'users.id')
                     ->where('sales_orders.status', 'selesai')
-                    ->whereBetween('sales_orders.key_in_at', [$cutoffStart, $cutoffEnd]);
+                    ->whereNotNull('sales_orders.install_date')
+                    ->whereDate('sales_orders.install_date', '>=', $cutoffStart->toDateString())
+                    ->whereDate('sales_orders.install_date', '<=', $cutoffEnd->toDateString());
             });
 
         if (!$isAdminOrHead) {
