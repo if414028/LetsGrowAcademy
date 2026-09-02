@@ -118,6 +118,19 @@
                     </div>
                 </div>
 
+                @if ($authUser->hasRole('Head Admin') && $user->hasRole('Health Manager'))
+                    <div class="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                        <label for="hm_since" class="text-sm font-semibold text-blue-900">Mulai Menjadi HM</label>
+                        <input type="date" name="hm_since" id="hm_since"
+                            value="{{ old('hm_since', optional($user->hm_since)->format('Y-m-d')) }}"
+                            max="{{ now()->toDateString() }}"
+                            class="mt-2 block w-full rounded-xl border-blue-200 bg-white focus:border-blue-500 focus:ring-blue-500 md:max-w-sm">
+                        <p class="mt-2 text-xs text-blue-700">
+                            Tanggal ini menjadi patokan awal siklus evaluasi Performance Recap setiap enam bulan.
+                        </p>
+                    </div>
+                @endif
+
                 {{-- Role + Referrer --}}
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>

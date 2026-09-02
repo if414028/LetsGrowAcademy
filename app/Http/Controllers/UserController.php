@@ -355,6 +355,7 @@ class UserController extends Controller
             'city_of_domicile' => ['nullable', 'string', 'max:255'],
             'date_of_birth' => ['nullable', 'date'],
             'join_date' => ['nullable', 'date'],
+            'hm_since' => ['nullable', 'date', 'before_or_equal:today'],
 
             // role & referrer
             'role' => ['required', 'string', 'exists:roles,name'],
@@ -378,8 +379,11 @@ class UserController extends Controller
 
         $role = $validated['role'];
         $referrerId = (int) $validated['referrer_user_id'];
+        $manualHmSince = $authUser->hasRole('Head Admin')
+            ? ($validated['hm_since'] ?? null)
+            : null;
 
-        unset($validated['role'], $validated['referrer_user_id']);
+        unset($validated['role'], $validated['referrer_user_id'], $validated['hm_since']);
 
         if ($role === 'Head Admin' && !$authUser->hasRole('Head Admin')) {
             return back()
@@ -425,13 +429,17 @@ class UserController extends Controller
             $validated['password'] = Hash::make($validated['password']);
         }
 
-        DB::transaction(function () use ($user, $validated, $role, $referrer) {
+        DB::transaction(function () use ($user, $validated, $role, $referrer, $authUser, $manualHmSince) {
             $wasHealthManager = $user->hasRole('Health Manager');
             $user->update($validated);
             $user->syncRoles([$role]);
 
-            if ($role === 'Health Manager' && !$wasHealthManager) {
-                $user->update(['hm_since' => now()->toDateString()]);
+            if ($role === 'Health Manager') {
+                if ($authUser->hasRole('Head Admin') && $manualHmSince) {
+                    $user->update(['hm_since' => $manualHmSince]);
+                } elseif (!$wasHealthManager) {
+                    $user->update(['hm_since' => now()->toDateString()]);
+                }
             }
 
             UserHierarchy::updateOrCreate(
