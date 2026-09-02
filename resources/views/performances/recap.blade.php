@@ -87,7 +87,7 @@
                                             'border-b border-r px-4 py-3 text-center font-semibold',
                                             'bg-red-100 text-red-700' => $month['below_monthly_minimum'],
                                             'bg-green-100 text-green-700' => $month['monthly_minimum_achieved'],
-                                            'bg-gray-50 text-gray-900' => $month['is_future'],
+                                            'bg-gray-50 text-gray-900' => !$month['below_monthly_minimum'] && !$month['monthly_minimum_achieved'],
                                         ])>
                                             {{ $month['label'] }}
                                         </th>
@@ -100,13 +100,13 @@
                                             'border-b px-3 py-2 text-center text-xs font-semibold uppercase',
                                             'bg-red-50 text-red-600' => $month['below_monthly_minimum'],
                                             'bg-green-50 text-green-600' => $month['monthly_minimum_achieved'],
-                                            'bg-gray-50 text-gray-500' => $month['is_future'],
+                                            'bg-gray-50 text-gray-500' => !$month['below_monthly_minimum'] && !$month['monthly_minimum_achieved'],
                                         ])>Ach</th>
                                         <th @class([
                                             'border-b border-r px-3 py-2 text-center text-xs font-semibold uppercase',
                                             'bg-red-50 text-red-600' => $month['below_monthly_minimum'],
                                             'bg-green-50 text-green-600' => $month['monthly_minimum_achieved'],
-                                            'bg-gray-50 text-gray-500' => $month['is_future'],
+                                            'bg-gray-50 text-gray-500' => !$month['below_monthly_minimum'] && !$month['monthly_minimum_achieved'],
                                         ])>Shrt</th>
                                     @endforeach
                                 </tr>
@@ -119,7 +119,8 @@
                                             'px-3 py-3 text-center font-semibold',
                                             'bg-red-50 text-red-700' => $month['below_monthly_minimum'],
                                             'bg-green-50 text-green-700' => $month['monthly_minimum_achieved'],
-                                            'text-gray-300' => $month['is_future'],
+                                            'text-gray-300' => $month['is_future'] && !$month['target_secured'],
+                                            'text-gray-900' => $month['is_current'] && !$month['target_secured'],
                                         ])>
                                             {{ $month['achievement'] }}
                                         </td>
@@ -127,7 +128,8 @@
                                             'border-r px-3 py-3 text-center',
                                             'bg-red-50 text-red-600' => $month['below_monthly_minimum'],
                                             'bg-green-50 text-green-600' => $month['monthly_minimum_achieved'],
-                                            'text-gray-300' => $month['is_future'],
+                                            'text-gray-300' => $month['is_future'] && !$month['target_secured'],
+                                            'text-gray-500' => $month['is_current'] && !$month['target_secured'],
                                         ])>
                                             {{ $month['shortage'] }}
                                         </td>
@@ -140,6 +142,7 @@
                     <p class="mt-4 text-sm text-gray-500">
                         Achievement menghitung NS selesai milik HM dan seluruh downline-nya. Shortage menunjukkan sisa kumulatif menuju 120 NS.
                         Minimum achievement bulanan adalah {{ $recap['monthly_minimum'] }} NS; bulan di bawah minimum ditandai merah.
+                        Setelah target 120 NS tercapai, seluruh sisa bulan dalam periode ditandai hijau.
                     </p>
                 </div>
             </section>

@@ -1691,11 +1691,17 @@ class PerformanceController extends Controller
             ->pluck('units', 'month_key');
 
         $cumulative = 0;
-        $months = collect(range(0, 5))->map(function (int $offset) use ($cycleStart, $monthlyUnits, &$cumulative, $target, $monthlyMinimum) {
+        $targetSecured = false;
+        $months = collect(range(0, 5))->map(function (int $offset) use ($cycleStart, $monthlyUnits, &$cumulative, &$targetSecured, $target, $monthlyMinimum) {
             $month = $cycleStart->copy()->addMonthsNoOverflow($offset);
             $achievement = (int) ($monthlyUnits[$month->format('Y-m-01')] ?? 0);
             $cumulative += $achievement;
-            $isFuture = $month->isAfter(Carbon::now()->startOfMonth());
+            if ($cumulative >= $target) {
+                $targetSecured = true;
+            }
+            $currentMonth = Carbon::now()->startOfMonth();
+            $isFuture = $month->isAfter($currentMonth);
+            $isCompletedMonth = $month->isBefore($currentMonth);
 
             return [
                 'label' => ucfirst($month->translatedFormat('M Y')),
@@ -1703,8 +1709,10 @@ class PerformanceController extends Controller
                 'cumulative' => $cumulative,
                 'shortage' => max($target - $cumulative, 0),
                 'is_future' => $isFuture,
-                'below_monthly_minimum' => !$isFuture && $achievement < $monthlyMinimum,
-                'monthly_minimum_achieved' => !$isFuture && $achievement >= $monthlyMinimum,
+                'is_current' => $month->isSameMonth($currentMonth),
+                'target_secured' => $targetSecured,
+                'below_monthly_minimum' => !$targetSecured && $isCompletedMonth && $achievement < $monthlyMinimum,
+                'monthly_minimum_achieved' => $targetSecured || ($isCompletedMonth && $achievement >= $monthlyMinimum),
             ];
         })->values();
 
