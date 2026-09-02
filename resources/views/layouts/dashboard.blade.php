@@ -41,15 +41,7 @@
                     Overview
                 </a>
 
-                <a href="{{ route('performance.index') }}"
-                    class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
-                        {{ request()->routeIs('performance.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M3 3v18h18M7 14l3-3 3 2 5-6" />
-                    </svg>
-                    Performance
-                </a>
+                @include('layouts.partials.performance-menu', ['mobile' => false])
 
                 <a href="{{ route('reports.index') }}"
                     class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
@@ -155,15 +147,7 @@
                         Overview
                     </a>
 
-                    <a href="{{ route('performance.index') }}" @click="sidebarOpen=false"
-                        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
-                            {{ request()->routeIs('performance.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M3 3v18h18M7 14l3-3 3 2 5-6" />
-                        </svg>
-                        Performance
-                    </a>
+                    @include('layouts.partials.performance-menu', ['mobile' => true])
 
                     <a href="{{ route('reports.index') }}" @click="sidebarOpen=false"
                         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium

@@ -395,6 +395,45 @@ class PerformanceController extends Controller
         ]);
     }
 
+    public function recap(Request $request)
+    {
+        $authUser = $request->user();
+
+        abort_unless($authUser->hasAnyRole(['Health Manager', 'Sales Manager', 'Head Admin']), 403);
+
+        $healthManagerOptions = collect();
+        $selectedHealthManagerId = null;
+
+        if ($authUser->hasRole('Health Manager')) {
+            $healthManagers = User::query()->whereKey($authUser->id)->get();
+        } else {
+            $healthManagerQuery = User::query()
+                ->role('Health Manager')
+                ->where('status', 'Active')
+                ->orderByRaw("COALESCE(NULLIF(full_name,''), name) asc");
+
+            $healthManagerOptions = (clone $healthManagerQuery)
+                ->get(['users.id', 'users.name', 'users.full_name']);
+
+            $requestedHealthManagerId = (int) $request->input('health_manager_id', 0);
+            if ($requestedHealthManagerId > 0 && $healthManagerOptions->contains('id', $requestedHealthManagerId)) {
+                $selectedHealthManagerId = $requestedHealthManagerId;
+                $healthManagerQuery->where('users.id', $selectedHealthManagerId);
+            }
+
+            $healthManagers = $healthManagerQuery->get();
+        }
+
+        $recaps = $healthManagers->map(fn(User $healthManager) => $this->buildHealthManagerRecap($healthManager));
+
+        return view('performances.recap', [
+            'recaps' => $recaps,
+            'isSingleHealthManager' => $authUser->hasRole('Health Manager'),
+            'healthManagerOptions' => $healthManagerOptions,
+            'selectedHealthManagerId' => $selectedHealthManagerId,
+        ]);
+    }
+
     private function buildPerformanceData(Request $request): array
     {
         $authUser = $request->user();
@@ -1616,6 +1655,65 @@ class PerformanceController extends Controller
                 'team' => $targetTeam,
                 'active_hp' => $targetActiveHp,
             ],
+        ];
+    }
+
+    private function buildHealthManagerRecap(User $healthManager): array
+    {
+        Carbon::setLocale('id');
+
+        $target = 120;
+        $hmSince = ($healthManager->hm_since ?? $healthManager->join_date ?? $healthManager->created_at)
+            ->copy()
+            ->startOfMonth();
+        $now = Carbon::now()->startOfMonth();
+        $elapsedMonths = max(0, (int) floor($hmSince->diffInMonths($now, false)));
+        $cycleIndex = intdiv($elapsedMonths, 6);
+        $cycleStart = $hmSince->copy()->addMonthsNoOverflow($cycleIndex * 6);
+        $cycleEnd = $cycleStart->copy()->addMonthsNoOverflow(5)->endOfMonth();
+
+        $scopeUserIds = $healthManager->downlineUserIds()
+            ->push($healthManager->id)
+            ->unique()
+            ->values();
+
+        $monthlyUnits = DB::table('sales_orders as so')
+            ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {
+                $join->on('sou.sales_order_id', '=', 'so.id');
+            })
+            ->whereNull('so.deleted_at')
+            ->where('so.status', 'selesai')
+            ->whereIn('so.sales_user_id', $scopeUserIds)
+            ->whereBetween('so.install_date', [$cycleStart->toDateString(), $cycleEnd->toDateString()])
+            ->selectRaw("DATE_FORMAT(so.install_date, '%Y-%m-01') as month_key, COALESCE(SUM(sou.unit_count), 0) as units")
+            ->groupBy(DB::raw("DATE_FORMAT(so.install_date, '%Y-%m-01')"))
+            ->pluck('units', 'month_key');
+
+        $cumulative = 0;
+        $months = collect(range(0, 5))->map(function (int $offset) use ($cycleStart, $monthlyUnits, &$cumulative, $target) {
+            $month = $cycleStart->copy()->addMonthsNoOverflow($offset);
+            $achievement = (int) ($monthlyUnits[$month->format('Y-m-01')] ?? 0);
+            $cumulative += $achievement;
+
+            return [
+                'label' => ucfirst($month->translatedFormat('M Y')),
+                'achievement' => $achievement,
+                'cumulative' => $cumulative,
+                'shortage' => max($target - $cumulative, 0),
+                'is_future' => $month->isAfter(Carbon::now()->startOfMonth()),
+            ];
+        })->values();
+
+        return [
+            'id' => $healthManager->id,
+            'name' => $healthManager->full_name ?: $healthManager->name,
+            'hm_since' => $hmSince->translatedFormat('d F Y'),
+            'cycle_label' => $cycleStart->translatedFormat('d M Y').' – '.$cycleEnd->translatedFormat('d M Y'),
+            'months' => $months,
+            'total' => $cumulative,
+            'target' => $target,
+            'shortage' => max($target - $cumulative, 0),
+            'achieved' => $cumulative >= $target,
         ];
     }
 }

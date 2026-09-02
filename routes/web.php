@@ -147,6 +147,10 @@ Route::middleware('auth', 'active')->group(function () {
     Route::get('/performance', [PerformanceController::class, 'index'])
         ->name('performance.index'); // ✅ konsisten
 
+    Route::get('/performance/recap', [PerformanceController::class, 'recap'])
+        ->middleware('role:Health Manager|Sales Manager|Head Admin')
+        ->name('performance.recap');
+
     Route::post('/performance/cutoff', [PerformanceController::class, 'updateCutoff'])
         ->middleware('role:Head Admin') // ✅ hanya Head Admin
         ->name('performance.cutoff.update');

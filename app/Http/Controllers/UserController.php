@@ -252,6 +252,9 @@ class UserController extends Controller
         ]);
 
         $user->assignRole($newRole);
+        if ($newRole === 'Health Manager' && !$user->hm_since) {
+            $user->update(['hm_since' => now()->toDateString()]);
+        }
 
         UserHierarchy::create([
             'parent_user_id' => $referrer->id,
@@ -423,8 +426,13 @@ class UserController extends Controller
         }
 
         DB::transaction(function () use ($user, $validated, $role, $referrer) {
+            $wasHealthManager = $user->hasRole('Health Manager');
             $user->update($validated);
             $user->syncRoles([$role]);
+
+            if ($role === 'Health Manager' && !$wasHealthManager) {
+                $user->update(['hm_since' => now()->toDateString()]);
+            }
 
             UserHierarchy::updateOrCreate(
                 ['child_user_id' => $user->id],
@@ -676,6 +684,9 @@ class UserController extends Controller
                     ]);
 
                     $user->assignRole($finalRole);
+                    if ($finalRole === 'Health Manager' && !$user->hm_since) {
+                        $user->update(['hm_since' => now()->toDateString()]);
+                    }
 
                     UserHierarchy::create([
                         'parent_user_id' => $referrer->id,

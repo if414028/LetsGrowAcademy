@@ -29,6 +29,7 @@ class User extends Authenticatable
         'date_of_birth',
         'phone_number',
         'join_date',
+        'hm_since',
         'city_of_domicile',
         'photo',
         'id_card',
@@ -57,6 +58,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'date_of_birth' => 'date',
             'join_date' => 'date',
+            'hm_since' => 'date',
             'last_login_at' => 'datetime',
         ];
     }
