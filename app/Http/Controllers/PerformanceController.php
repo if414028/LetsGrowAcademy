@@ -1663,6 +1663,7 @@ class PerformanceController extends Controller
         Carbon::setLocale('id');
 
         $target = 120;
+        $monthlyMinimum = 10;
         $hmSince = ($healthManager->hm_since ?? $healthManager->join_date ?? $healthManager->created_at)
             ->copy()
             ->startOfMonth();
@@ -1690,17 +1691,20 @@ class PerformanceController extends Controller
             ->pluck('units', 'month_key');
 
         $cumulative = 0;
-        $months = collect(range(0, 5))->map(function (int $offset) use ($cycleStart, $monthlyUnits, &$cumulative, $target) {
+        $months = collect(range(0, 5))->map(function (int $offset) use ($cycleStart, $monthlyUnits, &$cumulative, $target, $monthlyMinimum) {
             $month = $cycleStart->copy()->addMonthsNoOverflow($offset);
             $achievement = (int) ($monthlyUnits[$month->format('Y-m-01')] ?? 0);
             $cumulative += $achievement;
+            $isFuture = $month->isAfter(Carbon::now()->startOfMonth());
 
             return [
                 'label' => ucfirst($month->translatedFormat('M Y')),
                 'achievement' => $achievement,
                 'cumulative' => $cumulative,
                 'shortage' => max($target - $cumulative, 0),
-                'is_future' => $month->isAfter(Carbon::now()->startOfMonth()),
+                'is_future' => $isFuture,
+                'below_monthly_minimum' => !$isFuture && $achievement < $monthlyMinimum,
+                'monthly_minimum_achieved' => !$isFuture && $achievement >= $monthlyMinimum,
             ];
         })->values();
 
@@ -1712,6 +1716,7 @@ class PerformanceController extends Controller
             'months' => $months,
             'total' => $cumulative,
             'target' => $target,
+            'monthly_minimum' => $monthlyMinimum,
             'shortage' => max($target - $cumulative, 0),
             'achieved' => $cumulative >= $target,
         ];

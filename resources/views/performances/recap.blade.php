@@ -83,7 +83,12 @@
                                 <tr>
                                     <th class="sticky left-0 z-10 border-b border-r bg-white px-4 py-3 text-left font-semibold text-gray-900">List</th>
                                     @foreach ($recap['months'] as $month)
-                                        <th colspan="2" class="border-b border-r bg-gray-50 px-4 py-3 text-center font-semibold text-gray-900">
+                                        <th colspan="2" @class([
+                                            'border-b border-r px-4 py-3 text-center font-semibold',
+                                            'bg-red-100 text-red-700' => $month['below_monthly_minimum'],
+                                            'bg-green-100 text-green-700' => $month['monthly_minimum_achieved'],
+                                            'bg-gray-50 text-gray-900' => $month['is_future'],
+                                        ])>
                                             {{ $month['label'] }}
                                         </th>
                                     @endforeach
@@ -91,8 +96,18 @@
                                 <tr>
                                     <th class="sticky left-0 z-10 border-b border-r bg-white"></th>
                                     @foreach ($recap['months'] as $month)
-                                        <th class="border-b bg-gray-50 px-3 py-2 text-center text-xs font-semibold uppercase text-gray-500">Ach</th>
-                                        <th class="border-b border-r bg-gray-50 px-3 py-2 text-center text-xs font-semibold uppercase text-gray-500">Shrt</th>
+                                        <th @class([
+                                            'border-b px-3 py-2 text-center text-xs font-semibold uppercase',
+                                            'bg-red-50 text-red-600' => $month['below_monthly_minimum'],
+                                            'bg-green-50 text-green-600' => $month['monthly_minimum_achieved'],
+                                            'bg-gray-50 text-gray-500' => $month['is_future'],
+                                        ])>Ach</th>
+                                        <th @class([
+                                            'border-b border-r px-3 py-2 text-center text-xs font-semibold uppercase',
+                                            'bg-red-50 text-red-600' => $month['below_monthly_minimum'],
+                                            'bg-green-50 text-green-600' => $month['monthly_minimum_achieved'],
+                                            'bg-gray-50 text-gray-500' => $month['is_future'],
+                                        ])>Shrt</th>
                                     @endforeach
                                 </tr>
                             </thead>
@@ -100,10 +115,20 @@
                                 <tr>
                                     <td class="sticky left-0 z-10 border-r bg-white px-4 py-3 font-medium text-gray-900">Team NS</td>
                                     @foreach ($recap['months'] as $month)
-                                        <td @class(['px-3 py-3 text-center font-semibold', 'text-gray-300' => $month['is_future'], 'text-gray-900' => !$month['is_future']])>
+                                        <td @class([
+                                            'px-3 py-3 text-center font-semibold',
+                                            'bg-red-50 text-red-700' => $month['below_monthly_minimum'],
+                                            'bg-green-50 text-green-700' => $month['monthly_minimum_achieved'],
+                                            'text-gray-300' => $month['is_future'],
+                                        ])>
                                             {{ $month['achievement'] }}
                                         </td>
-                                        <td @class(['border-r px-3 py-3 text-center', 'text-gray-300' => $month['is_future'], 'text-gray-500' => !$month['is_future']])>
+                                        <td @class([
+                                            'border-r px-3 py-3 text-center',
+                                            'bg-red-50 text-red-600' => $month['below_monthly_minimum'],
+                                            'bg-green-50 text-green-600' => $month['monthly_minimum_achieved'],
+                                            'text-gray-300' => $month['is_future'],
+                                        ])>
                                             {{ $month['shortage'] }}
                                         </td>
                                     @endforeach
@@ -114,6 +139,7 @@
 
                     <p class="mt-4 text-sm text-gray-500">
                         Achievement menghitung NS selesai milik HM dan seluruh downline-nya. Shortage menunjukkan sisa kumulatif menuju 120 NS.
+                        Minimum achievement bulanan adalah {{ $recap['monthly_minimum'] }} NS; bulan di bawah minimum ditandai merah.
                     </p>
                 </div>
             </section>
