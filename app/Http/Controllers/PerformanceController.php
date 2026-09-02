@@ -81,6 +81,8 @@ class PerformanceController extends Controller
 
         $selectedStatuses = $this->selectedSalesOrderStatuses($request);
         $statusOptions = $this->salesOrderStatuses;
+        $salesType = $this->selectedSalesType($request);
+        $productSalesType = $this->selectedProductSalesType($request);
 
         // ======================================
         // Dropdown options
@@ -139,6 +141,8 @@ class PerformanceController extends Controller
             ->groupBy('users.id', 'users.name', 'users.full_name')
             ->orderByDesc('units');
 
+        $this->applySalesCategoryFilters($teamPerformanceQ, $salesType, $productSalesType, 'so');
+
         $teamPerformance = $teamPerformanceQ
             ->get()
             ->map(function ($row) {
@@ -160,6 +164,8 @@ class PerformanceController extends Controller
         if ($from) $myTotalUnitsQ->whereDate('so.install_date', '>=', $from);
         if ($to)   $myTotalUnitsQ->whereDate('so.install_date', '<=', $to);
 
+        $this->applySalesCategoryFilters($myTotalUnitsQ, $salesType, $productSalesType, 'so');
+
         $myTotalUnits = (int) $joinUnits($myTotalUnitsQ, 'so')
             ->selectRaw("{$unitsExpr} as units")
             ->value('units');
@@ -172,6 +178,7 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($summaryQ, $from, $to, !$manualDateRange);
+        $this->applySalesCategoryFilters($summaryQ, $salesType, $productSalesType, 'so');
 
         $summaryQ = $joinUnits($summaryQ, 'so');
 
@@ -244,6 +251,7 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange, true);
+        $this->applySalesCategoryFilters($sheetQ, $salesType, $productSalesType, 'so');
 
         if (!empty($selectedStatuses)) {
             $sheetQ->whereIn('so.status', $selectedStatuses);
@@ -319,6 +327,8 @@ class PerformanceController extends Controller
             'memberLabel'     => $hasMemberFilter ? ($baseUser->full_name ?: $baseUser->name) : '',
             'statusOptions'   => $statusOptions,
             'selectedStatuses' => $selectedStatuses,
+            'salesType'        => $salesType,
+            'productSalesType' => $productSalesType,
             'roadToHm'        => $roadToHm,
         ]);
     }
@@ -437,6 +447,8 @@ class PerformanceController extends Controller
         );
 
         $selectedStatuses = $this->selectedSalesOrderStatuses($request);
+        $salesType = $this->selectedSalesType($request);
+        $productSalesType = $this->selectedProductSalesType($request);
 
         // ======================================
         // Helper units
@@ -457,6 +469,7 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($summaryQ, $from, $to, !$manualDateRange);
+        $this->applySalesCategoryFilters($summaryQ, $salesType, $productSalesType, 'so');
 
         $summaryQ = $joinUnits($summaryQ, 'so');
 
@@ -529,6 +542,7 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange, true);
+        $this->applySalesCategoryFilters($sheetQ, $salesType, $productSalesType, 'so');
 
         if (!empty($selectedStatuses)) {
             $sheetQ->whereIn('so.status', $selectedStatuses);
@@ -1050,6 +1064,8 @@ class PerformanceController extends Controller
         );
 
         $selectedStatuses = $this->selectedSalesOrderStatuses($request);
+        $salesType = $this->selectedSalesType($request);
+        $productSalesType = $this->selectedProductSalesType($request);
 
         $unitCountExpr = "
             COALESCE(MAX(
@@ -1085,6 +1101,7 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($q, $from, $to, !$manualDateRange, true);
+        $this->applySalesCategoryFilters($q, $salesType, $productSalesType, 'so');
 
         if (!empty($selectedStatuses)) {
             $q->whereIn('so.status', $selectedStatuses);
@@ -1372,6 +1389,43 @@ class PerformanceController extends Controller
             ->filter(fn($status) => in_array($status, $this->salesOrderStatuses, true))
             ->values()
             ->all();
+    }
+
+    private function selectedSalesType(Request $request): ?string
+    {
+        $value = (string) $request->input('sales_type', '');
+
+        return in_array($value, ['individu', 'corporate'], true) ? $value : null;
+    }
+
+    private function selectedProductSalesType(Request $request): ?string
+    {
+        $value = (string) $request->input('product_sales_type', '');
+
+        return in_array($value, ['regular', 'bundle'], true) ? $value : null;
+    }
+
+    private function applySalesCategoryFilters(
+        $query,
+        ?string $salesType,
+        ?string $productSalesType,
+        string $salesOrderAlias = 'so'
+    ): void {
+        if ($salesType !== null) {
+            $query->where("{$salesOrderAlias}.customer_type", $salesType);
+        }
+
+        if ($productSalesType !== null) {
+            $query->whereExists(function ($itemQuery) use ($salesOrderAlias, $productSalesType) {
+                $itemQuery->selectRaw('1')
+                    ->from('sales_order_items as filter_soi')
+                    ->join('products as filter_product', 'filter_product.id', '=', 'filter_soi.product_id')
+                    ->whereColumn('filter_soi.sales_order_id', "{$salesOrderAlias}.id")
+                    ->whereNull('filter_soi.parent_item_id')
+                    ->whereRaw('COALESCE(filter_soi.is_cancelled, 0) = 0')
+                    ->where('filter_product.type', $productSalesType);
+            });
+        }
     }
 
     private function buildRoadToHmData(User $user): array

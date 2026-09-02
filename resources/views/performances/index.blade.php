@@ -208,7 +208,7 @@
                 </div>
 
                 @php
-                    $activeFilterCount = collect(['from', 'to', 'member_id', 'status'])
+                    $activeFilterCount = collect(['from', 'to', 'member_id', 'status', 'sales_type', 'product_sales_type'])
                         ->filter(fn($key) => request()->filled($key))
                         ->count();
                 @endphp
@@ -241,7 +241,7 @@
                     </div>
 
                     <form method="GET" class="mobile-modal-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
-                        @foreach (request()->except(['from', 'to', 'member_id', 'status', 'page']) as $key => $value)
+                        @foreach (request()->except(['from', 'to', 'member_id', 'status', 'sales_type', 'product_sales_type', 'page']) as $key => $value)
                             @if (is_array($value))
                                 @foreach ($value as $item)
                                     <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
@@ -287,6 +287,28 @@
                                         Tidak ada hasil.
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label for="sales_type" class="mb-1 block text-sm font-medium text-gray-700">Jenis Penjualan</label>
+                                <select name="sales_type" id="sales_type"
+                                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="">Semua</option>
+                                    <option value="individu" @selected(($salesType ?? null) === 'individu')>Individu</option>
+                                    <option value="corporate" @selected(($salesType ?? null) === 'corporate')>Corporate</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="product_sales_type" class="mb-1 block text-sm font-medium text-gray-700">Jenis Penjualan Produk</label>
+                                <select name="product_sales_type" id="product_sales_type"
+                                    class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="">Semua</option>
+                                    <option value="regular" @selected(($productSalesType ?? null) === 'regular')>Satuan</option>
+                                    <option value="bundle" @selected(($productSalesType ?? null) === 'bundle')>Bundling</option>
+                                </select>
                             </div>
                         </div>
 
