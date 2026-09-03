@@ -1673,12 +1673,69 @@ class PerformanceController extends Controller
         $cycleStart = $hmSince->copy()->addMonthsNoOverflow($cycleIndex * 6);
         $cycleEnd = $cycleStart->copy()->addMonthsNoOverflow(5)->endOfMonth();
 
-        $scopeUserIds = $healthManager->downlineUserIds()
-            ->push($healthManager->id)
+        $downlineUserIds = $healthManager->downlineUserIds()->unique()->values();
+        $scopeUserIds = $downlineUserIds
+            ->concat([$healthManager->id])
             ->unique()
             ->values();
 
-        $monthlyUnits = DB::table('sales_orders as so')
+        // Ketika seorang downline dipromosikan menjadi HM, mulai bulan promosinya
+        // seluruh subtree HM baru tersebut tidak lagi menyumbang NS ke HM di atasnya.
+        $promotedHmMonths = User::query()
+            ->whereIn('id', $downlineUserIds)
+            ->role('Health Manager')
+            ->get(['id', 'hm_since', 'join_date', 'created_at'])
+            ->mapWithKeys(function (User $user) {
+                $promotionDate = $user->hm_since ?? $user->join_date ?? $user->created_at;
+
+                return [$user->id => $promotionDate->copy()->startOfMonth()->format('Y-m-01')];
+            });
+
+        $currentHealthPlannerIds = User::query()
+            ->whereIn('id', $downlineUserIds)
+            ->role('Health Planner')
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->flip();
+
+        $childrenByParent = DB::table('user_hierarchies')
+            ->whereIn('child_user_id', $downlineUserIds)
+            ->get(['parent_user_id', 'child_user_id'])
+            ->groupBy('parent_user_id');
+
+        $exclusionMonthByUser = [];
+        $visitedUsers = [];
+        $walkTeam = function (int $userId, ?string $inheritedExclusionMonth = null) use (
+            &$walkTeam,
+            &$exclusionMonthByUser,
+            &$visitedUsers,
+            $childrenByParent,
+            $promotedHmMonths
+        ): void {
+            if (isset($visitedUsers[$userId])) {
+                return;
+            }
+            $visitedUsers[$userId] = true;
+
+            foreach ($childrenByParent->get($userId, collect()) as $edge) {
+                $childId = (int) $edge->child_user_id;
+                $childPromotionMonth = $promotedHmMonths->get($childId);
+                $exclusionMonth = $inheritedExclusionMonth;
+
+                if ($childPromotionMonth !== null && ($exclusionMonth === null || $childPromotionMonth < $exclusionMonth)) {
+                    $exclusionMonth = $childPromotionMonth;
+                }
+
+                if ($exclusionMonth !== null) {
+                    $exclusionMonthByUser[$childId] = $exclusionMonth;
+                }
+
+                $walkTeam($childId, $exclusionMonth);
+            }
+        };
+        $walkTeam((int) $healthManager->id);
+
+        $monthlyUnitsRows = DB::table('sales_orders as so')
             ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {
                 $join->on('sou.sales_order_id', '=', 'so.id');
             })
@@ -1686,9 +1743,30 @@ class PerformanceController extends Controller
             ->where('so.status', 'selesai')
             ->whereIn('so.sales_user_id', $scopeUserIds)
             ->whereBetween('so.install_date', [$cycleStart->toDateString(), $cycleEnd->toDateString()])
-            ->selectRaw("DATE_FORMAT(so.install_date, '%Y-%m-01') as month_key, COALESCE(SUM(sou.unit_count), 0) as units")
-            ->groupBy(DB::raw("DATE_FORMAT(so.install_date, '%Y-%m-01')"))
-            ->pluck('units', 'month_key');
+            ->selectRaw("so.sales_user_id, DATE_FORMAT(so.install_date, '%Y-%m-01') as month_key, COALESCE(SUM(sou.unit_count), 0) as units")
+            ->groupBy('so.sales_user_id', DB::raw("DATE_FORMAT(so.install_date, '%Y-%m-01')"))
+            ->get();
+
+        $monthlyUnits = [];
+        $activeHealthPlannersByMonth = [];
+        foreach ($monthlyUnitsRows as $row) {
+            $salesUserId = (int) $row->sales_user_id;
+            $exclusionMonth = $exclusionMonthByUser[$salesUserId] ?? null;
+            if ($exclusionMonth !== null && $row->month_key >= $exclusionMonth) {
+                continue;
+            }
+
+            $monthlyUnits[$row->month_key] = ($monthlyUnits[$row->month_key] ?? 0) + (int) $row->units;
+
+            $wasHealthPlannerBeforePromotion = $promotedHmMonths->has($salesUserId)
+                && $row->month_key < $promotedHmMonths->get($salesUserId);
+            $isEligibleHealthPlanner = $currentHealthPlannerIds->has($salesUserId)
+                || $wasHealthPlannerBeforePromotion;
+
+            if ($isEligibleHealthPlanner && (int) $row->units > 0) {
+                $activeHealthPlannersByMonth[$row->month_key][$salesUserId] = true;
+            }
+        }
 
         $cumulative = 0;
         $targetSecured = false;
@@ -1706,6 +1784,7 @@ class PerformanceController extends Controller
             return [
                 'label' => ucfirst($month->translatedFormat('M Y')),
                 'achievement' => $achievement,
+                'active_health_planners' => count($activeHealthPlannersByMonth[$month->format('Y-m-01')] ?? []),
                 'cumulative' => $cumulative,
                 'shortage' => max($target - $cumulative, 0),
                 'is_future' => $isFuture,

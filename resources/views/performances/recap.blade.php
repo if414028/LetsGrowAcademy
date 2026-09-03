@@ -135,12 +135,27 @@
                                         </td>
                                     @endforeach
                                 </tr>
+                                <tr class="border-t border-gray-100">
+                                    <td class="sticky left-0 z-10 border-r bg-white px-4 py-3 font-medium text-gray-900">Active HP</td>
+                                    @foreach ($recap['months'] as $month)
+                                        <td colspan="2" @class([
+                                            'border-r px-3 py-3 text-center font-semibold',
+                                            'bg-red-50 text-red-700' => $month['below_monthly_minimum'],
+                                            'bg-green-50 text-green-700' => $month['monthly_minimum_achieved'],
+                                            'text-gray-300' => $month['is_future'] && !$month['target_secured'],
+                                            'text-gray-900' => $month['is_current'] && !$month['target_secured'],
+                                        ])>
+                                            {{ $month['active_health_planners'] }} orang
+                                        </td>
+                                    @endforeach
+                                </tr>
                             </tbody>
                         </table>
                     </div>
 
                     <p class="mt-4 text-sm text-gray-500">
                         Achievement menghitung NS selesai milik HM dan seluruh downline-nya. Shortage menunjukkan sisa kumulatif menuju 120 NS.
+                        Mulai bulan seorang downline dipromosikan menjadi HM, NS miliknya dan seluruh tim barunya tidak lagi dihitung ke HM di atasnya.
                         Minimum achievement bulanan adalah {{ $recap['monthly_minimum'] }} NS; bulan di bawah minimum ditandai merah.
                         Setelah target 120 NS tercapai, seluruh sisa bulan dalam periode ditandai hijau.
                     </p>
