@@ -1770,7 +1770,7 @@ class PerformanceController extends Controller
 
         $cumulative = 0;
         $targetSecured = false;
-        $months = collect(range(0, 5))->map(function (int $offset) use ($cycleStart, $monthlyUnits, &$cumulative, &$targetSecured, $target, $monthlyMinimum) {
+        $months = collect(range(0, 5))->map(function (int $offset) use ($cycleStart, $monthlyUnits, $activeHealthPlannersByMonth, &$cumulative, &$targetSecured, $target, $monthlyMinimum) {
             $month = $cycleStart->copy()->addMonthsNoOverflow($offset);
             $achievement = (int) ($monthlyUnits[$month->format('Y-m-01')] ?? 0);
             $cumulative += $achievement;
