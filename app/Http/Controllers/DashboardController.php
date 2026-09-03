@@ -24,7 +24,9 @@ class DashboardController extends Controller
         $warnFrom = now()->subMonths(6);
 
         $lastSoSub = SalesOrder::query()
-            ->select('sales_user_id', DB::raw('MAX(key_in_at) as last_so_at'))
+            ->where('status', 'selesai')
+            ->whereNotNull('install_date')
+            ->select('sales_user_id', DB::raw('MAX(install_date) as last_install_at'))
             ->groupBy('sales_user_id');
 
         $warningsQuery = User::query()
@@ -38,13 +40,13 @@ class DashboardController extends Controller
                 'users.name',
                 'users.email',
                 'users.dst_code',
-                DB::raw('COALESCE(so.last_so_at, users.created_at) as last_activity_at'),
+                DB::raw('COALESCE(so.last_install_at, users.created_at) as last_activity_at'),
             ])
             ->whereRaw(
-                'COALESCE(so.last_so_at, users.created_at) <= ? AND COALESCE(so.last_so_at, users.created_at) > ?',
+                'COALESCE(so.last_install_at, users.created_at) <= ? AND COALESCE(so.last_install_at, users.created_at) > ?',
                 [$warnTo, $warnFrom]
             )
-            ->orderByRaw('COALESCE(so.last_so_at, users.created_at) asc');
+            ->orderByRaw('COALESCE(so.last_install_at, users.created_at) asc');
 
         // =========================
         // Scope by role

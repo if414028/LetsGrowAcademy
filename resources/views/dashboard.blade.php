@@ -88,8 +88,8 @@
 
                         @if ($isHP)
                             <p class="mt-1 text-sm text-orange-900/80">
-                                Anda sudah <span class="font-semibold">5 bulan</span> tidak membuat Penjualan.
-                                Jika tidak membuat SO sampai
+                                Anda sudah <span class="font-semibold">5 bulan</span> tidak memiliki instalasi selesai.
+                                Jika tidak ada instalasi selesai sampai
                                 <span class="font-semibold">
                                     {{ $selfWarning->deactivate_at->translatedFormat('d M Y') }}
                                 </span>,
@@ -100,7 +100,7 @@
                             </p>
                         @else
                             <p class="mt-1 text-sm text-orange-900/80">
-                                Berikut daftar Health Planner yang sudah 5 bulan tidak membuat Penjualan dan akan
+                                Berikut daftar Health Planner yang sudah 5 bulan tidak memiliki instalasi selesai dan akan
                                 dinonaktifkan pada bulan ke-6.
                             </p>
                         @endif
