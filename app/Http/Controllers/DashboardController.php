@@ -12,6 +12,7 @@ use App\Models\Contest;
 use Carbon\Carbon;
 use App\Models\PerformanceCutoff;
 use App\Models\Customer;
+use App\Services\HealthManagerNsScope;
 
 class DashboardController extends Controller
 {
@@ -133,9 +134,13 @@ class DashboardController extends Controller
             });
         };
 
-        $baseSoQuery = $applyNetSalesDateScope(SalesOrder::query()
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
-            ->where('sales_orders.status', 'selesai'));
+        $baseSoQuery = SalesOrder::query()->where('sales_orders.status', 'selesai');
+        if ($user->hasRole('Health Manager')) {
+            HealthManagerNsScope::apply($baseSoQuery, $user, 'sales_orders', 'sales_orders.install_date');
+        } elseif (!$isAdminOrHead) {
+            $baseSoQuery->whereIn('sales_orders.sales_user_id', $scopeUserIds);
+        }
+        $baseSoQuery = $applyNetSalesDateScope($baseSoQuery);
 
         // 1) Total unit terjual (SO selesai)
         $totalUnitsSold = $calcUnits(clone $baseSoQuery);
@@ -151,10 +156,7 @@ class DashboardController extends Controller
         );
 
         // 1c) Total Penjualan Produk Satuan (units) - SO selesai
-        $totalSalesProductSatuan = (int) SalesOrder::query()
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
-            ->where('sales_orders.status', 'selesai')
-            ->tap($applyNetSalesDateScope)
+        $totalSalesProductSatuan = (int) (clone $baseSoQuery)
             ->join('sales_order_items', function ($join) {
                 $join->on('sales_order_items.sales_order_id', '=', 'sales_orders.id')
                     ->whereNull('sales_order_items.parent_item_id');
@@ -165,10 +167,7 @@ class DashboardController extends Controller
 
         // 1d) Total Penjualan Produk Bundling - SO selesai
         // NOTE: sesuai request: "bundling itung 1 saja untuk 1 bundling" => hitung per item bundling, bukan qty
-        $totalSalesProductBundling = (int) SalesOrder::query()
-            ->when(!$isAdminOrHead, fn($q) => $q->whereIn('sales_orders.sales_user_id', $scopeUserIds))
-            ->where('sales_orders.status', 'selesai')
-            ->tap($applyNetSalesDateScope)
+        $totalSalesProductBundling = (int) (clone $baseSoQuery)
             ->join('sales_order_items', function ($join) {
                 $join->on('sales_order_items.sales_order_id', '=', 'sales_orders.id')
                     ->whereNull('sales_order_items.parent_item_id');
@@ -270,13 +269,9 @@ class DashboardController extends Controller
             // hitung total units (SO selesai) untuk tiap HM + tim multi-level
             $healthManagerPerformance = $healthManagers->map(function ($hm) use ($calcUnits, $applyNetSalesDateScope) {
                 $descendantIds = $this->getAllDescendantUserIds((int) $hm->id);
-                $scopeIds = array_values(array_unique(array_merge([(int) $hm->id], $descendantIds)));
-
-                $units = $calcUnits(
-                    $applyNetSalesDateScope(SalesOrder::query()
-                        ->whereIn('sales_orders.sales_user_id', $scopeIds)
-                        ->where('sales_orders.status', 'selesai'))
-                );
+                $hmUnitsQuery = SalesOrder::query()->where('sales_orders.status', 'selesai');
+                HealthManagerNsScope::apply($hmUnitsQuery, $hm, 'sales_orders', 'sales_orders.install_date');
+                $units = $calcUnits($applyNetSalesDateScope($hmUnitsQuery));
 
                 return (object) [
                     'id' => (int) $hm->id,
@@ -308,9 +303,14 @@ class DashboardController extends Controller
             $start = now()->startOfWeek()->subWeeks($weeks - 1);
 
             $rawWeekly = SalesOrder::query()
-                ->whereIn('sales_orders.sales_user_id', $scopeUserIds)
                 ->where('sales_orders.status', 'selesai')
                 ->whereBetween('sales_orders.key_in_at', [$start, $end]);
+
+            if ($user->hasRole('Health Manager')) {
+                HealthManagerNsScope::apply($rawWeekly, $user, 'sales_orders', 'sales_orders.install_date');
+            } else {
+                $rawWeekly->whereIn('sales_orders.sales_user_id', $scopeUserIds);
+            }
 
             $rawWeekly = $applyUnitsJoinsAndSelect($rawWeekly)
                 ->selectRaw("YEARWEEK(sales_orders.key_in_at, 3) as yw, $unitsSelectExpr")
@@ -332,9 +332,14 @@ class DashboardController extends Controller
             $start = now()->startOfMonth()->subMonths($months - 1);
 
             $rawMonthly = SalesOrder::query()
-                ->whereIn('sales_orders.sales_user_id', $scopeUserIds)
                 ->where('sales_orders.status', 'selesai')
                 ->whereBetween('sales_orders.key_in_at', [$start, $end]);
+
+            if ($user->hasRole('Health Manager')) {
+                HealthManagerNsScope::apply($rawMonthly, $user, 'sales_orders', 'sales_orders.install_date');
+            } else {
+                $rawMonthly->whereIn('sales_orders.sales_user_id', $scopeUserIds);
+            }
 
             $rawMonthly = $applyUnitsJoinsAndSelect($rawMonthly)
                 ->selectRaw("DATE_FORMAT(sales_orders.key_in_at, '%Y-%m') as ym, $unitsSelectExpr")

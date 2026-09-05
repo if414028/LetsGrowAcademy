@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 use Illuminate\Support\Str;
+use App\Services\HealthManagerNsScope;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -141,6 +142,10 @@ class PerformanceController extends Controller
             ->groupBy('users.id', 'users.name', 'users.full_name')
             ->orderByDesc('units');
 
+        if ($baseUser->hasRole('Health Manager')) {
+            HealthManagerNsScope::apply($teamPerformanceQ, $baseUser, 'so', 'so.install_date');
+        }
+
         $this->applySalesCategoryFilters($teamPerformanceQ, $salesType, $productSalesType, 'so');
 
         $teamPerformance = $teamPerformanceQ
@@ -158,8 +163,13 @@ class PerformanceController extends Controller
         // ======================================
         $myTotalUnitsQ = DB::table('sales_orders as so')
             ->whereNull('so.deleted_at')
-            ->where('so.sales_user_id', $baseUser->id)
             ->where('so.status', 'selesai');
+
+        if ($baseUser->hasRole('Health Manager')) {
+            HealthManagerNsScope::apply($myTotalUnitsQ, $baseUser, 'so', 'so.install_date');
+        } else {
+            $myTotalUnitsQ->where('so.sales_user_id', $baseUser->id);
+        }
 
         if ($from) $myTotalUnitsQ->whereDate('so.install_date', '>=', $from);
         if ($to)   $myTotalUnitsQ->whereDate('so.install_date', '<=', $to);
@@ -178,6 +188,9 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($summaryQ, $from, $to, !$manualDateRange);
+        if ($baseUser->hasRole('Health Manager')) {
+            HealthManagerNsScope::apply($summaryQ, $baseUser, 'so', 'COALESCE(so.install_date, so.key_in_at)');
+        }
         $this->applySalesCategoryFilters($summaryQ, $salesType, $productSalesType, 'so');
 
         $summaryQ = $joinUnits($summaryQ, 'so');
@@ -251,6 +264,9 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange, true);
+        if ($baseUser->hasRole('Health Manager')) {
+            HealthManagerNsScope::apply($sheetQ, $baseUser, 'so', 'COALESCE(so.install_date, so.key_in_at)');
+        }
         $this->applySalesCategoryFilters($sheetQ, $salesType, $productSalesType, 'so');
 
         if (!empty($selectedStatuses)) {
@@ -508,6 +524,9 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($summaryQ, $from, $to, !$manualDateRange);
+        if ($baseUser->hasRole('Health Manager')) {
+            HealthManagerNsScope::apply($summaryQ, $baseUser, 'so', 'COALESCE(so.install_date, so.key_in_at)');
+        }
         $this->applySalesCategoryFilters($summaryQ, $salesType, $productSalesType, 'so');
 
         $summaryQ = $joinUnits($summaryQ, 'so');
@@ -581,6 +600,9 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($sheetQ, $from, $to, !$manualDateRange, true);
+        if ($baseUser->hasRole('Health Manager')) {
+            HealthManagerNsScope::apply($sheetQ, $baseUser, 'so', 'COALESCE(so.install_date, so.key_in_at)');
+        }
         $this->applySalesCategoryFilters($sheetQ, $salesType, $productSalesType, 'so');
 
         if (!empty($selectedStatuses)) {
@@ -1140,6 +1162,9 @@ class PerformanceController extends Controller
             ->whereIn('so.sales_user_id', $scopeUserIds);
 
         $this->applyPerformanceScopeFilter($q, $from, $to, !$manualDateRange, true);
+        if ($baseUser->hasRole('Health Manager')) {
+            HealthManagerNsScope::apply($q, $baseUser, 'so', 'COALESCE(so.install_date, so.key_in_at)');
+        }
         $this->applySalesCategoryFilters($q, $salesType, $productSalesType, 'so');
 
         if (!empty($selectedStatuses)) {
@@ -1673,23 +1698,11 @@ class PerformanceController extends Controller
         $cycleStart = $hmSince->copy()->addMonthsNoOverflow($cycleIndex * 6);
         $cycleEnd = $cycleStart->copy()->addMonthsNoOverflow(5)->endOfMonth();
 
-        $downlineUserIds = $healthManager->downlineUserIds()->unique()->values();
-        $scopeUserIds = $downlineUserIds
-            ->concat([$healthManager->id])
-            ->unique()
-            ->values();
-
-        // Ketika seorang downline dipromosikan menjadi HM, mulai bulan promosinya
-        // seluruh subtree HM baru tersebut tidak lagi menyumbang NS ke HM di atasnya.
-        $promotedHmMonths = User::query()
-            ->whereIn('id', $downlineUserIds)
-            ->role('Health Manager')
-            ->get(['id', 'hm_since', 'join_date', 'created_at'])
-            ->mapWithKeys(function (User $user) {
-                $promotionDate = $user->hm_since ?? $user->join_date ?? $user->created_at;
-
-                return [$user->id => $promotionDate->copy()->startOfMonth()->format('Y-m-01')];
-            });
+        $hmTeamScope = HealthManagerNsScope::resolve($healthManager);
+        $scopeUserIds = $hmTeamScope['scope_ids'];
+        $downlineUserIds = $scopeUserIds->reject(fn($id) => (int) $id === (int) $healthManager->id)->values();
+        $promotedHmMonths = $hmTeamScope['promoted_hm_months'];
+        $exclusionMonthByUser = $hmTeamScope['exclusion_months']->all();
 
         $currentHealthPlannerIds = User::query()
             ->whereIn('id', $downlineUserIds)
@@ -1697,43 +1710,6 @@ class PerformanceController extends Controller
             ->pluck('id')
             ->map(fn($id) => (int) $id)
             ->flip();
-
-        $childrenByParent = DB::table('user_hierarchies')
-            ->whereIn('child_user_id', $downlineUserIds)
-            ->get(['parent_user_id', 'child_user_id'])
-            ->groupBy('parent_user_id');
-
-        $exclusionMonthByUser = [];
-        $visitedUsers = [];
-        $walkTeam = function (int $userId, ?string $inheritedExclusionMonth = null) use (
-            &$walkTeam,
-            &$exclusionMonthByUser,
-            &$visitedUsers,
-            $childrenByParent,
-            $promotedHmMonths
-        ): void {
-            if (isset($visitedUsers[$userId])) {
-                return;
-            }
-            $visitedUsers[$userId] = true;
-
-            foreach ($childrenByParent->get($userId, collect()) as $edge) {
-                $childId = (int) $edge->child_user_id;
-                $childPromotionMonth = $promotedHmMonths->get($childId);
-                $exclusionMonth = $inheritedExclusionMonth;
-
-                if ($childPromotionMonth !== null && ($exclusionMonth === null || $childPromotionMonth < $exclusionMonth)) {
-                    $exclusionMonth = $childPromotionMonth;
-                }
-
-                if ($exclusionMonth !== null) {
-                    $exclusionMonthByUser[$childId] = $exclusionMonth;
-                }
-
-                $walkTeam($childId, $exclusionMonth);
-            }
-        };
-        $walkTeam((int) $healthManager->id);
 
         $monthlyUnitsRows = DB::table('sales_orders as so')
             ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {

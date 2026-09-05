@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\PerformanceCutoff;
 use App\Models\User;
 use App\Models\UserHierarchy;
+use App\Services\HealthManagerNsScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -108,73 +109,42 @@ class ReportController extends Controller
             return collect();
         }
 
-        $scopeByTarget = $targets
-            ->mapWithKeys(function ($target) {
-                $scopeIds = $target->downlineUserIds()
-                    ->push((int) $target->id)
-                    ->unique()
-                    ->values();
-
-                return [(int) $target->id => $scopeIds];
-            });
-
-        $allScopeIds = $scopeByTarget
-            ->flatMap(fn($scopeIds) => $scopeIds)
-            ->unique()
-            ->values();
-
-        // Samakan definisi Active HP dengan Dashboard: user HP berstatus Active
-        // yang memiliki minimal satu SO selesai dengan install date pada periode terpilih.
-        $activeHealthPlannerIds = User::query()
-            ->role('Health Planner')
-            ->where('users.status', 'Active')
-            ->whereIn('users.id', $allScopeIds->all())
-            ->whereExists(function ($query) use ($from, $to) {
-                $query->select(DB::raw(1))
-                    ->from('sales_orders')
-                    ->whereColumn('sales_orders.sales_user_id', 'users.id')
-                    ->whereNull('sales_orders.deleted_at')
-                    ->where('sales_orders.status', 'selesai')
-                    ->whereNotNull('sales_orders.install_date')
-                    ->whereDate('sales_orders.install_date', '>=', $from)
-                    ->whereDate('sales_orders.install_date', '<=', $to);
-            })
-            ->pluck('users.id')
-            ->map(fn($id) => (int) $id)
-            ->flip();
-
-        $sellerStats = DB::table('sales_orders as so')
-            ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {
-                $join->on('sou.sales_order_id', '=', 'so.id');
-            })
-            ->whereNull('so.deleted_at')
-            ->where('so.status', 'selesai')
-            ->whereNotNull('so.install_date')
-            ->whereDate('so.install_date', '>=', $from)
-            ->whereDate('so.install_date', '<=', $to)
-            ->whereIn('so.sales_user_id', $allScopeIds->all())
-            ->groupBy('so.sales_user_id')
-            ->select(
-                'so.sales_user_id',
-                DB::raw('COALESCE(SUM(sou.unit_count), 0) as units'),
-                DB::raw('MIN(so.key_in_at) as first_key_in_at')
-            )
-            ->get()
-            ->keyBy(fn($row) => (int) $row->sales_user_id);
-
         return $targets
-            ->map(function ($t) use ($scopeByTarget, $sellerStats, $activeHealthPlannerIds) {
+            ->map(function ($t) use ($from, $to) {
                 $id = (int) $t->id;
-                $scopeIds = $scopeByTarget->get($id, collect([$id]));
-                $units = $scopeIds->sum(fn($sellerId) => (int) optional($sellerStats->get((int) $sellerId))->units);
-                $activeHealthPlanners = $scopeIds
-                    ->filter(fn($userId) => $activeHealthPlannerIds->has((int) $userId))
+                $query = DB::table('sales_orders as so')
+                    ->leftJoinSub($this->salesOrderUnitSubquery(), 'sou', function ($join) {
+                        $join->on('sou.sales_order_id', '=', 'so.id');
+                    })
+                    ->whereNull('so.deleted_at')
+                    ->where('so.status', 'selesai')
+                    ->whereNotNull('so.install_date')
+                    ->whereDate('so.install_date', '>=', $from)
+                    ->whereDate('so.install_date', '<=', $to);
+
+                HealthManagerNsScope::apply($query, $t, 'so', 'so.install_date');
+                $stats = $query->selectRaw('COALESCE(SUM(sou.unit_count), 0) as units, MIN(so.key_in_at) as first_key_in_at')->first();
+
+                $activeSellerQuery = DB::table('sales_orders as active_so')
+                    ->whereNull('active_so.deleted_at')
+                    ->where('active_so.status', 'selesai')
+                    ->whereNotNull('active_so.install_date')
+                    ->whereDate('active_so.install_date', '>=', $from)
+                    ->whereDate('active_so.install_date', '<=', $to);
+                HealthManagerNsScope::apply($activeSellerQuery, $t, 'active_so', 'active_so.install_date');
+                $activeSellerIds = $activeSellerQuery
+                    ->distinct()
+                    ->pluck('active_so.sales_user_id')
+                    ->map(fn($sellerId) => (int) $sellerId);
+
+                $activeHealthPlanners = User::query()
+                    ->role('Health Planner')
+                    ->where('users.status', 'Active')
+                    ->whereIn('users.id', $activeSellerIds)
                     ->count();
-                $firstKeyIn = $scopeIds
-                    ->map(fn($sellerId) => optional($sellerStats->get((int) $sellerId))->first_key_in_at)
-                    ->filter()
-                    ->sort()
-                    ->first();
+
+                $units = (int) ($stats->units ?? 0);
+                $firstKeyIn = $stats->first_key_in_at ?? null;
 
                 return [
                     'id' => $id,
