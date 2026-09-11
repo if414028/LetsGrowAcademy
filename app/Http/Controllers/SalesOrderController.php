@@ -751,7 +751,7 @@ class SalesOrderController extends Controller
             ]);
         }
 
-        app(\App\Services\CustomerOwnership::class)->validateOwner($salesUserId, $customer?->id, 'sales_user_id');
+        app(\App\Services\CustomerOwnership::class)->validateOwner($salesUserId, 'sales_user_id');
         $customer ??= new Customer();
         $customer->fill([
             'full_name' => $name,
@@ -823,7 +823,7 @@ class SalesOrderController extends Controller
         }
 
         if ($salesUserId) {
-            app(\App\Services\CustomerOwnership::class)->validateOwner($salesUserId, null, 'sales_user_id');
+            app(\App\Services\CustomerOwnership::class)->validateOwner($salesUserId, 'sales_user_id');
         }
         $customer = Customer::create([
             'health_planner_id' => $salesUserId,

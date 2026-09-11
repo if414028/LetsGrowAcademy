@@ -46,7 +46,7 @@ class CustomerManagementTest extends TestCase
         }
     }
 
-    public function test_hp_creates_only_for_self_and_cannot_add_a_second_customer(): void
+    public function test_hp_can_create_multiple_customers_only_for_self(): void
     {
         $hp = $this->user('Health Planner');
         $other = $this->user('Health Planner');
@@ -55,8 +55,9 @@ class CustomerManagementTest extends TestCase
         $this->post(route('customers.store'), $data)->assertSessionHasNoErrors();
         $this->assertDatabaseHas('customers', ['full_name' => 'First', 'health_planner_id' => $hp->id]);
         $data['full_name'] = 'Second';
-        $this->post(route('customers.store'), $data)->assertSessionHasErrors('health_planner_id');
-        $this->assertDatabaseCount('customers', 1);
+        $this->post(route('customers.store'), $data)->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('customers', 2);
+        $this->assertDatabaseHas('customers', ['full_name' => 'Second', 'health_planner_id' => $hp->id]);
     }
 
     public function test_hm_can_create_multiple_and_sales_manager_is_read_only(): void
@@ -117,18 +118,19 @@ class CustomerManagementTest extends TestCase
         $this->assertEquals($hp->id, $customer->fresh()->health_planner_id);
     }
 
-    public function test_admin_cannot_assign_customer_to_full_or_inactive_hp(): void
+    public function test_admin_can_assign_multiple_customers_to_active_hp_but_not_inactive_hp(): void
     {
         $hp = $this->user('Health Planner');
         Customer::create(['full_name' => 'Existing', 'health_planner_id' => $hp->id]);
         $customer = Customer::create(['full_name' => 'Unassigned']);
         $this->actingAs($this->user('Admin'));
         $data = ['full_name' => 'Unassigned', 'address' => 'Jakarta', 'health_planner_id' => $hp->id];
-        $this->put(route('customers.update', $customer), $data)->assertSessionHasErrors('health_planner_id');
+        $this->put(route('customers.update', $customer), $data)->assertSessionHasNoErrors();
+        $this->assertEquals(2, Customer::where('health_planner_id', $hp->id)->count());
         $inactive = $this->user('Health Planner');
         $inactive->update(['status' => 'Inactive']);
         $data['health_planner_id'] = $inactive->id;
         $this->put(route('customers.update', $customer), $data)->assertSessionHasErrors('health_planner_id');
-        $this->assertNull($customer->fresh()->health_planner_id);
+        $this->assertEquals($hp->id, $customer->fresh()->health_planner_id);
     }
 }

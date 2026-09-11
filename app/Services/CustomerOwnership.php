@@ -2,23 +2,18 @@
 
 namespace App\Services;
 
-use App\Models\{Customer, User, UserHierarchy};
+use App\Models\{User, UserHierarchy};
 use Illuminate\Validation\ValidationException;
 
 class CustomerOwnership
 {
     // Call inside the same transaction as the customer write. Locking the owner
     // serializes concurrent assignments, including assignments from sales orders.
-    public function validateOwner(int $ownerId, ?int $customerId = null, string $field = 'health_planner_id'): User
+    public function validateOwner(int $ownerId, string $field = 'health_planner_id'): User
     {
         $owner = User::query()->lockForUpdate()->findOrFail($ownerId);
         if (!$owner->hasAnyRole(['Health Planner', 'Health Manager']) || strcasecmp((string) $owner->status, 'Active') !== 0) {
             throw ValidationException::withMessages([$field => 'Pemilik harus Health Planner atau Health Manager yang aktif.']);
-        }
-        if ($owner->hasRole('Health Planner') && !$owner->hasRole('Health Manager')
-            && Customer::where('health_planner_id', $ownerId)
-                ->when($customerId, fn ($q) => $q->where('id', '!=', $customerId))->exists()) {
-            throw ValidationException::withMessages([$field => 'Health Planner ini sudah memiliki customer. Satu HP maksimal memiliki satu customer.']);
         }
         return $owner;
     }

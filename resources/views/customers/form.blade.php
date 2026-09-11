@@ -37,7 +37,7 @@
                 @else
                     <div class="rounded-xl bg-blue-50 p-3 text-sm text-blue-900">Pemilik: <strong>{{ auth()->user()->full_name ?: auth()->user()->name }}</strong> • ID: {{ auth()->user()->dst_code ?: auth()->id() }}. Customer baru otomatis menjadi milik Anda.</div>
                 @endhasanyrole
-                <p class="mt-2 text-xs text-gray-500">Satu HP maksimal memiliki satu customer. HM dapat memiliki banyak customer.</p>
+                <p class="mt-2 text-xs text-gray-500">Satu HP dapat memiliki banyak customer. Setiap customer hanya memiliki satu pemilik HP / HM.</p>
             </div>
             @foreach (['ktp' => 'KTP', 'unit_barcode' => 'Barcode Unit'] as $field => $label)
                 <div>

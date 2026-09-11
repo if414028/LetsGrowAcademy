@@ -107,7 +107,7 @@ class CustomerController extends Controller
         $paths = [];
         try {
             \Illuminate\Support\Facades\DB::transaction(function () use ($customer, $data, $ownerId, &$paths) {
-                app(\App\Services\CustomerOwnership::class)->validateOwner($ownerId, $customer->id);
+                app(\App\Services\CustomerOwnership::class)->validateOwner($ownerId);
                 if (!$customer->exists && Customer::whereRaw('LOWER(full_name) = ?', [mb_strtolower(trim($data['full_name']))])
                     ->when(filled($data['phone_number'] ?? null), fn ($q) => $q->where('phone_number', trim($data['phone_number'])))->exists()) {
                     throw \Illuminate\Validation\ValidationException::withMessages(['full_name' => 'Customer sudah terdaftar. Hubungi Admin untuk mengubah data atau pemiliknya.']);

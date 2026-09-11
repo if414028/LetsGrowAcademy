@@ -92,7 +92,7 @@ class SalesOrderCustomerTest extends TestCase
         $this->assertEquals($newHp->id, $oldOrder->customer->health_planner_id);
     }
 
-    public function test_so_cannot_assign_second_customer_but_can_repeat_for_same_customer(): void
+    public function test_so_can_assign_multiple_customers_and_repeat_for_same_customer(): void
     {
         $data = $this->payload();
         $this->post(route('sales-orders.store'), $data)->assertSessionHasNoErrors();
@@ -100,9 +100,10 @@ class SalesOrderCustomerTest extends TestCase
         $this->post(route('sales-orders.store'), $data)->assertSessionHasNoErrors();
         $data['order_no'] = 'SO-SECOND-CUSTOMER';
         $data['customer_name'] = 'Another Customer';
-        $this->post(route('sales-orders.store'), $data)->assertSessionHasErrors('sales_user_id');
-        $this->assertDatabaseCount('customers', 1);
-        $this->assertDatabaseCount('sales_orders', 2);
+        $this->post(route('sales-orders.store'), $data)->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('customers', 2);
+        $this->assertDatabaseCount('sales_orders', 3);
+        $this->assertEquals(2, Customer::where('health_planner_id', $data['sales_user_id'])->count());
     }
 
     public function test_invalid_upload_does_not_create_customer_or_order(): void
