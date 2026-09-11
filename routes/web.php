@@ -63,6 +63,17 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
  * Authenticated routes
  */
 Route::middleware('auth', 'active')->group(function () {
+    Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
+    Route::middleware('role:Admin|Head Admin|Health Planner|Health Manager')->group(function () {
+        Route::get('/customers/create', [CustomerController::class, 'create'])->name('customers.create');
+        Route::post('/customers', [CustomerController::class, 'store'])->name('customers.store');
+    });
+    Route::middleware('role:Admin|Head Admin')->group(function () {
+        Route::get('/customers/{customer}/edit', [CustomerController::class, 'edit'])->name('customers.edit');
+        Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
+    });
+
+
 
     // Profile (semua role): redirect ke halaman detail user yang login
     Route::get('/profile', function (\Illuminate\Http\Request $request) {
@@ -80,6 +91,8 @@ Route::middleware('auth', 'active')->group(function () {
 
         Route::get('/users/referrers/search', [UserController::class, 'searchReferrers'])
             ->name('users.referrers.search');
+
+        Route::get('/customers/{customer}/documents/{document}', [CustomerController::class, 'document'])->name('customers.document');
 
         // Sales Order
         Route::get('/sales-orders/create', [SalesOrderController::class, 'create'])->name('sales-orders.create');

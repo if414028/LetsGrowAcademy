@@ -430,6 +430,7 @@ class UserController extends Controller
         }
 
         DB::transaction(function () use ($user, $validated, $role, $referrer, $authUser, $manualHmSince) {
+            User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             $wasHealthManager = $user->hasRole('Health Manager');
             $user->update($validated);
             $user->syncRoles([$role]);

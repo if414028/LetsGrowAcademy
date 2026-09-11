@@ -389,6 +389,26 @@
                                 {{ $salesOrder->customer?->address ?? '-' }}
                             </div>
                         </div>
+                        <div>
+                            <div class="text-xs text-gray-500">Agama</div>
+                            <div class="mt-1 text-gray-900">{{ $salesOrder->customer?->religion ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500">Nomor Seri Unit</div>
+                            <div class="mt-1 text-gray-900">{{ $salesOrder->customer?->unit_serial_number ?? '-' }}</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-gray-500">HP / HM Pemilik Customer Saat Ini</div>
+                            <div class="mt-1 text-gray-900">{{ $salesOrder->customer?->healthPlanner?->full_name ?: ($salesOrder->customer?->healthPlanner?->name ?? '-') }}
+                                • ID: {{ $salesOrder->customer?->healthPlanner?->dst_code ?: ($salesOrder->customer?->health_planner_id ?? '-') }}</div>
+                        </div>
+                        @if (auth()->user()->hasAnyRole(['Admin', 'Head Admin']))
+                            @foreach (['ktp' => 'KTP', 'unit_barcode' => 'Barcode Unit'] as $document => $label)
+                                @if ($salesOrder->customer?->{$document . '_path'})
+                                    <a class="block text-sm text-blue-600 underline" href="{{ route('customers.document', [$salesOrder->customer, $document]) }}">Unduh {{ $label }}</a>
+                                @endif
+                            @endforeach
+                        @endif
                     </div>
                 </div>
 

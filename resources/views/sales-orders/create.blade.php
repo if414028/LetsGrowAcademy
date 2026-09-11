@@ -29,7 +29,7 @@
             </div>
         @endif
 
-        <form method="POST" action="{{ route('sales-orders.store') }}" class="mt-6">
+        <form method="POST" action="{{ route('sales-orders.store') }}" enctype="multipart/form-data" class="mt-6">
             @csrf
 
             <div class="grid grid-cols-1 gap-6 lg:grid-cols-12 items-stretch">
@@ -185,10 +185,11 @@
                 <div class="lg:col-span-4 space-y-6">
 
                     {{-- Customer --}}
-                    <div class="rounded-2xl border bg-white p-5" x-data="customerPicker()" x-init="init()">
+                    <div class="rounded-2xl border bg-white p-5" x-data="customerPicker()" @hp-changed.window="hp = $event.detail">
                         <h2 class="text-sm font-semibold text-gray-900">Customer</h2>
 
                         <input type="hidden" name="customer_id" :value="selectedId">
+                        <input type="hidden" name="customer_previous_hp_id" :value="owner?.health_planner_id || ''">
 
                         <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div class="relative md:col-span-2">
@@ -222,6 +223,36 @@
                                         otomatis saat submit.</span>
                                 </div>
                             </div>
+
+                            <div class="md:col-span-2 rounded-xl bg-blue-50 p-3 text-sm text-blue-900">
+                                <div class="font-medium">Health Planner customer pada SO ini</div>
+                                <div x-text="hp.id ? hp.label + ' • ID: ' + (hp.code || hp.id) : 'Pilih Health Planner pada Order Info.'"></div>
+                            </div>
+                            <div x-cloak x-show="owner?.health_planner_id && hp.id && String(owner.health_planner_id) !== String(hp.id)"
+                                role="alert" class="md:col-span-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                                Customer ini sebelumnya milik <strong x-text="owner?.health_planner_name"></strong>
+                                (ID: <span x-text="owner?.health_planner_code || owner?.health_planner_id"></span>).
+                                Dengan membuat SO ini, Anda setuju memindahkan customer ke
+                                <strong x-text="hp.label"></strong> (ID: <span x-text="hp.code || hp.id"></span>).
+                            </div>
+                            <div>
+                                <label for="customer_religion" class="text-xs font-medium text-gray-600">Agama (Opsional)</label>
+                                <input id="customer_religion" name="customer_religion" x-model="religion" maxlength="100"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label for="customer_unit_serial_number" class="text-xs font-medium text-gray-600">Nomor Seri Unit (Opsional)</label>
+                                <input id="customer_unit_serial_number" name="customer_unit_serial_number" x-model="serialNumber" maxlength="255"
+                                    class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            @foreach (['customer_ktp' => 'Upload KTP', 'customer_unit_barcode' => 'Upload Barcode Unit'] as $field => $label)
+                                <div class="md:col-span-2">
+                                    <label for="{{ $field }}" class="text-xs font-medium text-gray-600">{{ $label }} (Opsional)</label>
+                                    <input id="{{ $field }}" type="file" name="{{ $field }}" accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                        class="mt-1 block w-full text-sm text-gray-600">
+                                    <p class="mt-1 text-xs text-gray-400">JPG, PNG, WEBP, atau PDF. Maksimal 5 MB. Kosongkan untuk mempertahankan dokumen yang sudah ada.</p>
+                                </div>
+                            @endforeach
 
                             <div>
                                 <label for="customer_birth_date" class="text-xs font-medium text-gray-600">
@@ -668,10 +699,20 @@
                 selectedId: @json(old('customer_id', null)),
                 lastFetch: '',
 
-                init() {},
+                religion: @json(old('customer_religion', '')),
+                serialNumber: @json(old('customer_unit_serial_number', '')),
+                owner: null,
+                hp: {id: @json(old('sales_user_id')), label: @json($oldSalesUser?->name ?? ''), code: @json($oldSalesUser?->dst_code)},
+                async init() {
+                    if (this.selectedId && this.query) {
+                        const response = await fetch(`{{ route('customers.search') }}?q=${encodeURIComponent(this.query)}`);
+                        if (response.ok) this.owner = (await response.json()).find(c => String(c.id) === String(this.selectedId)) || null;
+                    }
+                },
 
                 async search() {
                     this.selectedId = null;
+                    this.owner = null;
 
                     const q = (this.query || '').trim();
                     if (q.length < 2) {
@@ -691,12 +732,17 @@
                     if (!res.ok) return;
 
                     const data = await res.json();
+                    if (q !== this.query.trim()) return;
                     this.items = Array.isArray(data) ? data : [];
                     this.open = true;
                 },
 
                 choose(c) {
                     this.selectedId = c.id;
+                    this.owner = c;
+                    this.religion = c.religion || '';
+                    this.serialNumber = c.unit_serial_number || '';
+                    this.lastFetch = '';
                     this.query = c.full_name;
                     this.birthDate = c.date_of_birth || '';
                     this.phone = c.phone_number || '';
@@ -895,6 +941,8 @@
                 hpLoadedForHmId: @json(old('health_manager_id', $oldHealthManager?->id) ?? null),
 
                 init() {
+                    this.$watch('selectedHpId', () => this.publishHp());
+                    this.$watch('hpQuery', () => this.publishHp());
                     // kalau page reload karena validation error & HM sudah ada, load list HP
                     if (this.selectedHmId) {
                         this.ensureHpLoaded().then(() => this.filterHp());
@@ -948,6 +996,11 @@
 
                     await this.ensureHpLoaded();
                     this.filterHp();
+                },
+
+                publishHp() {
+                    const selected = this.hpAll.find(u => String(u.id) === String(this.selectedHpId));
+                    this.$dispatch('hp-changed', {id: this.selectedHpId, label: this.hpQuery, code: selected?.dst_code || ''});
                 },
 
                 resetHp() {

@@ -213,6 +213,12 @@ class SalesOrderController extends Controller
             'customer_phone' => ['nullable', 'string', 'max:30'],
             'customer_address' => ['required', 'string', 'max:500'],
 
+            'customer_religion' => ['nullable', 'string', 'max:100'],
+            'customer_unit_serial_number' => ['nullable', 'string', 'max:255'],
+            'customer_ktp' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'customer_unit_barcode' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'customer_previous_hp_id' => ['nullable', 'integer'],
+
             // order fields
             'key_in_at' => ['nullable', 'date'],
             'install_date' => [
@@ -326,7 +332,7 @@ class SalesOrderController extends Controller
                 : (int) $authUser->id;
 
             // CUSTOMER: pilih existing / create baru
-            $customerId = $this->resolveCustomerId($validated);
+            $customerId = $this->resolveCustomerForNewOrder($validated, $salesUserId);
 
             // install_date: simplify by status
             $installDate = null;
@@ -586,7 +592,7 @@ class SalesOrderController extends Controller
                 ? (int) $validated['sales_user_id']
                 : (int) $authUser->id;
 
-            $customerId = $this->resolveCustomerId($validated, true);
+            $customerId = $this->resolveCustomerId($validated, true, $salesUserId);
 
             // install_date: simple by status
             $installDate = null;
@@ -726,7 +732,54 @@ class SalesOrderController extends Controller
         }
     }
 
-    private function resolveCustomerId(array $validated, bool $allowUpdateExisting = false): int
+    private function resolveCustomerForNewOrder(array $data, int $salesUserId): int
+    {
+        $name = trim($data['customer_name']);
+        $phone = trim((string) ($data['customer_phone'] ?? ''));
+        $query = Customer::query()->lockForUpdate();
+        $customer = !empty($data['customer_id'])
+            ? $query->findOrFail($data['customer_id'])
+            : $query->whereRaw('LOWER(full_name) = ?', [mb_strtolower($name)])
+                ->when($phone !== '', fn ($q) => $q->where('phone_number', $phone))->first();
+
+        if ($customer && $customer->health_planner_id && (int) $customer->health_planner_id !== $salesUserId
+            && (empty($data['customer_id']) || (int) ($data['customer_previous_hp_id'] ?? 0) !== (int) $customer->health_planner_id)) {
+            $owner = $customer->healthPlanner;
+            $label = $owner?->full_name ?: $owner?->name ?: 'HP sebelumnya';
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'customer_id' => "Customer ini milik {$label}. Pilih ulang customer dari dropdown untuk melihat dan menyetujui perpindahan HP saat membuat SO.",
+            ]);
+        }
+
+        app(\App\Services\CustomerOwnership::class)->validateOwner($salesUserId, $customer?->id, 'sales_user_id');
+        $customer ??= new Customer();
+        $customer->fill([
+            'full_name' => $name,
+            'phone_number' => $data['customer_phone'] ?? null,
+            'address' => $data['customer_address'],
+            'health_planner_id' => $salesUserId,
+        ]);
+        foreach (['customer_birth_date' => 'date_of_birth', 'customer_religion' => 'religion',
+            'customer_unit_serial_number' => 'unit_serial_number'] as $input => $column) {
+            if (filled($data[$input] ?? null)) {
+                $customer->$column = $data[$input];
+            }
+        }
+        foreach (['customer_ktp' => 'ktp_path', 'customer_unit_barcode' => 'unit_barcode_path'] as $input => $column) {
+            if (!empty($data[$input])) {
+                $path = $data[$input]->store('customers', 'local');
+                if (!$path) {
+                    throw new \RuntimeException('Upload dokumen customer gagal.');
+                }
+                $customer->$column = $path;
+            }
+        }
+        $customer->save();
+
+        return (int) $customer->id;
+    }
+
+    private function resolveCustomerId(array $validated, bool $allowUpdateExisting = false, ?int $salesUserId = null): int
     {
         $customerId = $validated['customer_id'] ?? null;
 
@@ -769,7 +822,11 @@ class SalesOrderController extends Controller
             return (int) $existing->id;
         }
 
+        if ($salesUserId) {
+            app(\App\Services\CustomerOwnership::class)->validateOwner($salesUserId, null, 'sales_user_id');
+        }
         $customer = Customer::create([
+            'health_planner_id' => $salesUserId,
             'full_name' => $name,
             'date_of_birth' => $validated['customer_birth_date'] ?? null,
             'phone_number' => $validated['customer_phone'] ?? null,
