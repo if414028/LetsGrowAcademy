@@ -114,6 +114,17 @@
             </div>
 
             @if (!$isHP)
+                <details class="group mt-4">
+                    <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-100 px-4 py-3 text-sm font-semibold text-orange-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 [&::-webkit-details-marker]:hidden">
+                        <span>{{ $soDeactivationWarnings->count() }} Health Planner dalam peringatan</span>
+                        <span class="flex items-center gap-2">
+                            <span class="group-open:hidden">Lihat daftar</span>
+                            <span class="hidden group-open:inline">Tutup daftar</span>
+                            <svg class="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6" />
+                            </svg>
+                        </span>
+                    </summary>
                 <div class="mt-4 -mx-6 sm:mx-0 overflow-x-auto">
                     <div class="px-6 sm:px-0">
                         <table class="min-w-[720px] w-full text-sm">
@@ -165,8 +176,65 @@
                         *List ini menampilkan seluruh Health Planner.
                     </p>
                 @endif
+                </details>
             @endif
         </div>
+    @endif
+
+    @if ($inactiveDownlines->isNotEmpty())
+        <section class="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-sm" aria-labelledby="inactive-downlines-heading">
+            <div class="flex items-start justify-between gap-4">
+                <div>
+                    <h3 id="inactive-downlines-heading" class="text-lg font-bold text-gray-800">User Nonaktif</h3>
+                    <p class="mt-1 text-sm text-gray-600">
+                        {{ $authUser->hasAnyRole(['Admin', 'Head Admin']) ? 'Daftar seluruh user yang berstatus nonaktif.' : 'Daftar downline Anda yang berstatus nonaktif, termasuk downline tidak langsung.' }}
+                    </p>
+                </div>
+                <span class="rounded-lg border border-gray-300 bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-700">Inactive</span>
+            </div>
+
+            <details class="group mt-4">
+                <summary class="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-300 bg-gray-100 px-4 py-3 text-sm font-semibold text-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600 [&::-webkit-details-marker]:hidden">
+                    <span>{{ $inactiveDownlines->count() }} user nonaktif</span>
+                    <span class="flex items-center gap-2">
+                        <span class="group-open:hidden">Lihat daftar</span>
+                        <span class="hidden group-open:inline">Tutup daftar</span>
+                        <svg class="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6 9 6 6 6-6" />
+                        </svg>
+                    </span>
+                </summary>
+                <div class="mt-4 overflow-x-auto">
+                    <table class="min-w-[720px] w-full text-sm">
+                        <thead class="text-gray-600">
+                            <tr class="border-b border-gray-300">
+                                <th class="py-2 text-left font-semibold">User</th>
+                                <th class="py-2 text-left font-semibold">Role</th>
+                                <th class="py-2 text-left font-semibold">Health Manager</th>
+                                <th class="py-2 text-left font-semibold">DST</th>
+                                <th class="py-2 text-left font-semibold">Status</th>
+                                <th class="py-2 text-left font-semibold">Tanggal Nonaktif</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($inactiveDownlines as $downline)
+                                <tr class="border-b border-gray-200">
+                                    <td class="py-2 pr-4">
+                                        <div class="font-semibold text-gray-800">{{ $downline->name }}</div>
+                                        <div class="text-xs text-gray-600">{{ $downline->email }}</div>
+                                    </td>
+                                    <td class="py-2 pr-4 text-gray-600">{{ $downline->roles->pluck('name')->join(', ') ?: '-' }}</td>
+                                    <td class="py-2 pr-4 text-gray-600">{{ $downline->health_manager_name }}</td>
+                                    <td class="whitespace-nowrap py-2 pr-4 text-gray-600">{{ $downline->dst_code ?? '-' }}</td>
+                                    <td class="py-2 font-semibold text-gray-700">Inactive</td>
+                                    <td class="whitespace-nowrap py-2 pl-4 text-gray-600">{{ $downline->deactivated_at?->translatedFormat('d M Y') ?? 'Belum tercatat' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
     @endif
 
     {{-- Birthday celebration section --}}

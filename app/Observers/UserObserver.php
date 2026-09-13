@@ -8,6 +8,15 @@ use Illuminate\Validation\ValidationException;
 
 class UserObserver
 {
+    public function saving(User $user): void
+    {
+        if ($user->isDirty('status')) {
+            $user->deactivated_at = strcasecmp((string) $user->status, 'Inactive') === 0
+                ? now()
+                : null;
+        }
+    }
+
     public function updating(User $user): void
     {
         if (!$this->becomingInactivePlanner($user)) return;

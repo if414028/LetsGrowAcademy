@@ -72,6 +72,20 @@ class DashboardController extends Controller
         $descendantIds = $this->getAllDescendantUserIds((int) $user->id);
         $scopeUserIds = array_values(array_unique(array_merge([(int) $user->id], $descendantIds)));
 
+        $inactiveDownlinesQuery = User::query()
+            ->where('status', 'Inactive')
+            ->where('id', '!=', $user->id)
+            ->with('roles');
+
+        if (!$isAdminOrHead) {
+            $inactiveDownlinesQuery->whereIn('id', $descendantIds);
+        }
+
+        $inactiveDownlines = $inactiveDownlinesQuery->orderBy('name')->get()->map(function ($downline) {
+            $downline->health_manager_name = $this->nearestHealthManagerName((int) $downline->id) ?? '-';
+            return $downline;
+        });
+
         // ======================================
         // HELPER HITUNG UNITS
         // Bundle parent qty sudah berisi total child aktif; child/cancelled row tidak dihitung.
@@ -471,6 +485,7 @@ class DashboardController extends Controller
         }
 
         return view('dashboard', compact(
+            'inactiveDownlines',
             'soDeactivationWarnings',
             'selfWarning',
             'totalUnitsSold',

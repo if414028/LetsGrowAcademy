@@ -60,6 +60,7 @@ class User extends Authenticatable
             'join_date' => 'date',
             'hm_since' => 'date',
             'last_login_at' => 'datetime',
+            'deactivated_at' => 'datetime',
         ];
     }
 
