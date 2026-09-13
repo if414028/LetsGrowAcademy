@@ -20,34 +20,7 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
-        // window warning: 5-6 bulan
-        $warnTo   = now()->subMonths(5);
-        $warnFrom = now()->subMonths(6);
-
-        $lastSoSub = SalesOrder::query()
-            ->where('status', 'selesai')
-            ->whereNotNull('install_date')
-            ->select('sales_user_id', DB::raw('MAX(install_date) as last_install_at'))
-            ->groupBy('sales_user_id');
-
-        $warningsQuery = User::query()
-            ->role('Health Planner')
-            ->where('users.status', 'Active')
-            ->leftJoinSub($lastSoSub, 'so', function ($join) {
-                $join->on('so.sales_user_id', '=', 'users.id');
-            })
-            ->select([
-                'users.id',
-                'users.name',
-                'users.email',
-                'users.dst_code',
-                DB::raw('COALESCE(so.last_install_at, users.created_at) as last_activity_at'),
-            ])
-            ->whereRaw(
-                'COALESCE(so.last_install_at, users.created_at) <= ? AND COALESCE(so.last_install_at, users.created_at) > ?',
-                [$warnTo, $warnFrom]
-            )
-            ->orderByRaw('COALESCE(so.last_install_at, users.created_at) asc');
+        $warningsQuery = \App\Services\SalesActivity::planners();
 
         // =========================
         // Scope by role
@@ -64,12 +37,15 @@ class DashboardController extends Controller
             $warningsQuery->whereRaw('1=0');
         }
 
-        $soDeactivationWarnings = $warningsQuery->get()->map(function ($u) {
-            $u->last_activity_at = \Carbon\Carbon::parse($u->last_activity_at);
-            $u->deactivate_at = $u->last_activity_at->copy()->addMonths(6);
+        $today = today();
+        $soDeactivationWarnings = $warningsQuery->get()->filter(function ($u) use ($today) {
+            return \App\Services\SalesActivity::lastActivity($u)->addMonths(5)->lte($today);
+        })->map(function ($u) {
+            $u->last_activity_at = \App\Services\SalesActivity::lastActivity($u);
+            $u->deactivate_at = \App\Services\SalesActivity::deactivateAt($u);
             $u->health_manager_name = $this->nearestHealthManagerName((int) $u->id) ?? '-';
             return $u;
-        });
+        })->sortBy('last_activity_at')->values();
 
         $selfWarning = $user->hasRole('Health Planner')
             ? $soDeactivationWarnings->first()

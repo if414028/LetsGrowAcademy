@@ -10,3 +10,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 Schedule::command('contests:end-expired')->dailyAt('00:10');
 
+
+Schedule::command('users:deactivate-inactive-planners')->hourly()->withoutOverlapping();
