@@ -256,6 +256,8 @@ class UserController extends Controller
             $user->update(['hm_since' => now()->toDateString()]);
         }
 
+        \App\Services\HealthManagerPeriods::sync($user, false);
+
         UserHierarchy::create([
             'parent_user_id' => $referrer->id,
             'child_user_id' => $user->id,
@@ -442,6 +444,8 @@ class UserController extends Controller
                     $user->update(['hm_since' => now()->toDateString()]);
                 }
             }
+
+            \App\Services\HealthManagerPeriods::sync($user, $wasHealthManager);
 
             UserHierarchy::updateOrCreate(
                 ['child_user_id' => $user->id],
@@ -696,6 +700,8 @@ class UserController extends Controller
                     if ($finalRole === 'Health Manager' && !$user->hm_since) {
                         $user->update(['hm_since' => now()->toDateString()]);
                     }
+
+                    \App\Services\HealthManagerPeriods::sync($user, false);
 
                     UserHierarchy::create([
                         'parent_user_id' => $referrer->id,

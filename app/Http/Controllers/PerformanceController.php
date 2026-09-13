@@ -1701,8 +1701,8 @@ class PerformanceController extends Controller
         $hmTeamScope = HealthManagerNsScope::resolve($healthManager);
         $scopeUserIds = $hmTeamScope['scope_ids'];
         $downlineUserIds = $scopeUserIds->reject(fn($id) => (int) $id === (int) $healthManager->id)->values();
-        $promotedHmMonths = $hmTeamScope['promoted_hm_months'];
-        $exclusionMonthByUser = $hmTeamScope['exclusion_months']->all();
+        $hmPeriods = $hmTeamScope['hm_periods'];
+        $exclusionPeriods = $hmTeamScope['exclusion_periods'];
 
         $currentHealthPlannerIds = User::query()
             ->whereIn('id', $downlineUserIds)
@@ -1727,17 +1727,14 @@ class PerformanceController extends Controller
         $activeHealthPlannersByMonth = [];
         foreach ($monthlyUnitsRows as $row) {
             $salesUserId = (int) $row->sales_user_id;
-            $exclusionMonth = $exclusionMonthByUser[$salesUserId] ?? null;
-            if ($exclusionMonth !== null && $row->month_key >= $exclusionMonth) {
+            if (HealthManagerNsScope::excluded($exclusionPeriods[$salesUserId] ?? [], $row->month_key)) {
                 continue;
             }
 
             $monthlyUnits[$row->month_key] = ($monthlyUnits[$row->month_key] ?? 0) + (int) $row->units;
 
-            $wasHealthPlannerBeforePromotion = $promotedHmMonths->has($salesUserId)
-                && $row->month_key < $promotedHmMonths->get($salesUserId);
-            $isEligibleHealthPlanner = $currentHealthPlannerIds->has($salesUserId)
-                || $wasHealthPlannerBeforePromotion;
+            $isEligibleHealthPlanner = !HealthManagerNsScope::excluded($hmPeriods[$salesUserId] ?? [], $row->month_key)
+                && ($currentHealthPlannerIds->has($salesUserId) || isset($hmPeriods[$salesUserId]));
 
             if ($isEligibleHealthPlanner && (int) $row->units > 0) {
                 $activeHealthPlannersByMonth[$row->month_key][$salesUserId] = true;

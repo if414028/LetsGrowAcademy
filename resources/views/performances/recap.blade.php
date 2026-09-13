@@ -155,7 +155,7 @@
 
                     <p class="mt-4 text-sm text-gray-500">
                         Achievement menghitung NS selesai milik HM dan seluruh downline-nya. Shortage menunjukkan sisa kumulatif menuju 120 NS.
-                        Mulai bulan seorang downline dipromosikan menjadi HM, NS miliknya dan seluruh tim barunya tidak lagi dihitung ke HM di atasnya.
+                        Selama periode jabatan HM, mulai bulan promosi sampai sebelum bulan demosi, NS miliknya dan timnya tidak dihitung ke HM di atasnya. Mulai bulan demosi, NS dapat dihitung kembali tanpa mengubah bulan sebelumnya.
                         Minimum achievement bulanan adalah {{ $recap['monthly_minimum'] }} NS; bulan di bawah minimum ditandai merah.
                         Setelah target 120 NS tercapai, seluruh sisa bulan dalam periode ditandai hijau.
                     </p>
