@@ -3,7 +3,7 @@
         <div>
             <p class="text-sm font-bold uppercase tracking-[0.18em] text-amber-600">Admin</p>
             <h1 class="mt-2 text-3xl font-extrabold tracking-tight">Verifikasi Subscription</h1>
-            <p class="mt-2 text-sm text-slate-500">Periksa transfer manual lalu aktifkan akses user.</p>
+            <p class="mt-2 text-sm text-slate-500">Pantau pembayaran Midtrans dan kelola konfirmasi transfer lama.</p>
         </div>
         <div class="flex flex-wrap gap-2">
             @foreach (['' => 'Semua', 'pending' => 'Menunggu', 'active' => 'Aktif', 'rejected' => 'Ditolak'] as $value => $label)
@@ -20,7 +20,7 @@
         <div class="overflow-x-auto">
             <table class="min-w-[900px] w-full text-left text-sm">
                 <thead class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-                    <tr><th class="px-5 py-4">User</th><th class="px-5 py-4">Paket</th><th class="px-5 py-4">Bukti transfer</th><th class="px-5 py-4">Diajukan</th><th class="px-5 py-4">Status</th><th class="px-5 py-4">Masa aktif</th><th class="px-5 py-4 text-right">Tindakan</th></tr>
+                    <tr><th class="px-5 py-4">User</th><th class="px-5 py-4">Paket</th><th class="px-5 py-4">Pembayaran</th><th class="px-5 py-4">Diajukan</th><th class="px-5 py-4">Status</th><th class="px-5 py-4">Masa aktif</th><th class="px-5 py-4 text-right">Tindakan</th></tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse ($subscriptions as $subscription)
@@ -28,7 +28,11 @@
                             <td class="px-5 py-4"><a href="{{ route('users.show', $subscription->user) }}" class="font-bold text-slate-900 hover:text-blue-600">{{ $subscription->user->name }}</a><p class="mt-1 text-xs text-slate-500">{{ $subscription->user->email }}</p></td>
                             <td class="px-5 py-4"><p class="font-bold">{{ $subscription->duration_months }} bulan</p><p class="mt-1 text-xs text-slate-500">Rp {{ number_format($subscription->amount, 0, ',', '.') }}</p></td>
                             <td class="px-5 py-4">
-                                @if ($subscription->payment_proof)
+                                @if ($subscription->midtrans_order_id)
+                                    <p class="font-bold text-slate-800">Midtrans</p>
+                                    <p class="mt-1 text-xs text-slate-500">{{ ucfirst($subscription->payment_status) }}</p>
+                                    <p class="mt-1 max-w-40 truncate font-mono text-[10px] text-slate-400" title="{{ $subscription->midtrans_order_id }}">{{ $subscription->midtrans_order_id }}</p>
+                                @elseif ($subscription->payment_proof)
                                     @php
                                         $proofUrl = asset('storage/'.$subscription->payment_proof);
                                         $proofIsImage = in_array(strtolower(pathinfo($subscription->payment_proof, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp']);
@@ -49,13 +53,15 @@
                             <td class="px-5 py-4"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $subscription->status === 'active' ? 'bg-emerald-100 text-emerald-700' : ($subscription->status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700') }}">{{ ucfirst($subscription->status) }}</span></td>
                             <td class="px-5 py-4 text-xs text-slate-600">{{ $subscription->starts_at ? $subscription->starts_at->translatedFormat('d M Y').' – '.$subscription->ends_at->translatedFormat('d M Y') : '-' }}</td>
                             <td class="px-5 py-4">
-                                @if ($subscription->status === 'pending')
+                                @if ($subscription->status === 'pending' && ! $subscription->midtrans_order_id)
                                     <div class="flex justify-end gap-2">
                                         <form method="POST" action="{{ route('admin.subscriptions.approve', $subscription) }}">@csrf @method('PATCH')<button class="min-h-10 rounded-xl bg-emerald-600 px-4 text-xs font-bold text-white hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-500">Setujui</button></form>
                                         <form method="POST" action="{{ route('admin.subscriptions.reject', $subscription) }}" onsubmit="return confirm('Tolak permintaan subscription ini?')">@csrf @method('PATCH')<button class="min-h-10 rounded-xl border border-red-200 px-4 text-xs font-bold text-red-600 hover:bg-red-50 focus:ring-2 focus:ring-red-500">Tolak</button></form>
                                     </div>
-                                @else
+                                @elseif (! $subscription->midtrans_order_id)
                                     <p class="text-right text-xs text-slate-400">{{ $subscription->reviewer?->name ?? '-' }}</p>
+                                @else
+                                    <p class="text-right text-xs text-slate-400">Otomatis</p>
                                 @endif
                             </td>
                         </tr>

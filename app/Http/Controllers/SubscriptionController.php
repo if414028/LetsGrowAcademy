@@ -3,12 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Models\Subscription;
+use App\Services\MidtransPaymentUpdater;
+use App\Services\MidtransService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class SubscriptionController extends Controller
 {
+    public function __construct(
+        private readonly MidtransService $midtrans,
+        private readonly MidtransPaymentUpdater $paymentUpdater,
+    ) {}
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -31,30 +41,71 @@ class SubscriptionController extends Controller
                 'integer',
                 Rule::in(config('subscription.durations')),
             ],
-            'payment_proof' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
         ]);
 
         $user = $request->user();
 
-        if ($user->pendingSubscription()) {
-            return back()->with('error', 'Permintaan subscription kamu masih menunggu pengecekan admin.');
+        if (! config('midtrans.server_key') || ! config('midtrans.client_key')) {
+            return back()->with('error', 'Pembayaran Midtrans belum dikonfigurasi. Hubungi administrator.');
+        }
+
+        if ($pending = $user->pendingSubscription()) {
+            if ($pending->snap_token) {
+                return back()->with('snap_token', $pending->snap_token);
+            }
+
+            return back()->with('error', 'Pembayaran sebelumnya masih menunggu penyelesaian.');
         }
 
         $months = (int) $validated['duration_months'];
-        $paymentProof = $request->file('payment_proof')->store('subscriptions/payment-proofs', 'public');
-
-        Subscription::create([
+        $subscription = Subscription::create([
             'user_id' => $user->id,
             'duration_months' => $months,
             'amount' => $months * (int) config('subscription.monthly_price'),
-            'payment_proof' => $paymentProof,
+            'payment_status' => 'pending',
             'status' => 'pending',
             'submitted_at' => now(),
         ]);
 
-        return redirect()
-            ->route('subscriptions.index')
-            ->with('success', 'Konfirmasi transfer terkirim. Admin akan memeriksa pembayaran kamu.');
+        $orderId = 'SUB-'.$subscription->id.'-'.str()->uuid();
+
+        try {
+            $snapToken = $this->midtrans->createSnapToken([
+                'transaction_details' => [
+                    'order_id' => $orderId,
+                    'gross_amount' => (int) $subscription->amount,
+                ],
+                'item_details' => [[
+                    'id' => 'subscription-'.$months.'m',
+                    'price' => (int) $subscription->amount,
+                    'quantity' => 1,
+                    'name' => "Subscription {$months} bulan",
+                ]],
+                'customer_details' => [
+                    'first_name' => $user->name,
+                    'email' => $user->email,
+                    'phone' => $user->phone_number,
+                ],
+                'callbacks' => [
+                    'finish' => config('midtrans.finish_url'),
+                ],
+            ]);
+        } catch (Throwable $exception) {
+            $subscription->delete();
+            Log::error('Failed to create Midtrans Snap token.', [
+                'user_id' => $user->id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return back()->with('error', 'Checkout belum dapat dibuat. Silakan coba lagi.');
+        }
+
+        $subscription->update([
+            'midtrans_order_id' => $orderId,
+            'snap_token' => $snapToken,
+        ]);
+
+        return redirect()->route('subscriptions.index')->with('snap_token', $snapToken);
     }
 
     public function adminIndex(Request $request)
@@ -71,8 +122,84 @@ class SubscriptionController extends Controller
         return view('subscriptions.admin-index', compact('subscriptions', 'status'));
     }
 
+    public function syncPayment(Request $request, Subscription $subscription): JsonResponse
+    {
+        abort_unless($subscription->user_id === $request->user()->id, 403);
+        abort_unless($subscription->midtrans_order_id, 422, 'This is not a Midtrans payment.');
+
+        try {
+            $status = $this->midtrans->transactionStatus($subscription->midtrans_order_id);
+            $grossAmount = (int) round((float) ($status->gross_amount ?? 0));
+            abort_unless($grossAmount === (int) $subscription->amount, 422, 'Payment amount does not match.');
+
+            $subscription = $this->paymentUpdater->update($subscription, $status);
+        } catch (Throwable $exception) {
+            Log::warning('Unable to sync Midtrans transaction status.', [
+                'subscription_id' => $subscription->id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return response()->json(['message' => 'Status pembayaran belum dapat diperbarui.'], 503);
+        }
+
+        if ($subscription->payment_status === 'paid') {
+            $request->session()->flash('payment_success', true);
+        }
+
+        return response()->json([
+            'payment_status' => $subscription->payment_status,
+            'subscription_status' => $subscription->status,
+        ]);
+    }
+
+    public function finishPayment(Request $request)
+    {
+        $orderId = $request->string('order_id')->toString();
+        $subscription = $request->user()->subscriptions()
+            ->where('midtrans_order_id', $orderId)
+            ->first();
+
+        if (! $subscription) {
+            return redirect()->route('subscriptions.index')
+                ->with('error', 'Transaksi pembayaran tidak ditemukan.');
+        }
+
+        try {
+            $status = $this->midtrans->transactionStatus($orderId);
+            $grossAmount = (int) round((float) ($status->gross_amount ?? 0));
+            abort_unless($grossAmount === (int) $subscription->amount, 422, 'Payment amount does not match.');
+
+            $subscription = $this->paymentUpdater->update($subscription, $status);
+        } catch (Throwable $exception) {
+            Log::warning('Unable to finish Midtrans payment.', [
+                'subscription_id' => $subscription->id,
+                'message' => $exception->getMessage(),
+            ]);
+
+            return redirect()->route('subscriptions.index')
+                ->with('error', 'Status pembayaran belum dapat diperbarui. Silakan muat ulang halaman.');
+        }
+
+        $redirect = redirect()->route('subscriptions.index')->with(
+            $subscription->payment_status === 'paid' ? 'success' : 'error',
+            $subscription->payment_status === 'paid'
+                ? 'Pembayaran berhasil. Subscription kamu sudah aktif.'
+                : 'Pembayaran belum berhasil dikonfirmasi.',
+        );
+
+        if ($subscription->payment_status === 'paid') {
+            $redirect->with('payment_success', true);
+        }
+
+        return $redirect;
+    }
+
     public function approve(Request $request, Subscription $subscription)
     {
+        if ($subscription->midtrans_order_id) {
+            return back()->with('error', 'Pembayaran Midtrans hanya dapat diaktifkan oleh notifikasi pembayaran yang valid.');
+        }
+
         if ($subscription->status !== 'pending') {
             return back()->with('error', 'Permintaan ini sudah diproses.');
         }
@@ -96,6 +223,10 @@ class SubscriptionController extends Controller
 
     public function reject(Request $request, Subscription $subscription)
     {
+        if ($subscription->midtrans_order_id) {
+            return back()->with('error', 'Status pembayaran Midtrans diperbarui otomatis oleh Midtrans.');
+        }
+
         if ($subscription->status !== 'pending') {
             return back()->with('error', 'Permintaan ini sudah diproses.');
         }

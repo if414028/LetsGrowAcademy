@@ -4,12 +4,12 @@ use App\Http\Controllers\BundleController;
 use App\Http\Controllers\ContestController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MidtransWebhookController;
 use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\ProductController;
-use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SalesOrderController;
-use App\Http\Controllers\UserController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -27,6 +27,9 @@ Route::get('/cody-services', function () {
 Route::get('/support', function () {
     return view('support');
 })->name('support');
+
+Route::post('/payments/midtrans/notification', [MidtransWebhookController::class, 'handle'])
+    ->name('payments.midtrans.notification');
 
 Route::get('/produk/air-purifier', function () {
     return view('products-public.air-purifier');
@@ -55,7 +58,6 @@ Route::get('/about-coway/{page}', function (string $page) {
     ]);
 })->name('about-coway.show');
 
-
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', 'active'])
     ->name('dashboard');
@@ -75,7 +77,11 @@ Route::middleware('auth', 'active')->group(function () {
     });
 
     Route::get('/subscription', [SubscriptionController::class, 'index'])->name('subscriptions.index');
-    Route::post('/subscription/confirm-transfer', [SubscriptionController::class, 'store'])->name('subscriptions.store');
+    Route::get('/subscription/payment-finish', [SubscriptionController::class, 'finishPayment'])
+        ->name('subscriptions.payment-finish');
+    Route::post('/subscription/checkout', [SubscriptionController::class, 'store'])->name('subscriptions.store');
+    Route::post('/subscription/{subscription}/sync-payment', [SubscriptionController::class, 'syncPayment'])
+        ->name('subscriptions.sync-payment');
 
     Route::middleware('role:Admin|Head Admin')->group(function () {
         Route::get('/admin/subscriptions', [SubscriptionController::class, 'adminIndex'])->name('admin.subscriptions.index');
@@ -91,7 +97,6 @@ Route::middleware('auth', 'active')->group(function () {
     Route::get('/profile', function (\Illuminate\Http\Request $request) {
         return redirect()->route('users.show', $request->user()->id);
     })->name('profile');
-
 
     // Admin-only: manajemen user (kecuali show karena sudah di atas)
     Route::middleware('role:Admin|Head Admin')->group(function () {
@@ -236,4 +241,4 @@ Route::middleware('auth', 'active')->group(function () {
     Route::put('/bundles/{bundle}', [BundleController::class, 'update'])->name('bundles.update');
 });
 
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';

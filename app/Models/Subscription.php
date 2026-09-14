@@ -13,6 +13,13 @@ class Subscription extends Model
         'user_id',
         'duration_months',
         'amount',
+        'midtrans_order_id',
+        'midtrans_transaction_id',
+        'payment_status',
+        'payment_type',
+        'snap_token',
+        'paid_at',
+        'payment_payload',
         'payment_proof',
         'status',
         'submitted_at',
@@ -27,6 +34,8 @@ class Subscription extends Model
     {
         return [
             'submitted_at' => 'datetime',
+            'paid_at' => 'datetime',
+            'payment_payload' => 'array',
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'reviewed_at' => 'datetime',
