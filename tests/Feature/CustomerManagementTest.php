@@ -27,17 +27,21 @@ class CustomerManagementTest extends TestCase
         return $user;
     }
 
-    public function test_all_roles_only_list_their_own_customers_but_only_admins_can_edit(): void
+    public function test_all_roles_list_their_own_and_downline_customers_but_not_unrelated_customers(): void
     {
         $owner = $this->user('Health Planner');
         Customer::create(['full_name' => 'Other Customer', 'health_planner_id' => $owner->id]);
         foreach (['Admin', 'Head Admin', 'Sales Manager', 'Health Manager', 'Health Planner'] as $role) {
             $user = $this->user($role);
             $ownCustomer = Customer::create(['full_name' => "{$role} Customer", 'health_planner_id' => $user->id]);
+            $downline = $this->user('Health Planner');
+            DB::table('user_hierarchies')->insert(['parent_user_id' => $user->id, 'child_user_id' => $downline->id]);
+            Customer::create(['full_name' => "{$role} Downline Customer", 'health_planner_id' => $downline->id]);
             $this->actingAs($user);
             $response = $this->get(route('customers.index'))
                 ->assertOk()
                 ->assertSee("{$role} Customer")
+                ->assertSee("{$role} Downline Customer")
                 ->assertDontSee('Other Customer');
             if (in_array($role, ['Admin', 'Head Admin'])) {
                 $response->assertSee('Edit');

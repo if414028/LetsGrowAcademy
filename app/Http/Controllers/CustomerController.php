@@ -50,8 +50,13 @@ class CustomerController extends Controller
     public function index(Request $request)
     {
         $search = trim((string) $request->query('q', ''));
+        $scopeUserIds = $request->user()->downlineUserIds()
+            ->push($request->user()->id)
+            ->unique()
+            ->values();
+
         $customers = Customer::with('owner.roles')
-            ->where('health_planner_id', $request->user()->id)
+            ->whereIn('health_planner_id', $scopeUserIds)
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('full_name', 'like', "%{$search}%")
