@@ -86,10 +86,20 @@
                         </span>
                         <h2 class="mt-4 text-2xl font-extrabold">Akses premium kamu aktif</h2>
                         <p class="mt-2 text-sm text-slate-300">Berlaku sampai {{ $activeSubscription->ends_at->translatedFormat('d F Y, H.i') }} WIB</p>
+                        @if (auth()->user()->whatsapp_url)
+                            <p class="mt-3 break-all text-xs font-semibold text-sky-300">{{ route('subscriber-landing.show', auth()->user()->landing_page_slug) }}</p>
+                        @else
+                            <p class="mt-3 text-xs font-semibold text-amber-300">Tambahkan nomor WhatsApp di profil agar landing page dapat dipublikasikan.</p>
+                        @endif
                     </div>
-                    <a href="{{ route('selling-kit.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-400 px-5 py-3 text-sm font-extrabold text-slate-950 transition hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-slate-900">
-                        Buka Selling Kit
-                    </a>
+                    <div class="flex flex-col gap-3 sm:items-end">
+                        @if (auth()->user()->whatsapp_url)
+                            <a href="{{ route('subscriber-landing.show', auth()->user()->landing_page_slug) }}" target="_blank" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-sky-500 px-5 py-3 text-sm font-extrabold text-white transition hover:bg-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:ring-offset-2 focus:ring-offset-slate-900">Buka Landing Page</a>
+                        @endif
+                        <a href="{{ route('selling-kit.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-400 px-5 py-3 text-sm font-extrabold text-slate-950 transition hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-slate-900">
+                            Buka Selling Kit
+                        </a>
+                    </div>
                 </div>
             </section>
         @elseif ($pendingSubscription)

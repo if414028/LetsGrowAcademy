@@ -213,6 +213,53 @@ class SubscriptionTest extends TestCase
         $this->actingAs($user)
             ->get(route('selling-kit.index'))
             ->assertOk()
-            ->assertSee('Selling Kit');
+            ->assertSee('Selling Kit')
+            ->assertSee('Galeri Selling Kit')
+            ->assertSee('Katalog &amp; Edukasi Produk', false)
+            ->assertSee('Panduan Penjualan')
+            ->assertSee('Rekrutmen Health Planner')
+            ->assertSee(route('selling-kit.category', 'katalog-edukasi-produk'), false)
+            ->assertDontSee('Catalog September 2026');
+
+        $this->actingAs($user)
+            ->get(route('selling-kit.category', 'katalog-edukasi-produk'))
+            ->assertOk()
+            ->assertSee('Catalog September 2026')
+            ->assertSee('Waspada Abu Vulkanik');
+
+        $this->actingAs($user)
+            ->get(route('selling-kit.category', 'panduan-penjualan'))
+            ->assertOk()
+            ->assertSee('Customer Confirmation')
+            ->assertSee('Alur Key In');
+
+        $this->actingAs($user)
+            ->get(route('selling-kit.category', 'rekrutmen-health-planner'))
+            ->assertOk()
+            ->assertSee('Alur Rekrut Calon HP')
+            ->assertSee('Brosur LGA September 2026');
+
+        $this->actingAs($user)
+            ->get(route('selling-kit.show', 'customer-confirmation'))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+
+        $this->actingAs($user)
+            ->get(route('selling-kit.download', 'customer-confirmation'))
+            ->assertOk()
+            ->assertDownload('customer-confirmation.pdf');
+    }
+
+    public function test_non_subscriber_cannot_open_selling_kit_document_directly(): void
+    {
+        $user = User::factory()->create(['status' => 'Active']);
+
+        $this->actingAs($user)
+            ->get(route('selling-kit.show', 'customer-confirmation'))
+            ->assertRedirect(route('subscriptions.index'));
+
+        $this->actingAs($user)
+            ->get(route('selling-kit.category', 'panduan-penjualan'))
+            ->assertRedirect(route('subscriptions.index'));
     }
 }

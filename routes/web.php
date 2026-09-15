@@ -8,7 +8,9 @@ use App\Http\Controllers\MidtransWebhookController;
 use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SalesOrderController;
+use App\Http\Controllers\SellingKitController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\SubscriberLandingPageController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -89,9 +91,16 @@ Route::middleware('auth', 'active')->group(function () {
         Route::patch('/admin/subscriptions/{subscription}/reject', [SubscriptionController::class, 'reject'])->name('admin.subscriptions.reject');
     });
 
-    Route::get('/selling-kit', fn () => view('selling-kit.index'))
+    Route::middleware('subscriber')->group(function () {
+        Route::get('/selling-kit', [SellingKitController::class, 'index'])->name('selling-kit.index');
+        Route::get('/selling-kit/category/{category}', [SellingKitController::class, 'category'])->name('selling-kit.category');
+        Route::get('/selling-kit/{document}', [SellingKitController::class, 'show'])->name('selling-kit.show');
+        Route::get('/selling-kit/{document}/download', [SellingKitController::class, 'download'])->name('selling-kit.download');
+    });
+
+    Route::get('/landing-page-produk', [SubscriberLandingPageController::class, 'index'])
         ->middleware('subscriber')
-        ->name('selling-kit.index');
+        ->name('subscriber-landing.index');
 
     // Profile (semua role): redirect ke halaman detail user yang login
     Route::get('/profile', function (\Illuminate\Http\Request $request) {
@@ -242,3 +251,8 @@ Route::middleware('auth', 'active')->group(function () {
 });
 
 require __DIR__.'/auth.php';
+
+// Harus menjadi route terakhir agar slug member tidak mengambil route aplikasi.
+Route::get('/{slug}', [SubscriberLandingPageController::class, 'show'])
+    ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
+    ->name('subscriber-landing.show');

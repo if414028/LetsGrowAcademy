@@ -4,12 +4,22 @@ namespace App\Observers;
 
 use App\Models\{Customer, User};
 use App\Services\CustomerOwnership;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class UserObserver
 {
     public function saving(User $user): void
     {
+        // Sebagian test lama membuat tabel users minimal tanpa menjalankan semua migration.
+        if (Schema::hasColumn($user->getTable(), 'landing_page_slug')
+            && (!$user->landing_page_slug || $user->isDirty(['name', 'dst_code']))) {
+            $user->landing_page_slug = User::uniqueLandingPageSlug(
+                collect([$user->name ?: 'member', $user->dst_code])->filter()->implode('-'),
+                $user->exists ? $user->id : null,
+            );
+        }
+
         if ($user->isDirty('status')) {
             $user->deactivated_at = strcasecmp((string) $user->status, 'Inactive') === 0
                 ? now()

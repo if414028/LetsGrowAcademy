@@ -8,6 +8,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
@@ -34,6 +35,7 @@ class User extends Authenticatable
         'photo',
         'id_card',
         'last_login_at',
+        'landing_page_slug',
     ];
 
     /**
@@ -246,5 +248,21 @@ class User extends Authenticatable
         }
 
         return "https://wa.me/{$clean}";
+    }
+
+    public static function uniqueLandingPageSlug(string $name, ?int $ignoreUserId = null): string
+    {
+        $base = Str::slug($name) ?: 'member';
+        $slug = $base;
+        $suffix = 2;
+
+        while (static::query()
+            ->when($ignoreUserId, fn ($query) => $query->whereKeyNot($ignoreUserId))
+            ->where('landing_page_slug', $slug)
+            ->exists()) {
+            $slug = $base.'-'.$suffix++;
+        }
+
+        return $slug;
     }
 }
