@@ -51,6 +51,7 @@ class CustomerController extends Controller
     {
         $search = trim((string) $request->query('q', ''));
         $customers = Customer::with('owner.roles')
+            ->where('health_planner_id', $request->user()->id)
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('full_name', 'like', "%{$search}%")

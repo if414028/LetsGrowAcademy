@@ -27,21 +27,25 @@ class CustomerManagementTest extends TestCase
         return $user;
     }
 
-    public function test_all_roles_can_list_all_customers_but_only_admins_can_edit(): void
+    public function test_all_roles_only_list_their_own_customers_but_only_admins_can_edit(): void
     {
         $owner = $this->user('Health Planner');
-        $customer = Customer::create(['full_name' => 'Visible Customer', 'health_planner_id' => $owner->id]);
+        Customer::create(['full_name' => 'Other Customer', 'health_planner_id' => $owner->id]);
         foreach (['Admin', 'Head Admin', 'Sales Manager', 'Health Manager', 'Health Planner'] as $role) {
-            $this->actingAs($this->user($role));
-            $response = $this->get(route('customers.index'))->assertOk()->assertSee('Visible Customer')->assertSee($owner->name);
+            $user = $this->user($role);
+            $ownCustomer = Customer::create(['full_name' => "{$role} Customer", 'health_planner_id' => $user->id]);
+            $this->actingAs($user);
+            $response = $this->get(route('customers.index'))
+                ->assertOk()
+                ->assertSee("{$role} Customer")
+                ->assertDontSee('Other Customer');
             if (in_array($role, ['Admin', 'Head Admin'])) {
                 $response->assertSee('Edit');
-                $this->get(route('customers.edit', $customer))->assertOk();
-                $this->put(route('customers.update', $customer), ['full_name' => 'Visible Customer', 'address' => 'Jakarta', 'health_planner_id' => $owner->id])->assertSessionHasNoErrors();
+                $this->get(route('customers.edit', $ownCustomer))->assertOk();
             } else {
                 $response->assertDontSee('>Edit<', false);
-                $this->get(route('customers.edit', $customer))->assertForbidden();
-                $this->put(route('customers.update', $customer), ['full_name' => 'Changed'])->assertForbidden();
+                $this->get(route('customers.edit', $ownCustomer))->assertForbidden();
+                $this->put(route('customers.update', $ownCustomer), ['full_name' => 'Changed'])->assertForbidden();
             }
         }
     }

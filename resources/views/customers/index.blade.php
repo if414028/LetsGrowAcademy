@@ -2,7 +2,7 @@
     <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-semibold text-gray-900">Customer</h1>
-            <p class="text-sm text-gray-500">Daftar semua customer dan HP atau HM pemiliknya.</p>
+            <p class="text-sm text-gray-500">Daftar customer yang menjadi milik Anda.</p>
         </div>
         @hasanyrole('Admin|Head Admin|Health Planner|Health Manager')
             <a href="{{ route('customers.create') }}" class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Tambah Customer</a>
