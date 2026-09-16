@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\MidtransService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery\MockInterface;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class SubscriptionTest extends TestCase
@@ -25,7 +26,7 @@ class SubscriptionTest extends TestCase
                 ->andReturn('sandbox-snap-token');
         });
 
-        $user = User::factory()->create(['status' => 'Active']);
+        $user = $this->eligibleUser();
 
         $response = $this->actingAs($user)->post(route('subscriptions.store'), [
             'duration_months' => 6,
@@ -47,7 +48,7 @@ class SubscriptionTest extends TestCase
     {
         config()->set('midtrans.server_key', 'SB-Mid-server-test');
 
-        $user = User::factory()->create(['status' => 'Active']);
+        $user = $this->eligibleUser();
         $subscription = Subscription::create([
             'user_id' => $user->id,
             'duration_months' => 3,
@@ -119,7 +120,7 @@ class SubscriptionTest extends TestCase
 
     public function test_user_can_sync_cancelled_payment_and_start_over(): void
     {
-        $user = User::factory()->create(['status' => 'Active']);
+        $user = $this->eligibleUser();
         $subscription = Subscription::create([
             'user_id' => $user->id,
             'duration_months' => 6,
@@ -153,7 +154,7 @@ class SubscriptionTest extends TestCase
 
     public function test_finish_redirect_syncs_successful_payment(): void
     {
-        $user = User::factory()->create(['status' => 'Active']);
+        $user = $this->eligibleUser();
         $subscription = Subscription::create([
             'user_id' => $user->id,
             'duration_months' => 6,
@@ -261,5 +262,13 @@ class SubscriptionTest extends TestCase
         $this->actingAs($user)
             ->get(route('selling-kit.category', 'panduan-penjualan'))
             ->assertRedirect(route('subscriptions.index'));
+    }
+
+    private function eligibleUser(): User
+    {
+        $user = User::factory()->create(['status' => 'Active']);
+        $user->assignRole(Role::firstOrCreate(['name' => 'Health Planner']));
+
+        return $user;
     }
 }

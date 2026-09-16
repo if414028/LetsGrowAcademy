@@ -78,17 +78,23 @@ Route::middleware('auth', 'active')->group(function () {
         Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
     });
 
-    Route::get('/subscription', [SubscriptionController::class, 'index'])->name('subscriptions.index');
-    Route::get('/subscription/payment-finish', [SubscriptionController::class, 'finishPayment'])
-        ->name('subscriptions.payment-finish');
-    Route::post('/subscription/checkout', [SubscriptionController::class, 'store'])->name('subscriptions.store');
-    Route::post('/subscription/{subscription}/sync-payment', [SubscriptionController::class, 'syncPayment'])
-        ->name('subscriptions.sync-payment');
+    Route::middleware('role:Health Planner|Health Manager|Sales Manager')->group(function () {
+        Route::get('/subscription', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+        Route::get('/subscription/payment-finish', [SubscriptionController::class, 'finishPayment'])
+            ->name('subscriptions.payment-finish');
+        Route::post('/subscription/checkout', [SubscriptionController::class, 'store'])->name('subscriptions.store');
+        Route::post('/subscription/{subscription}/sync-payment', [SubscriptionController::class, 'syncPayment'])
+            ->name('subscriptions.sync-payment');
+    });
 
     Route::middleware('role:Admin|Head Admin')->group(function () {
         Route::get('/admin/subscriptions', [SubscriptionController::class, 'adminIndex'])->name('admin.subscriptions.index');
         Route::patch('/admin/subscriptions/{subscription}/approve', [SubscriptionController::class, 'approve'])->name('admin.subscriptions.approve');
         Route::patch('/admin/subscriptions/{subscription}/reject', [SubscriptionController::class, 'reject'])->name('admin.subscriptions.reject');
+        Route::get('/admin/selling-kit', [SellingKitController::class, 'manage'])->name('admin.selling-kit.index');
+        Route::post('/admin/selling-kit', [SellingKitController::class, 'store'])->name('admin.selling-kit.store');
+        Route::get('/admin/selling-kit/{document}/view', [SellingKitController::class, 'show'])->name('admin.selling-kit.show');
+        Route::get('/admin/selling-kit/{document}/download', [SellingKitController::class, 'download'])->name('admin.selling-kit.download');
     });
 
     Route::middleware('subscriber')->group(function () {

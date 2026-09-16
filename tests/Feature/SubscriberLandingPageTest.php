@@ -6,6 +6,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
+use Spatie\Permission\Models\Role;
 
 class SubscriberLandingPageTest extends TestCase
 {
@@ -83,6 +84,9 @@ class SubscriberLandingPageTest extends TestCase
             'status' => 'Active',
         ]);
         $nonSubscriber = User::factory()->create(['status' => 'Active']);
+        $role = Role::firstOrCreate(['name' => 'Health Planner']);
+        $subscriber->assignRole($role);
+        $nonSubscriber->assignRole($role);
 
         Subscription::create([
             'user_id' => $subscriber->id,
