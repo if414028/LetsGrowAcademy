@@ -257,6 +257,10 @@
         font-weight: 800;
     }
 
+    .dashboard-main h1.selling-kit-hero-title {
+        color: #ffffff;
+    }
+
     /* Makes existing dashboard cards, forms and data views feel coherent. */
     .app-dashboard main .bg-white {
         border-color: #e2e8f0;

@@ -4,10 +4,13 @@ use App\Http\Controllers\BundleController;
 use App\Http\Controllers\ContestController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MidtransWebhookController;
 use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\ProductController;
-use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SalesOrderController;
+use App\Http\Controllers\SellingKitController;
+use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\SubscriberLandingPageController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +29,9 @@ Route::get('/cody-services', function () {
 Route::get('/support', function () {
     return view('support');
 })->name('support');
+
+Route::post('/payments/midtrans/notification', [MidtransWebhookController::class, 'handle'])
+    ->name('payments.midtrans.notification');
 
 Route::get('/produk/air-purifier', function () {
     return view('products-public.air-purifier');
@@ -54,7 +60,6 @@ Route::get('/about-coway/{page}', function (string $page) {
     ]);
 })->name('about-coway.show');
 
-
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', 'active'])
     ->name('dashboard');
@@ -73,13 +78,40 @@ Route::middleware('auth', 'active')->group(function () {
         Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
     });
 
+    Route::middleware('role:Health Planner|Health Manager|Sales Manager')->group(function () {
+        Route::get('/subscription', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+        Route::get('/subscription/payment-finish', [SubscriptionController::class, 'finishPayment'])
+            ->name('subscriptions.payment-finish');
+        Route::post('/subscription/checkout', [SubscriptionController::class, 'store'])->name('subscriptions.store');
+        Route::post('/subscription/{subscription}/sync-payment', [SubscriptionController::class, 'syncPayment'])
+            ->name('subscriptions.sync-payment');
+    });
 
+    Route::middleware('role:Admin|Head Admin')->group(function () {
+        Route::get('/admin/subscriptions', [SubscriptionController::class, 'adminIndex'])->name('admin.subscriptions.index');
+        Route::patch('/admin/subscriptions/{subscription}/approve', [SubscriptionController::class, 'approve'])->name('admin.subscriptions.approve');
+        Route::patch('/admin/subscriptions/{subscription}/reject', [SubscriptionController::class, 'reject'])->name('admin.subscriptions.reject');
+        Route::get('/admin/selling-kit', [SellingKitController::class, 'manage'])->name('admin.selling-kit.index');
+        Route::post('/admin/selling-kit', [SellingKitController::class, 'store'])->name('admin.selling-kit.store');
+        Route::get('/admin/selling-kit/{document}/view', [SellingKitController::class, 'show'])->name('admin.selling-kit.show');
+        Route::get('/admin/selling-kit/{document}/download', [SellingKitController::class, 'download'])->name('admin.selling-kit.download');
+    });
+
+    Route::middleware('subscriber')->group(function () {
+        Route::get('/selling-kit', [SellingKitController::class, 'index'])->name('selling-kit.index');
+        Route::get('/selling-kit/category/{category}', [SellingKitController::class, 'category'])->name('selling-kit.category');
+        Route::get('/selling-kit/{document}', [SellingKitController::class, 'show'])->name('selling-kit.show');
+        Route::get('/selling-kit/{document}/download', [SellingKitController::class, 'download'])->name('selling-kit.download');
+    });
+
+    Route::get('/landing-page-produk', [SubscriberLandingPageController::class, 'index'])
+        ->middleware('subscriber')
+        ->name('subscriber-landing.index');
 
     // Profile (semua role): redirect ke halaman detail user yang login
     Route::get('/profile', function (\Illuminate\Http\Request $request) {
         return redirect()->route('users.show', $request->user()->id);
     })->name('profile');
-
 
     // Admin-only: manajemen user (kecuali show karena sudah di atas)
     Route::middleware('role:Admin|Head Admin')->group(function () {
@@ -224,4 +256,9 @@ Route::middleware('auth', 'active')->group(function () {
     Route::put('/bundles/{bundle}', [BundleController::class, 'update'])->name('bundles.update');
 });
 
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';
+
+// Harus menjadi route terakhir agar slug member tidak mengambil route aplikasi.
+Route::get('/{slug}', [SubscriberLandingPageController::class, 'show'])
+    ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
+    ->name('subscriber-landing.show');

@@ -41,6 +41,8 @@
                     Overview
                 </a>
 
+                @include('layouts.partials.subscription-menu', ['mobile' => false])
+
                 @include('layouts.partials.performance-menu', ['mobile' => false])
 
                 <a href="{{ route('reports.index') }}"
@@ -151,6 +153,8 @@
                         Overview
                     </a>
 
+                    @include('layouts.partials.subscription-menu', ['mobile' => true])
+
                     @include('layouts.partials.performance-menu', ['mobile' => true])
 
                     <a href="{{ route('reports.index') }}" @click="sidebarOpen=false"
@@ -252,8 +256,11 @@
                         </div>
 
                         <div class="leading-tight hidden sm:block text-left">
-                            <div class="text-sm font-semibold">
+                            <div class="flex items-center gap-2 text-sm font-semibold">
                                 {{ auth()->user()->name ?? 'User' }}
+                                @if (auth()->user()->hasActiveSubscription())
+                                    <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-700">Subscriber</span>
+                                @endif
                             </div>
                             <div class="text-xs text-gray-500">
                                 {{ auth()->user()->getRoleNames()->first() ?? '-' }}
