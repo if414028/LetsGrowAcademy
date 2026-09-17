@@ -25,7 +25,7 @@
 
             <div class="auth-stage relative grid min-h-[calc(100vh-1.5rem)] w-full overflow-hidden rounded-[2rem] lg:grid-cols-[minmax(0,1.08fr)_minmax(28rem,0.92fr)]">
                 <aside class="auth-story relative hidden overflow-hidden lg:flex lg:flex-col lg:justify-end lg:p-14 xl:p-20" aria-hidden="true">
-                    <div class="absolute inset-0 bg-[url('/images/coway-product-hero-2026.webp')] bg-cover bg-[position:64%_bottom]"></div>
+                    <div class="absolute inset-0 bg-cover bg-[position:64%_bottom]" style="background-image: url('{{ asset('images/coway-product-hero-2026.webp') }}')"></div>
                     <div class="absolute inset-0 bg-[linear-gradient(135deg,rgba(4,22,38,0.88),rgba(4,52,78,0.48)_56%,rgba(2,132,199,0.12))]"></div>
                     <div class="auth-story-copy relative max-w-3xl text-white">
                         <p class="text-xs font-bold uppercase tracking-[0.22em] text-cyan-300">Sales workspace</p>

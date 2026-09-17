@@ -1,5 +1,4 @@
 import './bootstrap';
-import '@fontsource-variable/geist';
 
 import Alpine from 'alpinejs';
 import gsap from 'gsap';
