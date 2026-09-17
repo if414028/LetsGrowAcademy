@@ -48,8 +48,7 @@
     }
 
     html,
-    body,
-    body *:not(svg):not(svg *) {
+    body {
         font-family: 'Nunito', ui-sans-serif, system-ui, sans-serif !important;
     }
 </style>
