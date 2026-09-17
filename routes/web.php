@@ -30,6 +30,13 @@ Route::get('/support', function () {
     return view('support');
 })->name('support');
 
+Route::get('/subscription-sales', function () {
+    return view('subscription-public', [
+        'monthlyPrice' => config('subscription.monthly_price'),
+        'durations' => config('subscription.durations'),
+    ]);
+})->name('subscriptions.public');
+
 Route::post('/payments/midtrans/notification', [MidtransWebhookController::class, 'handle'])
     ->name('payments.midtrans.notification');
 

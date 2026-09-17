@@ -9,10 +9,10 @@
     @include('partials.nunito-font')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="bg-white font-sans text-slate-800 antialiased">
+<body class="public-cover bg-white font-sans text-slate-800 antialiased">
     @include('partials.public-navbar', ['sectionBase' => url('/')])
 
-    <main>
+    <main id="main-content" tabindex="-1">
         <section class="relative overflow-hidden pt-[72px]">
             <div class="absolute inset-0 bg-gradient-to-br from-[#eff8e7] via-white to-[#d8f0f8]"></div>
             <div class="relative mx-auto grid min-h-[calc(100vh-72px)] max-w-[1440px] items-center gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] xl:px-24">
@@ -81,5 +81,6 @@
             </div>
         </section>
     </main>
+    @include('partials.public-footer')
 </body>
 </html>

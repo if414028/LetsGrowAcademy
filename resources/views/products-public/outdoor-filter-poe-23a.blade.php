@@ -139,10 +139,10 @@
         }
     </style>
 </head>
-<body class="bg-white font-sans text-slate-800 antialiased">
+<body class="public-cover bg-white font-sans text-slate-800 antialiased">
     @include('partials.public-navbar', ['sectionBase' => url('/')])
 
-    <main>
+    <main id="main-content" tabindex="-1">
         <section class="relative min-h-screen overflow-hidden bg-[#1c2c41] pt-[72px] text-white">
             <img src="{{ asset('images/outdoor-hero.webp') }}" alt="Coway Outdoor Filter POE-23A" class="absolute inset-0 h-full w-full object-cover object-center">
             <div class="absolute inset-0 bg-gradient-to-r from-[#152439]/80 via-[#152439]/35 to-transparent"></div>
@@ -388,8 +388,6 @@
         </section>
     </main>
 
-    <footer class="bg-slate-950 px-5 py-8 text-center text-sm font-semibold text-slate-300">
-        <p>Coway Indonesia - Katalog Penjualan Produk Coway</p>
-    </footer>
+    @include('partials.public-footer')
 </body>
 </html>

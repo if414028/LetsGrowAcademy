@@ -110,10 +110,10 @@
     @include('partials.nunito-font')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="bg-white font-sans text-slate-800 antialiased">
+<body class="public-cover bg-white font-sans text-slate-800 antialiased">
     @include('partials.public-navbar', ['sectionBase' => url('/')])
 
-    <main>
+    <main id="main-content" tabindex="-1">
         <section class="relative min-h-screen overflow-hidden pt-[72px]">
             <img src="{{ asset('images/water-purifier-hero-new-wide.webp') }}" alt="Rangkaian Water Purifier Coway" class="absolute inset-0 h-full w-full object-cover object-center">
             <div class="absolute inset-0 bg-gradient-to-r from-black/55 via-black/15 to-transparent"></div>
@@ -240,8 +240,6 @@
         </section>
     </main>
 
-    <footer class="bg-slate-950 px-5 py-8 text-center text-sm font-semibold text-slate-300">
-        <p>Coway Indonesia - Katalog Penjualan Produk Coway</p>
-    </footer>
+    @include('partials.public-footer')
 </body>
 </html>

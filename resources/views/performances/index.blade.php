@@ -2,16 +2,16 @@
     <script>
         window.performanceMemberOptions = @json($memberOptions ?? []);
     </script>
-    <div x-data="teamSheet">
+    <div x-data="teamSheet" data-performance-page>
         @if (session('success'))
             <div class="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
                 {{ session('success') }}
             </div>
         @endif
-        <div class="flex items-center justify-between gap-4">
+        <div class="performance-page-header flex flex-col gap-6 border-b border-slate-200 pb-8 lg:flex-row lg:items-end lg:justify-between">
             <div>
-                <h1 class="text-2xl font-semibold text-gray-900">My Performance</h1>
-                <p class="text-sm text-gray-500">Pantau kinerja tim penjualan.</p>
+                <h1 class="max-w-5xl text-[clamp(2.75rem,4.2vw,4.75rem)] font-black leading-[0.98] tracking-[-0.055em] text-slate-950">My Performance</h1>
+                <p class="mt-2 text-sm text-gray-500 sm:text-base">Pantau kinerja tim penjualan.</p>
 
                 @hasrole('Head Admin')
                     <form method="POST" action="{{ route('performance.cutoff.update') }}"
@@ -49,7 +49,7 @@
                 @endhasrole
             </div>
 
-            <div class="flex flex-wrap items-center justify-end gap-2">
+            <div class="flex flex-wrap items-center gap-2 lg:justify-end">
                 <a href="{{ route('performance.export-new-format', request()->query()) }}"
                     class="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white shadow-sm
                hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2">

@@ -171,10 +171,10 @@
         }
     </style>
 </head>
-<body class="bg-white font-sans text-slate-800 antialiased">
+<body class="public-cover bg-white font-sans text-slate-800 antialiased">
     @include('partials.public-navbar', ['sectionBase' => url('/')])
 
-    <main class="overflow-hidden">
+    <main id="main-content" tabindex="-1" class="overflow-hidden">
         <section class="relative min-h-screen bg-[#15171a] pt-[72px] text-white">
             <img src="{{ $sq('squarebig-ap-2425h-in-a-room-with-sunlight.webp') }}" alt="Coway SQUAREBIG AP-2425H di ruangan dengan cahaya matahari" class="absolute inset-0 h-full w-full object-cover object-[60%_center]">
             <div class="absolute inset-0 bg-gradient-to-r from-black/75 via-black/42 to-transparent"></div>
@@ -435,8 +435,6 @@
         </section>
     </main>
 
-    <footer class="bg-slate-950 px-5 py-8 text-center text-sm font-semibold text-slate-300">
-        <p>Coway Indonesia - Katalog Penjualan Produk Coway</p>
-    </footer>
+    @include('partials.public-footer')
 </body>
 </html>

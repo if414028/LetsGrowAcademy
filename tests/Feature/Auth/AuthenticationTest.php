@@ -10,11 +10,12 @@ class AuthenticationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_home_redirects_to_login(): void
+    public function test_public_home_can_be_rendered(): void
     {
         $response = $this->get('/');
 
-        $response->assertRedirect(route('login'));
+        $response->assertOk()
+            ->assertSee('PRODUK COWAY');
     }
 
     public function test_login_screen_can_be_rendered(): void

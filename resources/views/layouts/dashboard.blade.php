@@ -10,11 +10,12 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="app-dashboard bg-gray-50 text-gray-900 antialiased" x-data="{ sidebarOpen: false }">
-    <div class="flex min-h-screen md:h-screen">
+<body class="app-dashboard bg-gray-50 font-sans text-gray-900 antialiased" x-data="{ sidebarOpen: false }" data-dashboard-motion>
+    <a href="#main-content" class="skip-link">Lewati ke konten utama</a>
+    <div class="flex min-h-screen md:h-screen md:gap-3 md:p-3">
 
         {{-- Sidebar (Desktop) --}}
-        <aside class="dashboard-sidebar w-64 hidden md:flex flex-col border-r bg-white h-full overflow-y-auto">
+        <aside class="dashboard-sidebar hidden h-full w-64 flex-col overflow-y-auto border bg-white md:flex md:rounded-[1.75rem]">
             <div class="h-20 flex items-center px-6 border-b shrink-0">
                 <a href="{{ route('dashboard') }}" class="flex items-center gap-3" aria-label="Let's Grow Academy">
                     <img
@@ -30,7 +31,8 @@
                 </a>
             </div>
 
-            <nav class="p-4 space-y-1">
+            <nav class="dashboard-navigation p-4 space-y-1" aria-label="Navigasi dashboard">
+                <p class="dashboard-nav-label">Workspace</p>
                 <a href="{{ route('dashboard') }}"
                     class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                           {{ request()->routeIs('dashboard') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
@@ -115,6 +117,15 @@
                     Kontes
                 </a>
             </nav>
+
+            <div class="dashboard-sidebar-note mt-auto p-4">
+                <div class="rounded-[1.25rem] bg-slate-950 p-4 text-white">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-300">Let's Grow Academy</p>
+                    <p class="mt-2 text-sm font-semibold leading-snug">Kelola pertumbuhan tim dalam satu ruang kerja.</p>
+                    <span class="mt-4 block h-px w-full bg-white/15"></span>
+                    <p class="mt-3 text-[11px] text-slate-400">Workspace aktif</p>
+                </div>
+            </div>
         </aside>
 
         {{-- Sidebar (Mobile Drawer) --}}
@@ -232,12 +243,12 @@
         </div>
 
         {{-- Main --}}
-        <div class="flex-1 min-w-0 flex flex-col md:h-screen">
+        <div class="min-w-0 flex-1 flex flex-col md:h-[calc(100vh-1.5rem)]">
             <header
-                class="dashboard-topbar h-20 bg-white border-b flex items-center justify-between px-4 md:px-8 gap-4 shrink-0 sticky top-0 z-40">
+                class="dashboard-topbar sticky top-0 z-40 flex h-20 shrink-0 items-center justify-between gap-4 border-b bg-white px-4 md:rounded-[1.5rem] md:border md:px-8">
                 {{-- Hamburger (Mobile) --}}
                 <button class="md:hidden p-2 rounded-xl hover:bg-gray-100" @click="sidebarOpen = true"
-                    aria-label="Open menu">
+                    aria-label="Buka menu navigasi" x-bind:aria-expanded="sidebarOpen.toString()">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M4 6h16M4 12h16M4 18h16" />
@@ -249,7 +260,7 @@
 
                 {{-- Profile dropdown --}}
                 <div x-data="{ open: false }" class="relative">
-                    <button @click="open = !open" class="flex items-center gap-3 focus:outline-none">
+                    <button @click="open = !open" class="flex items-center gap-3 focus:outline-none" aria-label="Buka menu akun" x-bind:aria-expanded="open.toString()">
                         <div
                             class="h-9 w-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold">
                             {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}
@@ -310,8 +321,8 @@
                 </div>
             </header>
 
-            <main class="dashboard-main flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:px-8 md:py-8 xl:px-10">
-                <div class="mx-auto w-full max-w-[1600px]">
+            <main id="main-content" tabindex="-1" class="dashboard-main mt-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-6 sm:px-6 md:mt-3 md:px-8 md:py-10 xl:px-12">
+                <div class="dashboard-content mx-auto w-full max-w-[1600px]">
                     {{ $slot }}
                 </div>
             </main>

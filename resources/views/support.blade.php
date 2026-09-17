@@ -40,10 +40,10 @@
     @include('partials.nunito-font')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="bg-white font-sans text-slate-900 antialiased">
+<body class="public-cover bg-white font-sans text-slate-900 antialiased">
     @include('partials.public-navbar', ['sectionBase' => url('/')])
 
-    <main>
+    <main id="main-content" tabindex="-1">
         <section class="relative min-h-[620px] overflow-hidden pt-[72px]">
             <div class="absolute inset-0">
                 <img src="{{ asset('images/coway-support-hero-main-b1.png') }}" alt="Coway Support" class="h-full w-full object-cover">
@@ -128,5 +128,6 @@
             </div>
         </section>
     </main>
+    @include('partials.public-footer')
 </body>
 </html>

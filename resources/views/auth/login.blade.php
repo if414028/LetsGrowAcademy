@@ -1,11 +1,10 @@
 <x-guest-layout>
-    <div class="w-full max-w-md">
-        <div class="bg-white/90 backdrop-blur rounded-2xl shadow-xl ring-1 ring-black/5 px-8 py-8">
-            <div class="flex flex-col items-center text-center">
-                <x-application-logo class="h-32 md:h-40 mx-auto mb-6" />
-
-                <h1 class="mt-5 text-3xl font-bold tracking-tight text-gray-900">Let's Grow Academy</h1>
-                <p class="mt-1 text-sm text-gray-500">Sign in to your dashboard</p>
+    <div class="auth-card w-full max-w-xl">
+        <div class="rounded-[1.75rem] border border-white bg-white/90 px-6 py-8 shadow-[0_30px_90px_rgba(7,26,45,0.12)] backdrop-blur sm:px-10 sm:py-10">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-[0.2em] text-sky-600">Workspace access</p>
+                <h1 class="mt-4 max-w-2xl text-[clamp(2.75rem,5vw,4.5rem)] font-black leading-[0.92] tracking-[-0.06em] text-slate-950">Selamat datang kembali.</h1>
+                <p class="mt-4 max-w-md text-base leading-7 text-slate-500">Masuk untuk melanjutkan pekerjaan dan melihat perkembangan tim Anda.</p>
             </div>
 
             {{-- session status / errors --}}
@@ -13,11 +12,11 @@
             <x-input-error :messages="$errors->get('email')" class="mt-4" />
             <x-input-error :messages="$errors->get('password')" class="mt-2" />
 
-            <form method="POST" action="{{ route('login') }}" class="mt-6 space-y-4">
+            <form method="POST" action="{{ route('login') }}" class="mt-8 space-y-5">
                 @csrf
 
                 <div>
-                    <x-input-label for="email" value="Email" />
+                    <x-input-label for="email" value="Alamat email" />
                     <x-text-input
                         id="email"
                         class="mt-1 block w-full rounded-xl"
@@ -27,12 +26,12 @@
                         required
                         autofocus
                         autocomplete="username"
-                        placeholder="your@email.com"
+                        placeholder="nama@email.com"
                     />
                 </div>
 
                 <div>
-                    <x-input-label for="password" value="Password" />
+                    <x-input-label for="password" value="Kata sandi" />
 
                     <div class="relative mt-1">
                         <x-text-input
@@ -80,15 +79,15 @@
                 <div class="flex items-center justify-between">
                     <label for="remember_me" class="inline-flex items-center">
                         <input id="remember_me" type="checkbox" class="rounded border-gray-300 text-blue-600 shadow-sm focus:ring-blue-500" name="remember">
-                        <span class="ms-2 text-sm text-gray-600">Remember me</span>
+                        <span class="ms-2 text-sm text-gray-600">Ingat saya</span>
                     </label>
                 </div>
 
                 <button
                     type="submit"
-                    class="w-full inline-flex justify-center items-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    class="inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-blue-700 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
-                    Sign In
+                    Masuk ke Dashboard
                 </button>
             </form>
         </div>
@@ -112,4 +111,3 @@
         }
     }
 </script>
-

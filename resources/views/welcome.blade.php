@@ -41,8 +41,9 @@
     @include('partials.nunito-font')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="bg-white font-sans text-slate-900 antialiased">
-    <header class="fixed inset-x-0 top-0 z-50 border-b border-slate-100 bg-white/95 backdrop-blur">
+<body class="public-cover bg-white font-sans text-slate-900 antialiased" data-public-motion>
+    <a href="#main-content" class="skip-link">Lewati ke konten utama</a>
+    <header class="public-floating-nav fixed inset-x-0 top-0 z-50 border-b border-slate-100 bg-white/95 backdrop-blur">
         <div class="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-5 sm:px-8 xl:px-24">
             <a href="/" class="flex items-center gap-3" aria-label="Beranda Coway">
                 <img src="{{ asset('images/coway-logo.png') }}" alt="Coway" class="h-8 w-auto object-contain">
@@ -55,7 +56,7 @@
                         Produk
                         <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                     </a>
-                    <div class="invisible absolute left-1/2 top-full w-[760px] -translate-x-1/2 translate-y-2 bg-[#34a9d7] p-7 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                    <div class="invisible absolute left-1/2 top-full w-[760px] -translate-x-1/2 translate-y-2 bg-[#34a9d7] p-7 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
                         <div class="grid grid-cols-3 gap-7">
                             @foreach ($productCategories as $category)
                                 <a href="{{ $category['href'] }}" class="block">
@@ -78,7 +79,7 @@
                         Services
                         <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                     </a>
-                    <div class="invisible absolute left-1/2 top-full w-56 -translate-x-1/2 translate-y-2 bg-[#34a9d7] py-3 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                    <div class="invisible absolute left-1/2 top-full w-56 -translate-x-1/2 translate-y-2 bg-[#34a9d7] py-3 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
                         @foreach ($services as $service)
                             <a href="{{ $service['href'] }}" class="block px-6 py-3 text-sm font-bold normal-case tracking-normal transition hover:bg-white/15">{{ $service['name'] }}</a>
                         @endforeach
@@ -89,7 +90,7 @@
                         About Coway
                         <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                     </a>
-                    <div class="invisible absolute left-1/2 top-full w-80 -translate-x-1/2 translate-y-2 bg-[#34a9d7] py-3 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                    <div class="invisible absolute left-1/2 top-full w-80 -translate-x-1/2 translate-y-2 bg-[#34a9d7] py-3 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
                         @foreach ($aboutCoway as $item)
                             <a href="{{ route('about-coway.show', $item['slug']) }}" class="block px-6 py-3 text-sm font-bold normal-case tracking-normal transition hover:bg-white/15">{{ $item['nav'] }}</a>
                         @endforeach
@@ -102,7 +103,7 @@
                 <a href="{{ route('login') }}" class="inline-flex h-10 items-center justify-center rounded-full border border-sky-500 bg-sky-500 px-6 text-sm font-bold text-white transition hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2">
                     Masuk Admin/Sales
                 </a>
-                <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-700 lg:hidden" aria-label="Buka menu" x-data x-on:click="$dispatch('toggle-cover-menu')">
+                <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 text-slate-700 lg:hidden" aria-label="Buka menu navigasi" x-data x-on:click="$dispatch('toggle-cover-menu')">
                     <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
                 </button>
             </div>
@@ -166,18 +167,18 @@
         </div>
     </header>
 
-    <main>
-        <section id="change-your-life" class="relative min-h-screen overflow-hidden pt-[72px]">
+    <main id="main-content" tabindex="-1" class="w-full max-w-full overflow-x-hidden">
+        <section id="change-your-life" class="public-hero relative min-h-screen overflow-hidden pt-[72px]">
             <div class="absolute inset-0">
                 <img src="{{ asset('images/coway-product-hero-2026.webp') }}" alt="Rangkaian produk Coway" class="h-full w-full object-cover object-[58%_bottom]">
                 <div class="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-white/5"></div>
                 <div class="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-white via-white/55 to-transparent"></div>
             </div>
             <div class="relative mx-auto flex min-h-[calc(100vh-72px)] max-w-[1440px] items-center px-5 py-14 sm:px-8 xl:px-24">
-                <div class="max-w-2xl">
+                <div class="public-hero-copy max-w-5xl">
                     <p class="text-sm font-bold tracking-[0.2em] text-[#00a4e4]">#ChangeYourLife</p>
                     <p class="mt-3 text-sm font-bold uppercase tracking-[0.32em] text-[#00a4e4]">Pure Way of Life</p>
-                    <h1 class="mt-8 text-5xl font-bold leading-[1.03] tracking-[0.08em] text-slate-700 sm:text-6xl">PRODUK COWAY</h1>
+                    <h1 class="mt-8 max-w-5xl text-[clamp(3.5rem,7vw,7.5rem)] font-black leading-[0.88] tracking-[-0.07em] text-slate-950">PRODUK COWAY</h1>
                     <p class="mt-5 text-lg font-bold uppercase tracking-wide text-slate-600">Mulai harimu dengan pilihan yang tepat</p>
                     <p class="mt-8 max-w-2xl text-lg leading-8 text-slate-600">Temukan pilihan produk Coway untuk kebutuhan rumah dan keluarga, mulai dari pemurni air, pemurni udara, hingga outdoor filter dengan layanan purna jual yang mendukung kenyamanan pelanggan.</p>
                     <div class="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -449,38 +450,38 @@
         <section id="support" class="bg-[#7dacd3] py-20 text-white">
             <div class="mx-auto grid max-w-[1440px] gap-10 px-5 sm:px-8 lg:grid-cols-[1fr_1fr] lg:items-center xl:px-24">
                 <div>
-                    <p class="text-sm font-bold uppercase tracking-[0.28em] text-sky-50">Dukungan</p>
-                    <h2 class="mt-3 text-4xl font-bold tracking-normal sm:text-5xl">Temukan panduan produk dan layanan pelanggan.</h2>
-                    <p class="mt-5 max-w-xl text-lg leading-8 text-sky-50">Temukan informasi layanan dan panduan produk untuk membantu pelanggan memahami manfaat serta perawatan produk Coway.</p>
+                    <p class="text-sm font-bold uppercase tracking-[0.28em] text-sky-50">Bergabung bersama kami</p>
+                    <h2 class="mt-3 text-4xl font-bold tracking-normal sm:text-5xl">Bangun peluang bersama Coway.</h2>
+                    <p class="mt-5 max-w-xl text-lg leading-8 text-sky-50">Jadilah bagian dari tim sales Coway dan bantu lebih banyak keluarga menemukan solusi hidup yang lebih sehat.</p>
                 </div>
                 <div class="rounded bg-white p-8 text-slate-900 shadow-xl">
-                    <h3 class="text-2xl font-bold">Akses Admin & Sales</h3>
-                    <p class="mt-3 leading-7 text-slate-600">Area login hanya untuk admin dan sales Coway yang memiliki akses pengelolaan data internal.</p>
+                    <p class="text-xs font-extrabold uppercase tracking-[0.2em] text-[#00a4e4]">Peluang Sales Coway</p>
+                    <h3 class="mt-2 text-2xl font-bold">Mulai perjalananmu sebagai Sales Coway</h3>
+                    <p class="mt-3 leading-7 text-slate-600">Dapatkan peluang penghasilan, pengembangan diri, dukungan komunitas, dan materi penjualan untuk membangun bisnis Anda.</p>
+                    <ul class="mt-5 grid gap-3 text-sm font-bold text-slate-700 sm:grid-cols-2">
+                        @foreach (['Pelatihan & pendampingan', 'Komunitas yang suportif', 'Peluang penghasilan', 'Materi penjualan digital'] as $benefit)
+                            <li class="flex items-center gap-2">
+                                <svg class="h-5 w-5 shrink-0 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m5 12 4 4L19 6"/></svg>
+                                {{ $benefit }}
+                            </li>
+                        @endforeach
+                    </ul>
                     <div class="mt-8 grid gap-3 sm:grid-cols-2">
-                        <a href="{{ route('support') }}" class="inline-flex h-12 items-center justify-center rounded-full bg-[#00a4e4] px-6 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-[#008ac4]">Buka Dukungan</a>
-                        <a href="{{ route('login') }}" class="inline-flex h-12 items-center justify-center rounded-full border border-slate-300 px-6 text-sm font-bold uppercase tracking-wide text-slate-700 transition hover:border-[#00a4e4] hover:text-[#00a4e4]">Masuk Admin/Sales</a>
+                        <a href="https://wa.me/628886547788?text={{ urlencode('Halo, saya tertarik untuk mendaftar sebagai Sales Coway. Mohon informasi selanjutnya.') }}" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[#00a4e4] px-5 py-3 text-center text-sm font-bold uppercase tracking-wide text-white transition hover:bg-[#008ac4] focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2">
+                            Daftar Jadi Sales
+                            <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        </a>
+                        <a href="{{ route('subscriptions.public') }}" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-[#00a4e4] px-5 py-3 text-center text-sm font-bold uppercase tracking-wide text-[#008ac4] transition hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2">
+                            Benefit Subscription
+                            <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m-6-6 6 6-6 6"/></svg>
+                        </a>
                     </div>
+                    <p class="mt-3 text-center text-xs font-semibold text-slate-500">Tim kami akan menghubungi Anda melalui WhatsApp.</p>
                 </div>
             </div>
         </section>
     </main>
 
-    <footer class="bg-[#7dacd3] py-10 text-white">
-        <div class="mx-auto flex max-w-[1440px] flex-col gap-8 px-5 sm:px-8 lg:flex-row lg:items-center lg:justify-between xl:px-24">
-            <div class="flex items-center gap-3">
-                <img src="{{ asset('images/coway-logo.png') }}" alt="Coway" class="h-8 w-auto object-contain">
-                <div>
-                    <p class="font-extrabold tracking-tight">COWAY</p>
-                    <p class="text-sm text-sky-50">Katalog penjualan produk Coway</p>
-                </div>
-            </div>
-            <div class="flex flex-wrap gap-5 text-sm font-semibold uppercase tracking-wide text-sky-50">
-                <a href="#products" class="hover:text-white">Produk</a>
-                <a href="#services" class="hover:text-white">Services</a>
-                <a href="#about-coway" class="hover:text-white">About Coway</a>
-                <a href="{{ route('login') }}" class="hover:text-white">Masuk</a>
-            </div>
-        </div>
-    </footer>
+    @include('partials.public-footer')
 </body>
 </html>

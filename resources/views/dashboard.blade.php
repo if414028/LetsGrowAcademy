@@ -60,15 +60,16 @@
         </section>
     @endif
 
-    @php
-        $dashboardSubscription = request()->user()->activeSubscription();
-        $pendingDashboardSubscription = request()->user()->pendingSubscription();
-        $subscriptionWarningDays = config('subscription.warning_days', 7);
-        $subscriptionExpiringSoon = $dashboardSubscription
-            && now()->diffInDays($dashboardSubscription->ends_at, false) <= $subscriptionWarningDays;
-    @endphp
+    @hasanyrole('Health Planner|Health Manager|Sales Manager')
+        @php
+            $dashboardSubscription = request()->user()->activeSubscription();
+            $pendingDashboardSubscription = request()->user()->pendingSubscription();
+            $subscriptionWarningDays = config('subscription.warning_days', 7);
+            $subscriptionExpiringSoon = $dashboardSubscription
+                && now()->diffInDays($dashboardSubscription->ends_at, false) <= $subscriptionWarningDays;
+        @endphp
 
-    <section class="mt-6 overflow-hidden rounded-2xl border {{ $dashboardSubscription ? 'border-amber-200 bg-gradient-to-r from-amber-50 to-white' : ($pendingDashboardSubscription ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white') }} p-5 shadow-sm sm:p-6">
+        <section class="mt-6 overflow-hidden rounded-2xl border {{ $dashboardSubscription ? 'border-amber-200 bg-gradient-to-r from-amber-50 to-white' : ($pendingDashboardSubscription ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white') }} p-5 shadow-sm sm:p-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-start gap-4">
                 <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full {{ $dashboardSubscription ? 'bg-amber-100 text-amber-700' : ($pendingDashboardSubscription ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500') }}">
@@ -97,7 +98,8 @@
                 {{ $dashboardSubscription ? 'Kelola Subscription' : ($pendingDashboardSubscription ? 'Lihat Status' : 'Subscribe Sekarang') }}
             </a>
         </div>
-    </section>
+        </section>
+    @endhasanyrole
 
     {{-- Deactivation warning (Month-5) --}}
     @php
@@ -426,7 +428,7 @@
     @endif
 
     {{-- Stat cards --}}
-    <div class="mt-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+    <div class="dashboard-bento mt-8 grid grid-flow-dense grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-12">
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
             <div class="flex items-start justify-between">
                 <div>

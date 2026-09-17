@@ -35,6 +35,7 @@
     };
 @endphp
 
+<a href="#main-content" class="skip-link">Lewati ke konten utama</a>
 <header class="fixed inset-x-0 top-0 z-50 border-b border-slate-100 bg-white/95 backdrop-blur">
     <div class="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-5 sm:px-8 xl:px-24">
         <a href="{{ url('/') }}" class="flex items-center gap-3" aria-label="Beranda Coway">
@@ -48,7 +49,7 @@
                     Produk
                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                 </a>
-                <div class="invisible absolute left-1/2 top-full w-[760px] -translate-x-1/2 translate-y-2 bg-[#34a9d7] p-7 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                <div class="invisible absolute left-1/2 top-full w-[760px] -translate-x-1/2 translate-y-2 bg-[#34a9d7] p-7 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
                     <div class="grid grid-cols-3 gap-7">
                         @foreach ($productCategories as $category)
                             <a href="{{ $resolvePublicHref($category['href']) }}" class="block">
@@ -71,7 +72,7 @@
                     Services
                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                 </a>
-                <div class="invisible absolute left-1/2 top-full w-56 -translate-x-1/2 translate-y-2 bg-[#34a9d7] py-3 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                <div class="invisible absolute left-1/2 top-full w-56 -translate-x-1/2 translate-y-2 bg-[#34a9d7] py-3 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
                     @foreach ($services as $service)
                         <a href="{{ $service['href'] }}" class="block px-6 py-3 text-sm font-bold normal-case tracking-normal transition hover:bg-white/15">{{ $service['name'] }}</a>
                     @endforeach
@@ -82,7 +83,7 @@
                     About Coway
                     <svg class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
                 </a>
-                <div class="invisible absolute left-1/2 top-full w-80 -translate-x-1/2 translate-y-2 bg-[#34a9d7] py-3 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+                <div class="invisible absolute left-1/2 top-full w-80 -translate-x-1/2 translate-y-2 bg-[#34a9d7] py-3 text-white opacity-0 shadow-2xl transition duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
                     @foreach ($aboutCoway as $item)
                         <a href="{{ route('about-coway.show', $item['slug']) }}" class="block px-6 py-3 text-sm font-bold normal-case tracking-normal transition hover:bg-white/15">{{ $item['nav'] }}</a>
                     @endforeach
@@ -95,7 +96,7 @@
             <a href="{{ route('login') }}" class="inline-flex h-10 items-center justify-center rounded-full border border-sky-500 bg-sky-500 px-6 text-sm font-bold text-white transition hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-2">
                 Masuk Admin/Sales
             </a>
-            <button type="button" class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-700 lg:hidden" aria-label="Buka menu" x-data x-on:click="$dispatch('toggle-cover-menu')">
+            <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 text-slate-700 lg:hidden" aria-label="Buka menu navigasi" x-data x-on:click="$dispatch('toggle-cover-menu')">
                 <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
             </button>
         </div>
