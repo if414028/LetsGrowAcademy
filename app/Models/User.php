@@ -34,6 +34,8 @@ class User extends Authenticatable
         'photo',
         'id_card',
         'last_login_at',
+        'is_secondary_account',
+        'primary_account_id',
     ];
 
     /**
@@ -61,6 +63,7 @@ class User extends Authenticatable
             'hm_since' => 'date',
             'last_login_at' => 'datetime',
             'deactivated_at' => 'datetime',
+            'is_secondary_account' => 'boolean',
         ];
     }
 
@@ -71,6 +74,16 @@ class User extends Authenticatable
     public function hierarchyParent()
     {
         return $this->hasOne(\App\Models\UserHierarchy::class, 'child_user_id');
+    }
+
+    public function primaryAccount()
+    {
+        return $this->belongsTo(self::class, 'primary_account_id');
+    }
+
+    public function secondaryAccounts()
+    {
+        return $this->hasMany(self::class, 'primary_account_id');
     }
 
     public function hierarchyChildren()

@@ -158,6 +158,63 @@
                 </div>
             </div>
 
+            {{-- Primary / Secondary account relationship --}}
+            <div class="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                <label for="is_secondary_account" class="flex cursor-pointer items-start gap-3">
+                    <input type="hidden" name="is_secondary_account" value="0">
+                    <input
+                        type="checkbox"
+                        id="is_secondary_account"
+                        name="is_secondary_account"
+                        value="1"
+                        @checked(old('is_secondary_account'))
+                        class="mt-0.5 h-5 w-5 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                    >
+                    <span>
+                        <span class="block text-sm font-semibold text-gray-900">Secondary Account</span>
+                        <span class="mt-0.5 block text-xs leading-5 text-gray-600">
+                            Tandai jika akun ini merupakan akun tambahan milik keluarga dari HP atau HM yang sudah terdaftar.
+                        </span>
+                    </span>
+                </label>
+
+                <div id="primary_account_field" class="mt-4 {{ old('is_secondary_account') ? '' : 'hidden' }}">
+                    <label for="primary_account_search" class="text-sm font-medium text-gray-700">
+                        Primary Account <span class="text-red-500" aria-hidden="true">*</span>
+                    </label>
+                    <input
+                        type="hidden"
+                        name="primary_account_id"
+                        id="primary_account_id"
+                        value="{{ old('primary_account_id') }}"
+                    >
+
+                    <div class="relative mt-1">
+                        <input
+                            type="text"
+                            id="primary_account_search"
+                            autocomplete="off"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-expanded="false"
+                            aria-controls="primary_account_results"
+                            class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                            placeholder="Cari nama HP atau HM..."
+                            value="{{ $oldPrimaryAccount ? ($oldPrimaryAccount->name.' ('.$oldPrimaryAccount->email.') - '.$oldPrimaryAccount->getRoleNames()->first()) : '' }}"
+                        >
+
+                        <div id="primary_account_dropdown"
+                             class="absolute z-30 mt-2 hidden w-full overflow-hidden rounded-xl border bg-white shadow-lg">
+                            <ul id="primary_account_results" role="listbox" class="max-h-72 overflow-auto"></ul>
+                        </div>
+                    </div>
+
+                    <p class="mt-2 text-xs text-gray-500">
+                        Hanya akun utama dengan role Health Planner atau Health Manager yang dapat dipilih.
+                    </p>
+                </div>
+            </div>
+
             {{-- Uploads --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -209,51 +266,6 @@
 </x-dashboard-layout>
 
 <script>
-    (function () {
-        const referrerSelect = document.getElementById('referrer_user_id');
-        const roleSelect = document.getElementById('role');
-
-        function filterRolesByReferrer() {
-            const selected = referrerSelect.options[referrerSelect.selectedIndex];
-            const refRank = selected?.dataset?.rank ? parseInt(selected.dataset.rank, 10) : null;
-
-            if (!refRank) {
-                roleSelect.disabled = true;
-                roleSelect.value = "";
-                return;
-            }
-
-            roleSelect.disabled = false;
-
-            const options = Array.from(roleSelect.options);
-            let firstAllowedValue = null;
-
-            options.forEach((opt, idx) => {
-                if (idx === 0) return; // placeholder
-                const roleRank = parseInt(opt.dataset.rank || "999", 10);
-
-                // allowed: setara atau di bawah referrer (rank lebih besar = lebih bawah)
-                const allowed = roleRank >= refRank;
-
-                opt.hidden = !allowed;
-                opt.disabled = !allowed;
-
-                if (allowed && !firstAllowedValue) firstAllowedValue = opt.value;
-            });
-
-            const current = roleSelect.value;
-            const currentOpt = options.find(o => o.value === current);
-            const currentAllowed = currentOpt && !currentOpt.disabled && !currentOpt.hidden;
-
-            if (!currentAllowed) {
-                roleSelect.value = firstAllowedValue ?? "";
-            }
-        }
-
-        referrerSelect.addEventListener('change', filterRolesByReferrer);
-        window.addEventListener('DOMContentLoaded', filterRolesByReferrer);
-    })();
-
     (function () {
         const searchInput = document.getElementById('referrer_search');
         const hiddenId = document.getElementById('referrer_user_id');
@@ -391,5 +403,108 @@
             })();
         @endif
 
+    })();
+
+    (function () {
+        const checkbox = document.getElementById('is_secondary_account');
+        const field = document.getElementById('primary_account_field');
+        const searchInput = document.getElementById('primary_account_search');
+        const hiddenId = document.getElementById('primary_account_id');
+        const dropdown = document.getElementById('primary_account_dropdown');
+        const resultsEl = document.getElementById('primary_account_results');
+        let debounceTimer = null;
+
+        function closeDropdown() {
+            dropdown.classList.add('hidden');
+            searchInput.setAttribute('aria-expanded', 'false');
+        }
+
+        function openDropdown() {
+            dropdown.classList.remove('hidden');
+            searchInput.setAttribute('aria-expanded', 'true');
+        }
+
+        function syncVisibility() {
+            field.classList.toggle('hidden', !checkbox.checked);
+            searchInput.required = checkbox.checked;
+
+            if (!checkbox.checked) {
+                hiddenId.value = '';
+                searchInput.value = '';
+                resultsEl.innerHTML = '';
+                closeDropdown();
+            }
+        }
+
+        async function searchPrimaryAccounts(query = '') {
+            const url = "{{ route('users.primary-accounts.search') }}" + '?q=' + encodeURIComponent(query);
+            const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+            return response.ok ? response.json() : [];
+        }
+
+        function selectAccount(item) {
+            hiddenId.value = item.id;
+            searchInput.value = item.label;
+            closeDropdown();
+        }
+
+        function renderResults(items) {
+            resultsEl.innerHTML = '';
+
+            if (!items.length) {
+                const empty = document.createElement('li');
+                empty.className = 'px-4 py-3 text-sm text-gray-500';
+                empty.textContent = 'Tidak ada akun HP atau HM yang cocok';
+                resultsEl.appendChild(empty);
+                openDropdown();
+                return;
+            }
+
+            items.forEach((item) => {
+                const option = document.createElement('li');
+                option.setAttribute('role', 'option');
+                option.className = 'cursor-pointer px-4 py-3 text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none';
+                option.tabIndex = 0;
+                option.textContent = item.label;
+                option.addEventListener('click', () => selectAccount(item));
+                option.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        selectAccount(item);
+                    }
+                });
+                resultsEl.appendChild(option);
+            });
+
+            openDropdown();
+        }
+
+        async function loadResults() {
+            renderResults(await searchPrimaryAccounts(searchInput.value.trim()));
+        }
+
+        checkbox.addEventListener('change', () => {
+            syncVisibility();
+            if (checkbox.checked) {
+                searchInput.focus();
+                loadResults();
+            }
+        });
+
+        searchInput.addEventListener('focus', loadResults);
+        searchInput.addEventListener('input', () => {
+            hiddenId.value = '';
+            if (debounceTimer) clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(loadResults, 250);
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!dropdown.contains(event.target) && event.target !== searchInput) closeDropdown();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') closeDropdown();
+        });
+
+        syncVisibility();
     })();
 </script>

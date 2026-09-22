@@ -165,7 +165,12 @@ class UserController extends Controller
             $oldReferrer = User::with('roles')->find(old('referrer_user_id'));
         }
 
-        return view('users.create', compact('roles', 'roleRanks', 'oldReferrer'));
+        $oldPrimaryAccount = null;
+        if (old('primary_account_id')) {
+            $oldPrimaryAccount = User::with('roles')->find(old('primary_account_id'));
+        }
+
+        return view('users.create', compact('roles', 'roleRanks', 'oldReferrer', 'oldPrimaryAccount'));
     }
 
     public function store(Request $request)
@@ -180,6 +185,13 @@ class UserController extends Controller
             // hierarchy & role
             'role' => ['required', 'string', 'exists:roles,name'],
             'referrer_user_id' => ['required', 'exists:users,id'],
+            'is_secondary_account' => ['nullable', 'boolean'],
+            'primary_account_id' => [
+                'nullable',
+                'required_if:is_secondary_account,1',
+                'integer',
+                'exists:users,id',
+            ],
 
             // ERD fields
             'status' => ['nullable', 'string', 'max:50'],
@@ -201,6 +213,23 @@ class UserController extends Controller
         $newRole = $validated['role'];
 
         $authUser = $request->user();
+
+        $isSecondaryAccount = $request->boolean('is_secondary_account');
+        $primaryAccount = null;
+
+        if ($isSecondaryAccount) {
+            $primaryAccount = User::query()
+                ->whereKey($validated['primary_account_id'])
+                ->where('is_secondary_account', false)
+                ->whereHas('roles', fn ($query) => $query->whereIn('name', ['Health Planner', 'Health Manager']))
+                ->first();
+
+            if (!$primaryAccount) {
+                return back()
+                    ->withErrors(['primary_account_id' => 'Primary Account harus berupa akun utama HP atau HM.'])
+                    ->withInput();
+            }
+        }
 
         if ($newRole === 'Head Admin' && !$authUser->hasRole('Head Admin')) {
             return back()
@@ -249,6 +278,8 @@ class UserController extends Controller
 
             'photo' => $photoPath,
             'id_card' => $idCardPath,
+            'is_secondary_account' => $isSecondaryAccount,
+            'primary_account_id' => $primaryAccount?->id,
         ]);
 
         $user->assignRole($newRole);
@@ -488,6 +519,39 @@ class UserController extends Controller
                     'role' => $role,
                     'rank' => $role ? ($roleRanks[$role] ?? 999) : 999,
                     'label' => "{$u->name} ({$u->email}) - " . ($role ?? '-'),
+                ];
+            });
+
+        return response()->json($users);
+    }
+
+    public function searchPrimaryAccounts(Request $request)
+    {
+        $q = trim((string) $request->get('q', ''));
+
+        $users = User::query()
+            ->with('roles')
+            ->where('is_secondary_account', false)
+            ->whereHas('roles', fn ($query) => $query->whereIn('name', ['Health Planner', 'Health Manager']))
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where(function ($search) use ($q) {
+                    $search->where('name', 'like', "%{$q}%")
+                        ->orWhere('full_name', 'like', "%{$q}%")
+                        ->orWhere('email', 'like', "%{$q}%");
+                });
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get()
+            ->map(function (User $user) {
+                $role = $user->getRoleNames()->first();
+
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $role,
+                    'label' => "{$user->name} ({$user->email}) - {$role}",
                 ];
             });
 
