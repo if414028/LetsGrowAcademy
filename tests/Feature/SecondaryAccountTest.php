@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -39,6 +40,43 @@ class SecondaryAccountTest extends TestCase
             'referrer_user_id' => $referrer->id,
             'status' => 'Active',
         ], $overrides);
+    }
+
+    private function completedOrder(User $salesUser, int $quantity, string $suffix): void
+    {
+        $now = now();
+        $customerId = DB::table('customers')->insertGetId([
+            'full_name' => "Customer {$suffix}",
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $productId = DB::table('products')->insertGetId([
+            'sku' => "SKU-{$suffix}",
+            'product_name' => "Product {$suffix}",
+            'is_active' => true,
+            'type' => 'regular',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $salesOrderId = DB::table('sales_orders')->insertGetId([
+            'order_no' => "SO-{$suffix}",
+            'sales_user_id' => $salesUser->id,
+            'customer_id' => $customerId,
+            'status' => 'selesai',
+            'install_date' => '2026-09-15',
+            'key_in_at' => '2026-09-10 09:00:00',
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        DB::table('sales_order_items')->insert([
+            'sales_order_id' => $salesOrderId,
+            'product_id' => $productId,
+            'qty' => $quantity,
+            'is_cancelled' => false,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
     }
 
     public function test_admin_can_create_secondary_account_with_hp_primary_account(): void
@@ -134,5 +172,55 @@ class SecondaryAccountTest extends TestCase
             ->assertSee('Primary Account')
             ->assertSee('Primary HM Name')
             ->assertSee('primary.hm@example.com');
+    }
+
+    public function test_hp_leaderboard_switches_between_account_family_and_team_ns(): void
+    {
+        $admin = $this->user('Head Admin');
+        $primary = $this->user('Health Planner', ['name' => 'Primary HP']);
+        $secondary = $this->user('Health Planner', [
+            'name' => 'Secondary HP',
+            'is_secondary_account' => true,
+            'primary_account_id' => $primary->id,
+        ]);
+        $downline = $this->user('Health Planner', ['name' => 'Downline HP']);
+        $downlineSecondary = $this->user('Health Planner', [
+            'name' => 'Downline Secondary HP',
+            'is_secondary_account' => true,
+            'primary_account_id' => $downline->id,
+        ]);
+
+        DB::table('user_hierarchies')->insert([
+            'parent_user_id' => $primary->id,
+            'child_user_id' => $downline->id,
+            'relation_type' => 'referral',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->completedOrder($primary, 1, 'PRIMARY');
+        $this->completedOrder($secondary, 2, 'SECONDARY');
+        $this->completedOrder($downline, 3, 'DOWNLINE');
+        $this->completedOrder($downlineSecondary, 4, 'DOWNLINE-SECONDARY');
+
+        $personalResponse = $this->actingAs($admin)->get(route('reports.index', [
+            'from' => '2026-09-01',
+            'to' => '2026-09-30',
+            'hp_scope' => 'personal',
+        ]))->assertOk()->assertSee('NS Pribadi')->assertDontSee('Secondary HP</td>', false);
+
+        $personalRow = $personalResponse->viewData('hpLeaderboard')->firstWhere('id', $primary->id);
+        $this->assertSame(3, $personalRow['units']);
+        $this->assertSame(1, $personalRow['active_hp']);
+
+        $teamResponse = $this->actingAs($admin)->get(route('reports.index', [
+            'from' => '2026-09-01',
+            'to' => '2026-09-30',
+            'hp_scope' => 'team',
+        ]))->assertOk()->assertSee('NS Team');
+
+        $teamRow = $teamResponse->viewData('hpLeaderboard')->firstWhere('id', $primary->id);
+        $this->assertSame(10, $teamRow['units']);
+        $this->assertSame(2, $teamRow['active_hp']);
     }
 }
