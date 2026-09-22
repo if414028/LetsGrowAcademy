@@ -97,7 +97,7 @@ class UserController extends Controller
         $this->denyIfTargetIsHeadAdmin($user, $authUser);
 
         // Roles
-        $user->load('roles');
+        $user->load(['roles', 'primaryAccount.roles']);
 
         // Parent (referrer)
         $parentHierarchy = UserHierarchy::with('parentUser')

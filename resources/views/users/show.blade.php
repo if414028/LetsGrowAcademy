@@ -179,6 +179,38 @@
                         $authUser = request()->user();
                     @endphp
 
+                    @if ($user->is_secondary_account)
+                        <div class="md:col-span-2 rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <p class="text-sm font-semibold text-gray-900">Primary Account</p>
+                                        <span class="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                                            Secondary Account
+                                        </span>
+                                    </div>
+
+                                    @if ($user->primaryAccount)
+                                        <p class="mt-2 text-base font-semibold text-gray-900">
+                                            {{ $user->primaryAccount->name }}
+                                        </p>
+                                        <p class="mt-0.5 text-sm text-gray-600">
+                                            {{ $user->primaryAccount->email }}
+                                            @if ($user->primaryAccount->getRoleNames()->isNotEmpty())
+                                                <span aria-hidden="true">&middot;</span>
+                                                {{ $user->primaryAccount->getRoleNames()->join(', ') }}
+                                            @endif
+                                        </p>
+                                    @else
+                                        <p class="mt-2 text-sm font-medium text-amber-700">
+                                            Primary account tidak tersedia.
+                                        </p>
+                                    @endif
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+
 
                     <div class="md:col-span-2 rounded-xl border bg-gray-50 p-4">
                         <p class="text-sm font-semibold text-gray-900">Health Manager</p>

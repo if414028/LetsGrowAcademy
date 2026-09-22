@@ -115,4 +115,24 @@ class SecondaryAccountTest extends TestCase
         $this->assertTrue($ids->contains($hm->id));
         $this->assertCount(2, $ids);
     }
+
+    public function test_secondary_user_detail_displays_its_primary_account(): void
+    {
+        $admin = $this->user('Head Admin');
+        $primary = $this->user('Health Manager', [
+            'name' => 'Primary HM Name',
+            'email' => 'primary.hm@example.com',
+        ]);
+        $secondary = $this->user('Health Planner', [
+            'is_secondary_account' => true,
+            'primary_account_id' => $primary->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('users.show', $secondary))
+            ->assertOk()
+            ->assertSee('Primary Account')
+            ->assertSee('Primary HM Name')
+            ->assertSee('primary.hm@example.com');
+    }
 }
