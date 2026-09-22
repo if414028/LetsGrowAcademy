@@ -91,6 +91,8 @@ Route::middleware('auth', 'active')->group(function () {
 
         Route::get('/users/referrers/search', [UserController::class, 'searchReferrers'])
             ->name('users.referrers.search');
+        Route::get('/users/primary-accounts/search', [UserController::class, 'searchPrimaryAccounts'])
+            ->name('users.primary-accounts.search');
 
         Route::get('/customers/{customer}/documents/{document}', [CustomerController::class, 'document'])->name('customers.document');
 

@@ -12,6 +12,7 @@
         <div class="bg-white rounded-2xl shadow ring-1 ring-black/5 p-4">
             <form method="GET" action="{{ route('reports.index') }}"
                 class="flex flex-col md:flex-row md:items-end gap-4">
+                <input type="hidden" name="hp_scope" value="{{ $hpLeaderboardScope }}">
                 <div>
                     <label for="from" class="block text-sm font-medium text-gray-700 mb-1">From</label>
                     <input type="date" name="from" id="from" value="{{ $from }}"
@@ -30,7 +31,7 @@
                         Apply
                     </button>
 
-                    <a href="{{ route('reports.index') }}"
+                    <a href="{{ route('reports.index', ['hp_scope' => $hpLeaderboardScope]) }}"
                         class="inline-flex items-center rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-200">
                         Reset
                     </a>
@@ -124,11 +125,41 @@
 
         {{-- Leaderboard Health Planner --}}
         <div class="bg-white rounded-2xl shadow ring-1 ring-black/5 p-6">
-            <div class="flex items-center justify-between">
-                <h2 class="text-lg font-semibold text-gray-900">
-                    Leaderboard Health Planner
-                </h2>
-                <div class="text-sm text-gray-500">{{ number_format($hpLeaderboard->count()) }} entries</div>
+            @php
+                $scopeQuery = $isManualRange ? ['from' => $from, 'to' => $to] : [];
+                $personalScopeUrl = route('reports.index', array_merge($scopeQuery, ['hp_scope' => 'personal']));
+                $teamScopeUrl = route('reports.index', array_merge($scopeQuery, ['hp_scope' => 'team']));
+            @endphp
+
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">
+                        Leaderboard Health Planner
+                    </h2>
+                    <p class="mt-1 text-sm text-gray-500">
+                        {{ $hpLeaderboardScope === 'team'
+                            ? 'Peringkat berdasarkan NS akun utama, secondary account, dan seluruh downliner.'
+                            : 'Peringkat berdasarkan NS akun utama dan seluruh secondary account miliknya.' }}
+                    </p>
+                </div>
+
+                <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+                    <div class="inline-flex rounded-xl bg-gray-100 p-1" role="group" aria-label="Mode leaderboard Health Planner">
+                        <a href="{{ $personalScopeUrl }}"
+                           aria-current="{{ $hpLeaderboardScope === 'personal' ? 'page' : 'false' }}"
+                           class="rounded-lg px-3.5 py-2 text-sm font-semibold transition {{ $hpLeaderboardScope === 'personal' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900' }}">
+                            NS Pribadi
+                        </a>
+                        <a href="{{ $teamScopeUrl }}"
+                           aria-current="{{ $hpLeaderboardScope === 'team' ? 'page' : 'false' }}"
+                           class="rounded-lg px-3.5 py-2 text-sm font-semibold transition {{ $hpLeaderboardScope === 'team' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900' }}">
+                            NS Team
+                        </a>
+                    </div>
+                    <div class="whitespace-nowrap text-sm text-gray-500">
+                        {{ number_format($hpLeaderboard->count()) }} entries
+                    </div>
+                </div>
             </div>
 
             <div class="mt-4">
@@ -149,7 +180,9 @@
                             <th class="py-3 pr-4">Health Planner</th>
                             <th class="py-3 pr-4">Health Manager</th>
                             <th class="py-3 pr-4">Active HP</th>
-                            <th class="py-3 pr-4">Total NS</th>
+                            <th class="py-3 pr-4">
+                                {{ $hpLeaderboardScope === 'team' ? 'Total NS Team' : 'Total NS Pribadi' }}
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y">
@@ -218,7 +251,7 @@
                 data: {
                     labels: @json($hpChartLabels),
                     datasets: [{
-                        label: 'Units Sold',
+                        label: @json($hpLeaderboardScope === 'team' ? 'NS Team' : 'NS Pribadi'),
                         data: @json($hpChartUnits),
                         borderWidth: 1,
                         borderRadius: 10
