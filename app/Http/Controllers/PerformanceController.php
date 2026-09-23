@@ -84,6 +84,7 @@ class PerformanceController extends Controller
         $statusOptions = $this->salesOrderStatuses;
         $salesType = $this->selectedSalesType($request);
         $productSalesType = $this->selectedProductSalesType($request);
+        $recurringStatus = $this->selectedRecurringStatus($request);
 
         // ======================================
         // Dropdown options
@@ -273,6 +274,8 @@ class PerformanceController extends Controller
             $sheetQ->whereIn('so.status', $selectedStatuses);
         }
 
+        $this->applyRecurringStatusFilter($sheetQ, $recurringStatus, 'so');
+
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
             ->orderBy('so.key_in_at')
@@ -345,6 +348,7 @@ class PerformanceController extends Controller
             'selectedStatuses' => $selectedStatuses,
             'salesType'        => $salesType,
             'productSalesType' => $productSalesType,
+            'recurringStatus'   => $recurringStatus,
             'roadToHm'        => $roadToHm,
         ]);
     }
@@ -504,6 +508,7 @@ class PerformanceController extends Controller
         $selectedStatuses = $this->selectedSalesOrderStatuses($request);
         $salesType = $this->selectedSalesType($request);
         $productSalesType = $this->selectedProductSalesType($request);
+        $recurringStatus = $this->selectedRecurringStatus($request);
 
         // ======================================
         // Helper units
@@ -608,6 +613,8 @@ class PerformanceController extends Controller
         if (!empty($selectedStatuses)) {
             $sheetQ->whereIn('so.status', $selectedStatuses);
         }
+
+        $this->applyRecurringStatusFilter($sheetQ, $recurringStatus, 'so');
 
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
@@ -1127,6 +1134,7 @@ class PerformanceController extends Controller
         $selectedStatuses = $this->selectedSalesOrderStatuses($request);
         $salesType = $this->selectedSalesType($request);
         $productSalesType = $this->selectedProductSalesType($request);
+        $recurringStatus = $this->selectedRecurringStatus($request);
 
         $unitCountExpr = "
             COALESCE(MAX(
@@ -1170,6 +1178,8 @@ class PerformanceController extends Controller
         if (!empty($selectedStatuses)) {
             $q->whereIn('so.status', $selectedStatuses);
         }
+
+        $this->applyRecurringStatusFilter($q, $recurringStatus, 'so');
 
         $rows = $q
             ->select([
@@ -1467,6 +1477,27 @@ class PerformanceController extends Controller
         $value = (string) $request->input('product_sales_type', '');
 
         return in_array($value, ['regular', 'bundle'], true) ? $value : null;
+    }
+
+    private function selectedRecurringStatus(Request $request): ?string
+    {
+        $value = (string) $request->input('recurring_status', '');
+
+        return in_array($value, ['not_recurring', 'recurring'], true) ? $value : null;
+    }
+
+    private function applyRecurringStatusFilter(
+        $query,
+        ?string $recurringStatus,
+        string $salesOrderAlias = 'so'
+    ): void {
+        if ($recurringStatus === 'not_recurring') {
+            $query->whereRaw("COALESCE({$salesOrderAlias}.is_recurring, 0) = 0");
+        }
+
+        if ($recurringStatus === 'recurring') {
+            $query->whereRaw("COALESCE({$salesOrderAlias}.is_recurring, 0) = 1");
+        }
     }
 
     private function applySalesCategoryFilters(
