@@ -1572,6 +1572,7 @@ class PerformanceController extends Controller
         $activeHpIds = User::query()
             ->whereIn('id', $downlineIds)
             ->role('Health Planner')
+            ->where('users.status', 'Active')
             ->pluck('id')
             ->values();
 
@@ -1738,6 +1739,7 @@ class PerformanceController extends Controller
         $currentHealthPlannerIds = User::query()
             ->whereIn('id', $downlineUserIds)
             ->role('Health Planner')
+            ->where('users.status', 'Active')
             ->pluck('id')
             ->map(fn($id) => (int) $id)
             ->flip();
