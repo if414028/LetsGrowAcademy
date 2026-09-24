@@ -79,6 +79,20 @@ class SecondaryAccountTest extends TestCase
         ]);
     }
 
+    private function updatePayload(User $user, User $referrer, array $overrides = []): array
+    {
+        return array_merge([
+            'name' => $user->name,
+            'full_name' => $user->full_name,
+            'email' => $user->email,
+            'phone_number' => $user->phone_number,
+            'status' => $user->status ?? 'Active',
+            'role' => $user->getRoleNames()->first(),
+            'referrer_user_id' => $referrer->id,
+            'is_secondary_account' => '0',
+        ], $overrides);
+    }
+
     public function test_admin_can_create_secondary_account_with_hp_primary_account(): void
     {
         $admin = $this->user('Head Admin');
@@ -172,6 +186,95 @@ class SecondaryAccountTest extends TestCase
             ->assertSee('Primary Account')
             ->assertSee('Primary HM Name')
             ->assertSee('primary.hm@example.com');
+    }
+
+    public function test_admin_can_change_primary_user_into_secondary_user(): void
+    {
+        $admin = $this->user('Head Admin');
+        $referrer = $this->user('Health Manager');
+        $primaryAccount = $this->user('Health Manager', ['name' => 'Family Primary']);
+        $user = $this->user('Health Planner');
+
+        DB::table('user_hierarchies')->insert([
+            'parent_user_id' => $referrer->id,
+            'child_user_id' => $user->id,
+            'relation_type' => 'referral',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('users.edit', $user))
+            ->assertOk()
+            ->assertSee('Secondary Account');
+
+        $this->actingAs($admin)
+            ->put(route('users.update', $user), $this->updatePayload($user, $referrer, [
+                'is_secondary_account' => '1',
+                'primary_account_id' => $primaryAccount->id,
+            ]))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('users.show', $user));
+
+        $user->refresh();
+        $this->assertTrue($user->is_secondary_account);
+        $this->assertSame($primaryAccount->id, $user->primary_account_id);
+    }
+
+    public function test_admin_can_change_secondary_user_back_to_primary_user(): void
+    {
+        $admin = $this->user('Head Admin');
+        $referrer = $this->user('Health Manager');
+        $primaryAccount = $this->user('Health Planner');
+        $user = $this->user('Health Planner', [
+            'is_secondary_account' => true,
+            'primary_account_id' => $primaryAccount->id,
+        ]);
+
+        DB::table('user_hierarchies')->insert([
+            'parent_user_id' => $referrer->id,
+            'child_user_id' => $user->id,
+            'relation_type' => 'referral',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('users.update', $user), $this->updatePayload($user, $referrer))
+            ->assertSessionHasNoErrors();
+
+        $user->refresh();
+        $this->assertFalse($user->is_secondary_account);
+        $this->assertNull($user->primary_account_id);
+    }
+
+    public function test_user_with_secondary_accounts_cannot_become_secondary(): void
+    {
+        $admin = $this->user('Head Admin');
+        $referrer = $this->user('Health Manager');
+        $newPrimaryAccount = $this->user('Health Manager');
+        $user = $this->user('Health Planner');
+        $this->user('Health Planner', [
+            'is_secondary_account' => true,
+            'primary_account_id' => $user->id,
+        ]);
+
+        DB::table('user_hierarchies')->insert([
+            'parent_user_id' => $referrer->id,
+            'child_user_id' => $user->id,
+            'relation_type' => 'referral',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->put(route('users.update', $user), $this->updatePayload($user, $referrer, [
+                'is_secondary_account' => '1',
+                'primary_account_id' => $newPrimaryAccount->id,
+            ]))
+            ->assertSessionHasErrors('is_secondary_account');
+
+        $this->assertFalse($user->fresh()->is_secondary_account);
     }
 
     public function test_hp_leaderboard_switches_between_account_family_and_team_ns(): void

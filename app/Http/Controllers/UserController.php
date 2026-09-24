@@ -309,7 +309,7 @@ class UserController extends Controller
         // Admin tidak boleh edit Head Admin
         $this->denyIfTargetIsHeadAdmin($user, $authUser);
 
-        $user->load('roles');
+        $user->load(['roles', 'primaryAccount.roles']);
 
         $roles = Role::query()
             ->orderBy('name')
@@ -322,7 +322,11 @@ class UserController extends Controller
             ->where('child_user_id', $user->id)
             ->first()?->parentUser;
 
-        return view('users.edit', compact('user', 'roles', 'currentReferrer'));
+        $selectedPrimaryAccount = old('primary_account_id')
+            ? User::with('roles')->find(old('primary_account_id'))
+            : $user->primaryAccount;
+
+        return view('users.edit', compact('user', 'roles', 'currentReferrer', 'selectedPrimaryAccount'));
     }
 
     public function update(Request $request, User $user)
@@ -393,6 +397,13 @@ class UserController extends Controller
             // role & referrer
             'role' => ['required', 'string', 'exists:roles,name'],
             'referrer_user_id' => ['required', 'exists:users,id'],
+            'is_secondary_account' => ['nullable', 'boolean'],
+            'primary_account_id' => [
+                'nullable',
+                'required_if:is_secondary_account,1',
+                'integer',
+                'exists:users,id',
+            ],
 
             // uploads
             'photo' => ['nullable', 'image', 'max:2048'],
@@ -415,6 +426,34 @@ class UserController extends Controller
         $manualHmSince = $authUser->hasRole('Head Admin')
             ? ($validated['hm_since'] ?? null)
             : null;
+        $isSecondaryAccount = $request->boolean('is_secondary_account');
+        $primaryAccount = null;
+
+        if ($isSecondaryAccount) {
+            if ($user->secondaryAccounts()->exists()) {
+                return back()
+                    ->withErrors([
+                        'is_secondary_account' => 'User ini masih menjadi Primary Account. Pindahkan secondary account miliknya terlebih dahulu.',
+                    ])
+                    ->withInput();
+            }
+
+            $primaryAccount = User::query()
+                ->whereKey($validated['primary_account_id'])
+                ->where('id', '!=', $user->id)
+                ->where('is_secondary_account', false)
+                ->whereHas('roles', fn($query) => $query->whereIn('name', ['Health Planner', 'Health Manager']))
+                ->first();
+
+            if (!$primaryAccount) {
+                return back()
+                    ->withErrors(['primary_account_id' => 'Primary Account harus berupa akun utama HP atau HM dan tidak boleh diri sendiri.'])
+                    ->withInput();
+            }
+        }
+
+        $validated['is_secondary_account'] = $isSecondaryAccount;
+        $validated['primary_account_id'] = $primaryAccount?->id;
 
         unset($validated['role'], $validated['referrer_user_id'], $validated['hm_since']);
 
@@ -528,10 +567,12 @@ class UserController extends Controller
     public function searchPrimaryAccounts(Request $request)
     {
         $q = trim((string) $request->get('q', ''));
+        $excludeId = (int) $request->get('exclude', 0);
 
         $users = User::query()
             ->with('roles')
             ->where('is_secondary_account', false)
+            ->when($excludeId > 0, fn($query) => $query->where('users.id', '!=', $excludeId))
             ->whereHas('roles', fn ($query) => $query->whereIn('name', ['Health Planner', 'Health Manager']))
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($search) use ($q) {
