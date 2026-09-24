@@ -136,7 +136,7 @@ class ReportController extends Controller
                     ->whereDate('so.install_date', '<=', $to);
 
                 HealthManagerNsScope::apply($query, $t, 'so', 'so.install_date');
-                $stats = $query->selectRaw('COALESCE(SUM(sou.unit_count), 0) as units, MIN(so.key_in_at) as first_key_in_at')->first();
+                $stats = $query->selectRaw('COALESCE(SUM(sou.unit_count), 0) as units, MIN(so.key_in_at) as first_key_in_at, MIN(so.install_date) as first_install_date')->first();
 
                 $activeSellerQuery = DB::table('sales_orders as active_so')
                     ->whereNull('active_so.deleted_at')
@@ -158,6 +158,7 @@ class ReportController extends Controller
 
                 $units = (int) ($stats->units ?? 0);
                 $firstKeyIn = $stats->first_key_in_at ?? null;
+                $firstInstallDate = $stats->first_install_date ?? null;
 
                 return [
                     'id' => $id,
@@ -166,12 +167,15 @@ class ReportController extends Controller
                     'active_hp' => $activeHealthPlanners,
                     'first_key_in_at' => $firstKeyIn,
                     'first_key_in_sort' => $firstKeyIn ?? '9999-12-31 23:59:59',
+                    'first_install_date' => $firstInstallDate,
+                    'first_install_date_sort' => $firstInstallDate ?? '9999-12-31',
                 ];
             })
             ->filter(fn($row) => $row['units'] > 0)
             ->sortBy([
                 ['units', 'desc'],
                 ['first_key_in_sort', 'asc'],
+                ['first_install_date_sort', 'asc'],
                 ['name', 'asc'],
             ])
             ->values()
@@ -270,7 +274,8 @@ class ReportController extends Controller
             ->select(
                 'so.sales_user_id',
                 DB::raw('COALESCE(SUM(sou.unit_count), 0) as units'),
-                DB::raw('MIN(so.key_in_at) as first_key_in_at')
+                DB::raw('MIN(so.key_in_at) as first_key_in_at'),
+                DB::raw('MIN(so.install_date) as first_install_date')
             )
             ->get();
 
@@ -278,6 +283,7 @@ class ReportController extends Controller
             ->mapWithKeys(fn($r) => [(int) $r->sales_user_id => [
                 'units' => (int) $r->units,
                 'first_key_in_at' => $r->first_key_in_at,
+                'first_install_date' => $r->first_install_date,
             ]]);
 
         return $targets
@@ -296,6 +302,7 @@ class ReportController extends Controller
                     ->filter();
                 $units = $stats->sum('units');
                 $firstKeyInAt = $stats->pluck('first_key_in_at')->filter()->sort()->first();
+                $firstInstallDate = $stats->pluck('first_install_date')->filter()->sort()->first();
 
                 $activeHealthPlanners = $primaryAccountIdsByTarget
                     ->get($id, collect([$id]))
@@ -318,12 +325,15 @@ class ReportController extends Controller
                     'active_hp' => $activeHealthPlanners,
                     'first_key_in_at' => $firstKeyInAt,
                     'first_key_in_sort' => $firstKeyInAt ?? '9999-12-31 23:59:59',
+                    'first_install_date' => $firstInstallDate,
+                    'first_install_date_sort' => $firstInstallDate ?? '9999-12-31',
                 ];
             })
             ->filter(fn($row) => $row['units'] > 0)
             ->sortBy([
                 ['units', 'desc'],
                 ['first_key_in_sort', 'asc'],
+                ['first_install_date_sort', 'asc'],
                 ['name', 'asc'],
             ])
             ->values()
