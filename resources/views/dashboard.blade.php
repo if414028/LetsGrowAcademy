@@ -685,15 +685,21 @@
         {{-- Sales Trend --}}
         <div class="rounded-2xl bg-white p-6 shadow-sm border">
             <div class="flex items-center justify-between">
-                <h2 class="text-xl font-bold">Sales Trend</h2>
+                <div>
+                    <h2 class="text-xl font-bold">Sales Trend</h2>
+                    @if ($salesTrendPerHealthManager)
+                        <p class="mt-1 text-sm text-gray-500">Penjualan per HM dan timnya.</p>
+                    @endif
+                </div>
 
                 <form method="GET" class="relative">
                     @foreach (request()->except('trend') as $k => $v)
                         <input type="hidden" name="{{ $k }}" value="{{ $v }}">
                     @endforeach
 
-                    <select name="trend" onchange="this.form.submit()"
+                    <select name="trend" aria-label="Periode Sales Trend" onchange="this.form.submit()"
                         class="appearance-none rounded-lg border bg-white pl-3 pr-9 py-2 text-sm text-gray-700 shadow-sm hover:bg-gray-50">
+                        <option value="daily" {{ $trend === 'daily' ? 'selected' : '' }}>Daily</option>
                         <option value="weekly" {{ ($trend ?? 'weekly') === 'weekly' ? 'selected' : '' }}>Weekly
                         </option>
                         <option value="monthly" {{ ($trend ?? 'weekly') === 'monthly' ? 'selected' : '' }}>Monthly
@@ -709,6 +715,9 @@
                 </form>
             </div>
 
+            @if ($salesTrendPerHealthManager && empty($salesTrendDatasets))
+                <p class="mt-6 text-sm text-gray-500">Belum ada Health Manager aktif untuk ditampilkan.</p>
+            @endif
             <div class="mt-6 h-56 rounded-xl bg-gray-50 border p-3">
                 <canvas id="salesTrendChart" class="w-full h-full"></canvas>
             </div>
@@ -724,7 +733,9 @@
                 if (!el) return;
 
                 const labels = @json($salesTrendLabels ?? []);
-                const dataUnits = @json($salesTrendUnits ?? []);
+                const series = @json($salesTrendDatasets ?? []);
+                const perHealthManager = @json($salesTrendPerHealthManager);
+                const colors = ['#259df5', '#16a085', '#e67e22', '#8e44ad', '#e74c3c', '#0284c7', '#c026d3', '#64748b'];
 
                 // destroy previous instance (jika ada hot reload / livewire)
                 if (window.__salesTrendChart) {
@@ -735,21 +746,23 @@
                     type: 'line',
                     data: {
                         labels,
-                        datasets: [{
-                            label: 'Units',
-                            data: dataUnits,
+                        datasets: series.map((dataset, index) => ({
+                            ...dataset,
+                            borderColor: colors[index] ?? `hsl(${(index * 137.508) % 360}, 65%, 45%)`,
+                            backgroundColor: colors[index] ?? `hsl(${(index * 137.508) % 360}, 65%, 45%)`,
                             tension: 0.35,
-                            pointRadius: 3,
+                            pointRadius: @json($trend === 'daily' ? 2 : 3),
                             borderWidth: 2,
                             fill: false,
-                        }]
+                        }))
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
                             legend: {
-                                display: false
+                                display: perHealthManager,
+                                position: 'bottom'
                             },
                             tooltip: {
                                 mode: 'index',
