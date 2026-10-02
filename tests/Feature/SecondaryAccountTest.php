@@ -315,6 +315,7 @@ class SecondaryAccountTest extends TestCase
         $personalRow = $personalResponse->viewData('hpLeaderboard')->firstWhere('id', $primary->id);
         $this->assertSame(3, $personalRow['units']);
         $this->assertSame(1, $personalRow['active_hp']);
+        $this->assertSame(0, $personalResponse->viewData('hpLeaderboard')->firstWhere('id', $downline->id)['active_hp']);
 
         $teamResponse = $this->actingAs($admin)->get(route('reports.index', [
             'from' => '2026-09-01',
@@ -324,6 +325,7 @@ class SecondaryAccountTest extends TestCase
 
         $teamRow = $teamResponse->viewData('hpLeaderboard')->firstWhere('id', $primary->id);
         $this->assertSame(10, $teamRow['units']);
-        $this->assertSame(2, $teamRow['active_hp']);
+        $this->assertSame(1, $teamRow['active_hp']);
+        $this->assertSame(0, $teamResponse->viewData('hpLeaderboard')->firstWhere('id', $downline->id)['active_hp']);
     }
 }

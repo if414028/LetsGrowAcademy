@@ -179,7 +179,6 @@
                             <th class="py-3 pr-4">Rank</th>
                             <th class="py-3 pr-4">Health Planner</th>
                             <th class="py-3 pr-4">Health Manager</th>
-                            <th class="py-3 pr-4">Active HP</th>
                             <th class="py-3 pr-4">
                                 {{ $hpLeaderboardScope === 'team' ? 'Total NS Team' : 'Total NS Pribadi' }}
                             </th>
@@ -198,12 +197,11 @@
                                 <td class="py-3 pr-4 text-gray-600">
                                     {{ $row['health_manager_name'] ?: '—' }}
                                 </td>
-                                <td class="py-3 pr-4">{{ number_format($row['active_hp']) }}</td>
                                 <td class="py-3 pr-4">{{ number_format($row['units']) }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="py-6 text-center text-gray-500">
+                                <td colspan="4" class="py-6 text-center text-gray-500">
                                     No data available for selected closing date.
                                 </td>
                             </tr>

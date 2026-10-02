@@ -208,11 +208,10 @@ class ReportController extends Controller
             return collect();
         }
 
+        // Active HP always counts downlines, independently of the NS display mode.
         $primaryAccountIdsByTarget = $targets
-            ->mapWithKeys(function ($target) use ($scope) {
-                $candidateIds = $scope === 'team'
-                    ? $target->downlineUserIds()->push((int) $target->id)
-                    : collect([(int) $target->id]);
+            ->mapWithKeys(function ($target) {
+                $candidateIds = $target->downlineUserIds()->push((int) $target->id);
 
                 $primaryAccountIds = User::query()
                     ->whereIn('id', $candidateIds->unique()->all())
@@ -238,7 +237,11 @@ class ReportController extends Controller
             ->map(fn($secondaries) => $secondaries->pluck('id')->map(fn($id) => (int) $id)->values());
 
         $salesScopeByTarget = $primaryAccountIdsByTarget
-            ->map(function ($primaryIds) use ($secondaryAccountIdsByPrimary) {
+            ->map(function ($primaryIds, $targetId) use ($secondaryAccountIdsByPrimary, $scope) {
+                if ($scope === 'personal') {
+                    $primaryIds = collect([(int) $targetId]);
+                }
+
                 return $primaryIds
                     ->flatMap(fn($primaryId) => collect([(int) $primaryId])
                         ->merge($secondaryAccountIdsByPrimary->get((int) $primaryId, collect())))
@@ -246,8 +249,9 @@ class ReportController extends Controller
                     ->values();
             });
 
-        $allSalesUserIds = $salesScopeByTarget
-            ->flatMap(fn($salesUserIds) => $salesUserIds)
+        $allSalesUserIds = $allPrimaryAccountIds
+            ->flatMap(fn($primaryId) => collect([(int) $primaryId])
+                ->merge($secondaryAccountIdsByPrimary->get((int) $primaryId, collect())))
             ->unique()
             ->values();
 
@@ -306,6 +310,7 @@ class ReportController extends Controller
 
                 $activeHealthPlanners = $primaryAccountIdsByTarget
                     ->get($id, collect([$id]))
+                    ->reject(fn($primaryId) => (int) $primaryId === $id)
                     ->filter(function ($primaryId) use ($activeHealthPlannerIds, $secondaryAccountIdsByPrimary, $leaderboardMap) {
                         if (!$activeHealthPlannerIds->has((int) $primaryId)) {
                             return false;
