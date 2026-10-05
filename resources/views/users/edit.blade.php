@@ -145,7 +145,10 @@
                                 </option>
                             @endforeach
                         </select>
-                        <p class="mt-2 text-xs text-gray-500">Role user ini akan di-update sesuai pilihan.</p>
+                        <p class="mt-2 text-xs text-gray-500">
+                            HP dapat dipromosikan ke HM meskipun referrer masih HP.
+                            Jika referrer tetap sama, posisi di Partner Tree dan seluruh downline tetap.
+                        </p>
                     </div>
 
                     <div class="relative">

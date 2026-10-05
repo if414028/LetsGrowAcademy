@@ -249,15 +249,11 @@ class UserController extends Controller
                 ->withInput();
         }
 
-        // role baru tidak boleh lebih tinggi dari referrer
-        if ($refRole === 'Health Planner') {
-            $newRole = 'Health Planner';
-        } else {
-            if ($rankMap[$newRole] < $rankMap[$refRole]) {
-                return back()
-                    ->withErrors(['role' => "Role user baru tidak boleh lebih tinggi dari referrer ({$refRole})."])
-                    ->withInput();
-            }
+        // Reject incompatible roles instead of silently replacing the selected role.
+        if ($rankMap[$newRole] < $rankMap[$refRole]) {
+            return back()
+                ->withErrors(['role' => "Role {$newRole} tidak boleh lebih tinggi dari referrer {$referrer->name} ({$refRole}). Pilih referrer dengan role setara atau lebih tinggi."])
+                ->withInput();
         }
 
         $photoPath = $request->file('photo')?->store('users/photos', 'public');
@@ -484,7 +480,8 @@ class UserController extends Controller
             referrer: $referrer,
             requestedRole: $role,
             actor: $authUser,
-            rankMap: $rankMap
+            rankMap: $rankMap,
+            existingUser: $user
         );
 
         if (is_string($resolvedRoleOrError) && str_starts_with($resolvedRoleOrError, 'ERROR:')) {
@@ -838,7 +835,7 @@ class UserController extends Controller
         ]);
     }
 
-    private function resolveRoleByReferrerRule(User $referrer, string $requestedRole, User $actor, array $rankMap): string
+    private function resolveRoleByReferrerRule(User $referrer, string $requestedRole, User $actor, array $rankMap, ?User $existingUser = null): string
     {
         if ($requestedRole === 'Head Admin' && !$actor->hasRole('Head Admin')) {
             return 'ERROR:Kamu tidak punya akses untuk membuat user Head Admin.';
@@ -854,12 +851,15 @@ class UserController extends Controller
             return 'ERROR:Role tidak dikenali di config roles.rank';
         }
 
-        if ($refRole === 'Health Planner') {
-            return 'Health Planner';
+        // Promotion changes the role without moving the existing referral branch.
+        // Keep allowing profile edits after the user has become an HM under an HP.
+        if ($refRole === 'Health Planner' && $requestedRole === 'Health Manager'
+            && $existingUser?->hasAnyRole(['Health Planner', 'Health Manager'])) {
+            return $requestedRole;
         }
 
         if ($rankMap[$requestedRole] < $rankMap[$refRole]) {
-            return "ERROR:Role user baru tidak boleh lebih tinggi dari referrer ({$refRole}).";
+            return "ERROR:Role {$requestedRole} tidak boleh lebih tinggi dari referrer {$referrer->name} ({$refRole}). Pilih referrer dengan role setara atau lebih tinggi.";
         }
 
         return $requestedRole;
