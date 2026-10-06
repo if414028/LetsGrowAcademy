@@ -37,6 +37,7 @@ class InactivePlannerNetSalesTest extends TestCase
         });
         Schema::create('sales_orders', function (Blueprint $t) {
             $t->id();
+            $t->string('order_no')->nullable();
             $t->unsignedBigInteger('sales_user_id');
             $t->unsignedBigInteger('customer_id')->nullable();
             $t->string('status')->default('selesai');
@@ -147,6 +148,77 @@ class InactivePlannerNetSalesTest extends TestCase
                 $this->assertSame(50, array_sum($trend['datasets'][0]['data']));
             }
         }
+    }
+
+    public function test_reconciliation_identifies_unassigned_sales_without_modifying_data(): void
+    {
+        $this->user('Head Admin');
+        $hm = $this->user('Health Manager');
+        $assigned = $this->user('Health Planner', $hm);
+        $unassigned = $this->user('Health Planner', null, ['status' => 'Inactive', 'name' => 'Unassigned HP']);
+        $this->sale($assigned, 48);
+        $this->sale($unassigned, 2, ['order_no' => 'SO-MISSING-2']);
+        $this->sale($unassigned, 100, ['status' => 'dibatalkan']);
+        $this->sale($unassigned, 100, ['deleted_at' => now()]);
+        $this->sale($unassigned, 100, ['key_in_at' => '2026-07-01', 'install_date' => '2026-07-01']);
+        $queries = [];
+        DB::listen(function ($query) use (&$queries) { $queries[] = $query->sql; });
+
+        $this->artisan('sales:reconcile-dashboard')
+            ->expectsOutputToContain('SO tidak masuk tabel: SO-MISSING-2')
+            ->expectsOutputToContain('Sales: Unassigned HP (#'.$unassigned->id.') | Status akun: Inactive')
+            ->expectsOutputToContain('sales tidak berada dalam cakupan hierarki HM yang ditampilkan')
+            ->assertSuccessful();
+
+        foreach ($queries as $query) {
+            $this->assertDoesNotMatchRegularExpression('/^\s*(insert|update|delete|replace|alter|create|drop|truncate)\b/i', $query);
+        }
+        $this->assertSame('Inactive', $unassigned->fresh()->status);
+        $this->assertDatabaseCount('sales_orders', 5);
+    }
+
+    public function test_reconciliation_distinguishes_inactive_hm_from_inactive_hp(): void
+    {
+        $admin = $this->user('Head Admin');
+        $inactiveHm = $this->user('Health Manager', null, ['status' => 'Inactive', 'name' => 'Inactive HM']);
+        $inactiveHp = $this->user('Health Planner', $inactiveHm, ['status' => 'Inactive']);
+        $this->sale($inactiveHp, 2, ['order_no' => 'SO-INACTIVE-HM']);
+        $this->artisan('sales:reconcile-dashboard', ['--user' => $admin->id])
+            ->expectsOutputToContain('SO tidak masuk tabel: SO-INACTIVE-HM')
+            ->expectsOutputToContain('sales tidak berada dalam cakupan hierarki HM yang ditampilkan')
+            ->assertSuccessful();
+    }
+
+    public function test_reconciliation_identifies_hm_history_exclusions(): void
+    {
+        $this->user('Head Admin');
+        $hm = $this->user('Health Manager', null, ['name' => 'Current HM']);
+        $demoted = $this->user('Health Planner', $hm);
+        DB::table('health_manager_periods')->insert(['user_id' => $demoted->id, 'started_on' => '2026-08-01', 'ended_on' => null]);
+        $this->sale($demoted, 2, ['order_no' => 'SO-HISTORY-EXCLUDED']);
+        $this->artisan('sales:reconcile-dashboard')
+            ->expectsOutputToContain('SO tidak masuk tabel: SO-HISTORY-EXCLUDED')
+            ->expectsOutputToContain('sales ada dalam tim HM, tetapi SO dikecualikan')
+            ->expectsOutputToContain('HM kandidat: Current HM')
+            ->assertSuccessful();
+    }
+
+    public function test_reconciliation_reports_duplicate_attribution_and_correct_inactive_hp_attribution(): void
+    {
+        $this->user('Head Admin');
+        $hm = $this->user('Health Manager');
+        $hp = $this->user('Health Planner', $hm, ['status' => 'Inactive']);
+        $this->sale($hp, 50);
+        $this->artisan('sales:reconcile-dashboard')
+            ->expectsOutputToContain('Semua SO pada card teratribusi tepat satu kali ke tabel HM.')
+            ->assertSuccessful();
+
+        // A newly promoted HM's pre-promotion sale can currently match both rows.
+        $promoted = $this->user('Health Manager', $hm, ['hm_since' => '2026-10-01']);
+        $this->sale($promoted, 2, ['order_no' => 'SO-DUPLICATE']);
+        $this->artisan('sales:reconcile-dashboard')
+            ->expectsOutputToContain('Atribusi ganda: SO-DUPLICATE | Units 2')
+            ->assertSuccessful();
     }
 
     public function test_performance_and_export_include_inactive_planner_sales_and_member_filter(): void
