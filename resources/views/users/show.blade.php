@@ -15,6 +15,38 @@
         </div>
     </div>
 
+    @if (session('success'))
+        <div class="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800" role="status">{{ session('success') }}</div>
+    @endif
+    @if ($transferablePlanners->isNotEmpty())
+        <section class="mt-6 rounded-2xl border bg-white p-6 shadow-sm" aria-labelledby="transfer-hp-title">
+            <h2 id="transfer-hp-title" class="text-lg font-semibold">Alihkan tim HP ke HM lain</h2>
+            <p class="mt-2 text-sm text-gray-600">Ada {{ $transferablePlanners->count() }} HP dalam tim ini, termasuk akun Inactive. Seluruh NS mereka akan mengikuti HM tujuan. Referrer tetap.</p>
+            <details class="mt-3 text-sm text-gray-600">
+                <summary class="cursor-pointer font-medium">Lihat HP yang akan dialihkan</summary>
+                <ul class="mt-2 max-h-64 space-y-1 overflow-auto">
+                    @foreach ($transferablePlanners as $planner)
+                        <li>{{ $planner->name }} — {{ $planner->dst_code ?: '#'.$planner->id }} ({{ $planner->status }})</li>
+                    @endforeach
+                </ul>
+            </details>
+            <form method="POST" action="{{ route('users.transfer-health-planners', $user) }}" class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                @csrf
+                <div class="sm:min-w-72">
+                    <label for="transfer_health_manager_id" class="text-sm font-medium text-gray-700">HM tujuan</label>
+                    <select id="transfer_health_manager_id" name="health_manager_id" required class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">Pilih HM tujuan</option>
+                        @foreach ($healthManagerOptions as $manager)
+                            <option value="{{ $manager->id }}" @selected((int) old('health_manager_id') === (int) $manager->id)>{{ $manager->name }}{{ $manager->dst_code ? ' — '.$manager->dst_code : '' }}</option>
+                        @endforeach
+                    </select>
+                    @error('health_manager_id')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <button type="submit" class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Alihkan {{ $transferablePlanners->count() }} HP</button>
+            </form>
+        </section>
+    @endif
+
     <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {{-- Left: Profile card --}}
         <div class="lg:col-span-1">

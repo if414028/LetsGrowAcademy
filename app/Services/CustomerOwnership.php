@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\{User, UserHierarchy};
+use App\Models\User;
 use Illuminate\Validation\ValidationException;
 
 class CustomerOwnership
@@ -20,16 +20,7 @@ class CustomerOwnership
 
     public function nearestManager(User $hp): ?User
     {
-        $visited = [$hp->id];
-        $current = $hp->id;
-        while ($parentId = UserHierarchy::where('child_user_id', $current)->value('parent_user_id')) {
-            if (in_array((int) $parentId, $visited, true)) return null;
-            $visited[] = (int) $parentId;
-            $parent = User::find($parentId);
-            if (!$parent) return null;
-            if ($parent->hasRole('Health Manager')) return $parent;
-            $current = $parent->id;
-        }
-        return null;
+        $manager = HealthManagerAssignment::managerFor($hp);
+        return $manager?->hasRole('Health Manager') ? $manager : null;
     }
 }

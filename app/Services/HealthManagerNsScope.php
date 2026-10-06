@@ -10,7 +10,7 @@ class HealthManagerNsScope
 {
     public static function resolve(User $healthManager): array
     {
-        $downlineIds = $healthManager->downlineUserIds()->unique()->reject(fn ($id) => (int) $id === (int) $healthManager->id)->values();
+        $downlineIds = $healthManager->teamUserIds()->unique()->reject(fn ($id) => (int) $id === (int) $healthManager->id)->values();
         $scopeIds = $downlineIds->concat([(int) $healthManager->id])->unique()->values();
         $periods = DB::table('health_manager_periods')->whereIn('user_id', $downlineIds)->get()->groupBy('user_id');
         $ranges = [];
@@ -43,6 +43,11 @@ class HealthManagerNsScope
             }
         };
         $walk((int) $healthManager->id);
+        // An explicit assignment owns all this planner's NS, independently of
+        // referral ancestry and the former HM's promotion/demotion intervals.
+        foreach (User::role('Health Planner')->where('health_manager_id', $healthManager->id)->pluck('id') as $id) {
+            unset($exclusions[$id]);
+        }
         return ['scope_ids' => $scopeIds, 'exclusion_periods' => $exclusions, 'hm_periods' => $ranges];
     }
 

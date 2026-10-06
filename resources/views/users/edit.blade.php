@@ -187,6 +187,41 @@
                     </div>
                 </div>
 
+                @include('users.partials.health-manager-field')
+
+                @if ($user->hasRole('Health Manager') && $transferablePlannerCount > 0)
+                    <div id="hm_promotion_field" class="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                        <label for="replacement_health_manager_id" class="text-sm font-semibold text-blue-900">HM pengganti saat promosi menjadi SM</label>
+                        <select name="replacement_health_manager_id" id="replacement_health_manager_id"
+                            class="mt-2 w-full rounded-xl border-blue-200 bg-white focus:border-blue-500 focus:ring-blue-500">
+                            <option value="">Pilih HM pengganti</option>
+                            @foreach ($healthManagerOptions as $manager)
+                                <option value="{{ $manager->id }}" @selected((int) old('replacement_health_manager_id') === (int) $manager->id)>{{ $manager->name }}</option>
+                            @endforeach
+                        </select>
+                        <p class="mt-2 text-xs text-blue-700">Wajib dipilih jika Role diubah menjadi Sales Manager. Seluruh {{ $transferablePlannerCount }} HP, termasuk HP Inactive, akan dialihkan ke HM ini.</p>
+                        @error('replacement_health_manager_id')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                    </div>
+                @endif
+
+                @if ($user->hasRole('Health Manager') && $transferablePlannerCount > 0)
+                    <script>
+                        (() => {
+                            const field = document.getElementById('hm_promotion_field');
+                            const role = field.closest('form').querySelector('select[name="role"]');
+                            const replacement = field.querySelector('select');
+                            const update = () => {
+                                const promoting = role.value === 'Sales Manager';
+                                field.classList.toggle('hidden', !promoting);
+                                replacement.disabled = !promoting;
+                                replacement.required = promoting;
+                            };
+                            role.addEventListener('change', update);
+                            update();
+                        })();
+                    </script>
+                @endif
+
                 {{-- Primary / Secondary account relationship --}}
                 <div class="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
                     <label for="is_secondary_account" class="flex cursor-pointer items-start gap-3">

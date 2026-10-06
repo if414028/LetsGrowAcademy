@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\PerformanceCutoff;
 use App\Models\User;
-use App\Models\UserHierarchy;
 use App\Services\HealthManagerNsScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -72,7 +71,7 @@ class ReportController extends Controller
                 ->select('users.id', 'users.name', 'users.full_name')
                 ->get();
         } else {
-            $downlineIds = $user->downlineUserIds();
+            $downlineIds = $user->teamUserIds();
 
             $hpTargets = User::query()
                 ->whereIn('users.id', $downlineIds)
@@ -355,55 +354,10 @@ class ReportController extends Controller
      */
     private function nearestHealthManagerNames($healthPlannerIds)
     {
-        $currentByHealthPlanner = $healthPlannerIds
-            ->mapWithKeys(fn($id) => [(int) $id => (int) $id]);
-        $visitedByHealthPlanner = $currentByHealthPlanner
-            ->map(fn($id) => [$id => true])
-            ->all();
         $names = collect();
-
-        while ($currentByHealthPlanner->isNotEmpty()) {
-            $parentByChild = UserHierarchy::query()
-                ->whereIn('child_user_id', $currentByHealthPlanner->values()->unique()->all())
-                ->pluck('parent_user_id', 'child_user_id')
-                ->mapWithKeys(fn($parentId, $childId) => [(int) $childId => (int) $parentId]);
-
-            if ($parentByChild->isEmpty()) {
-                break;
-            }
-
-            $healthManagers = User::query()
-                ->whereIn('users.id', $parentByChild->values()->unique()->all())
-                ->whereHas('roles', fn($query) => $query->where('name', 'Health Manager'))
-                ->select('users.id', 'users.name', 'users.full_name')
-                ->get()
-                ->mapWithKeys(fn($user) => [
-                    (int) $user->id => trim((string) ($user->full_name ?: $user->name)),
-                ]);
-
-            $next = collect();
-
-            foreach ($currentByHealthPlanner as $healthPlannerId => $currentId) {
-                $parentId = $parentByChild->get($currentId);
-
-                if (!$parentId) {
-                    continue;
-                }
-
-                if ($healthManagers->has($parentId)) {
-                    $names->put((int) $healthPlannerId, $healthManagers->get($parentId));
-                    continue;
-                }
-
-                if (isset($visitedByHealthPlanner[$healthPlannerId][$parentId])) {
-                    continue;
-                }
-
-                $visitedByHealthPlanner[$healthPlannerId][$parentId] = true;
-                $next->put((int) $healthPlannerId, (int) $parentId);
-            }
-
-            $currentByHealthPlanner = $next;
+        foreach (User::with(['roles', 'assignedHealthManager.roles'])->whereIn('id', $healthPlannerIds)->get() as $planner) {
+            $manager = \App\Services\HealthManagerAssignment::managerFor($planner);
+            if ($manager) $names->put((int) $planner->id, $manager->full_name ?: $manager->name);
         }
 
         return $names;

@@ -812,44 +812,12 @@ class ContestController extends Controller
 
     private function getDescendantsByRole(array $rootUserIds, string $roleName): array
     {
-        $rootUserIds = array_values(array_unique(array_filter($rootUserIds)));
+        $allDescendantIds = User::whereIn('id', $rootUserIds)->get()
+            ->flatMap(fn ($root) => $root->teamUserIds())->unique()->all();
+        if (! $allDescendantIds) return [];
 
-        if (empty($rootUserIds)) {
-            return [];
-        }
-
-        $visited = [];
-        $queue = $rootUserIds;
-
-        while (!empty($queue)) {
-            $batch = $queue;
-            $queue = [];
-
-            $children = DB::table('user_hierarchies')
-                ->whereIn('parent_user_id', $batch)
-                ->pluck('child_user_id')
-                ->map(fn($v) => (int) $v)
-                ->all();
-
-            foreach ($children as $cid) {
-                if (!isset($visited[$cid])) {
-                    $visited[$cid] = true;
-                    $queue[] = $cid;
-                }
-            }
-        }
-
-        $allDescendantIds = array_keys($visited);
-        if (empty($allDescendantIds)) {
-            return [];
-        }
-
-        return User::query()
-            ->whereIn('id', $allDescendantIds)
-            ->whereHas('roles', fn($q) => $q->where('name', $roleName))
-            ->pluck('id')
-            ->map(fn($v) => (int) $v)
-            ->all();
+        return User::whereIn('id', $allDescendantIds)
+            ->role($roleName)->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
     private function buildMonthRanges($start, $end): array

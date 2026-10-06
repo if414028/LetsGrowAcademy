@@ -158,6 +158,8 @@
                 </div>
             </div>
 
+            @include('users.partials.health-manager-field')
+
             {{-- Primary / Secondary account relationship --}}
             <div class="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
                 <label for="is_secondary_account" class="flex cursor-pointer items-start gap-3">
@@ -301,6 +303,7 @@
             if (!refRank || isNaN(refRank)) {
                 roleSelect.disabled = true;
                 roleSelect.value = "";
+                roleSelect.dispatchEvent(new Event("change"));
                 return;
             }
 
@@ -327,6 +330,7 @@
             const currentAllowed = currentOpt && !currentOpt.disabled && !currentOpt.hidden;
 
             if (!currentAllowed) roleSelect.value = firstAllowedValue ?? "";
+            roleSelect.dispatchEvent(new Event("change"));
         }
 
         async function searchReferrers(q) {
@@ -363,6 +367,7 @@
             refRank = null;
             roleSelect.disabled = true;
             roleSelect.value = "";
+            roleSelect.dispatchEvent(new Event("change"));
         }
 
         searchInput.addEventListener('input', () => {

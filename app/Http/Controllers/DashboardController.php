@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\SalesOrder;
 use App\Models\User;
-use App\Models\UserHierarchy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Contest;
@@ -453,67 +452,13 @@ class DashboardController extends Controller
      */
     private function getAllDescendantUserIds(int $userId): array
     {
-        $visited = [];
-        $queue = [$userId];
-
-        while (!empty($queue)) {
-            $parentId = array_shift($queue);
-
-            $children = UserHierarchy::query()
-                ->where('parent_user_id', $parentId)
-                ->pluck('child_user_id')
-                ->all();
-
-            foreach ($children as $childId) {
-                $childId = (int) $childId;
-
-                if (isset($visited[$childId])) {
-                    continue;
-                }
-
-                $visited[$childId] = true;
-                $queue[] = $childId;
-            }
-        }
-
-        return array_keys($visited);
+        return User::find($userId)?->teamUserIds()->all() ?? [];
     }
 
     private function nearestHealthManagerName(int $userId): ?string
     {
-        $visited = [];
-        $current = $userId;
-
-        while ($current) {
-            if (isset($visited[$current])) {
-                break;
-            }
-
-            $visited[$current] = true;
-
-            $parentId = UserHierarchy::query()
-                ->where('child_user_id', $current)
-                ->value('parent_user_id');
-
-            if (!$parentId) {
-                return null;
-            }
-
-            $parent = User::query()
-                ->with('roles')
-                ->find($parentId, ['id', 'name', 'full_name']);
-
-            if (!$parent) {
-                return null;
-            }
-
-            if ($parent->hasRole('Health Manager')) {
-                return trim((string) ($parent->full_name ?: $parent->name));
-            }
-
-            $current = (int) $parentId;
-        }
-
-        return null;
+        $user = User::find($userId);
+        $manager = $user ? \App\Services\HealthManagerAssignment::managerFor($user) : null;
+        return $manager ? trim((string) ($manager->full_name ?: $manager->name)) : null;
     }
 }

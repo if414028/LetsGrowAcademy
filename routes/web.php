@@ -85,6 +85,8 @@ Route::middleware('auth', 'active')->group(function () {
     Route::middleware('role:Admin|Head Admin')->group(function () {
         Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
         Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        Route::post('/users/{user}/transfer-health-planners', [UserController::class, 'transferHealthPlanners'])
+            ->name('users.transfer-health-planners');
 
         Route::resource('users', UserController::class)
             ->only(['destroy']);

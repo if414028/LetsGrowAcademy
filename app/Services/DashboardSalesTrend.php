@@ -31,7 +31,7 @@ class DashboardSalesTrend
         }
 
         $perHealthManager = $user->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']);
-        $scopeIds = $user->downlineUserIds()->push((int) $user->id)->unique()->all();
+        $scopeIds = $user->teamUserIds()->push((int) $user->id)->unique()->all();
         if ($perHealthManager) {
             $managers = User::role('Health Manager')->where('status', 'Active')->orderBy('name');
             if (! $user->hasAnyRole(['Admin', 'Head Admin'])) {

@@ -36,6 +36,7 @@ class User extends Authenticatable
         'last_login_at',
         'is_secondary_account',
         'primary_account_id',
+        'health_manager_id',
     ];
 
     /**
@@ -64,6 +65,7 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'deactivated_at' => 'datetime',
             'is_secondary_account' => 'boolean',
+            'health_manager_id' => 'integer',
         ];
     }
 
@@ -84,6 +86,23 @@ class User extends Authenticatable
     public function secondaryAccounts()
     {
         return $this->hasMany(self::class, 'primary_account_id');
+    }
+
+    public function assignedHealthManager()
+    {
+        return $this->belongsTo(self::class, 'health_manager_id');
+    }
+
+    public function assignedHealthPlanners()
+    {
+        return $this->hasMany(self::class, 'health_manager_id');
+    }
+
+    public function teamUserIds(): Collection
+    {
+        return $this->hasAnyRole(['Health Manager', 'Sales Manager'])
+            ? \App\Services\HealthManagerAssignment::teamUserIds($this)
+            : $this->downlineUserIds();
     }
 
     public function hierarchyChildren()

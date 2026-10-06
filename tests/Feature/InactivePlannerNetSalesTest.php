@@ -31,6 +31,7 @@ class InactivePlannerNetSalesTest extends TestCase
                 $t->date($column)->nullable();
             }
             $t->string('status')->default('Active');
+            $t->unsignedBigInteger('health_manager_id')->nullable();
             $t->timestamp('deactivated_at')->nullable();
             $t->boolean('is_secondary_account')->default(false);
             $t->unsignedBigInteger('primary_account_id')->nullable();
@@ -316,4 +317,73 @@ class InactivePlannerNetSalesTest extends TestCase
         $this->assertSame($activeChild->id, $tree['children'][0]['children'][0]['id']);
         $this->assertSame(4, $tree['children'][0]['children'][0]['total_net_sales']);
     }
+    public function test_reassigning_hp_from_promoted_sm_reconciles_48_to_50_across_screens(): void
+    {
+        $admin = $this->user('Head Admin');
+        $hm = $this->user('Health Manager', null, ['name' => 'Original HM']);
+        $target = $this->user('Health Manager', null, ['name' => 'Daniel Prasadja', 'dst_code' => 'DST230600279']);
+        $former = $this->user('Sales Manager', null, ['name' => 'Gabrielle Prasadja', 'dst_code' => 'DST230500300']);
+        $normal = $this->user('Health Planner', $hm, ['health_manager_id' => $hm->id]);
+        $orphan = $this->user('Health Planner', $former, ['status' => 'Inactive', 'health_manager_id' => $former->id]);
+        $this->sale($normal, 48);
+        $this->sale($orphan, 2);
+        $edges = DB::table('user_hierarchies')->orderBy('id')->get()->toArray();
+        $before = app(DashboardController::class)->index($this->request($admin))->getData();
+        $this->assertSame(50, $before['totalUnitsSold']);
+        $this->assertSame(48, $before['healthManagerPerformance']->sum('units'));
+
+        $this->artisan('users:transfer-health-planners', ['from' => 'DST230500300', 'to' => 'DST230600279'])
+            ->expectsOutputToContain('1 HP berhasil dialihkan ke Daniel Prasadja.')->assertSuccessful();
+        $orphan->refresh();
+        $this->assertSame($target->id, $orphan->health_manager_id);
+        $this->assertSame('Inactive', $orphan->status);
+        $this->assertEquals($edges, DB::table('user_hierarchies')->orderBy('id')->get()->toArray());
+        $after = app(DashboardController::class)->index($this->request($admin))->getData();
+        $this->assertSame(50, $after['totalUnitsSold']);
+        $this->assertSame(50, $after['healthManagerPerformance']->sum('units'));
+        $this->assertSame(2, $after['healthManagerPerformance']->firstWhere('id', $target->id)->units);
+        $this->assertSame(1, $after['healthManagerPerformance']->firstWhere('id', $target->id)->team_size);
+        $targetDashboard = app(DashboardController::class)->index($this->request($target))->getData();
+        $this->assertSame(2, $targetDashboard['totalUnitsSold']);
+        $trend = app(DashboardSalesTrend::class)->build($target, 'daily');
+        $this->assertSame(2, array_sum($trend['datasets'][0]['data']));
+        $performance = app(PerformanceController::class)->index($this->request($target))->getData();
+        $this->assertSame(2, (int) $performance['summary']->total_sudah_install);
+        $this->assertSame(2, $performance['myTotalUnits']);
+        $this->assertSame(2, $performance['teamPerformance']->firstWhere('id', $orphan->id)['units']);
+        $export = (new ReflectionMethod(PerformanceController::class, 'buildPerformanceData'))
+            ->invoke(app(PerformanceController::class), $this->request($target));
+        $this->assertSame(2, (int) $export['summary']->total_sudah_install);
+        $report = app(ReportController::class)->index($this->request($admin))->getData();
+        $this->assertSame(2, $report['hmLeaderboard']->firstWhere('id', $target->id)['units']);
+        $this->assertSame('Daniel Prasadja', $report['hpLeaderboard']->firstWhere('id', $orphan->id)['health_manager_name']);
+        $recap = (new ReflectionMethod(PerformanceController::class, 'buildHealthManagerRecap'))
+            ->invoke(app(PerformanceController::class), $target);
+        $this->assertSame(2, $recap['months'][1]['achievement']);
+        $this->assertSame(0, $recap['months'][1]['active_health_planners']);
+        $planners = app(\App\Http\Controllers\SalesOrderController::class)->listHealthPlanners($this->request($admin, ['health_manager_id' => $target->id]))->getData(true);
+        $this->assertSame([$orphan->id], array_column($planners, 'id'));
+        $this->assertSame($target->id, app(\App\Services\CustomerOwnership::class)->nearestManager($orphan)->id);
+        $this->artisan('sales:reconcile-dashboard')->expectsOutputToContain('Semua SO pada card teratribusi tepat satu kali ke tabel HM.')->assertSuccessful();
+    }
+
+    public function test_explicit_manager_reassignment_removes_ns_from_former_hm_without_double_counting(): void
+    {
+        $admin = $this->user('Head Admin');
+        $source = $this->user('Health Manager');
+        $target = $this->user('Health Manager');
+        $hp = $this->user('Health Planner', $source, ['health_manager_id' => $source->id]);
+        $this->sale($hp, 7, ['install_date' => '2026-08-15', 'key_in_at' => '2026-08-15']);
+        $hp->update(['health_manager_id' => $target->id]);
+        $this->assertFalse($source->teamUserIds()->contains($hp->id));
+        $this->assertTrue($target->teamUserIds()->contains($hp->id));
+        $controller = app(ReportController::class);
+        $report = $controller->index($this->request($admin, ['from' => '2026-08-01', 'to' => '2026-08-31']))->getData();
+        $this->assertSame(7, $report['hmLeaderboard']->sum('units'));
+        $this->assertFalse($report['hmLeaderboard']->contains('id', $source->id));
+        $this->assertSame(7, $report['hmLeaderboard']->firstWhere('id', $target->id)['units']);
+        $this->actingAs($target)->get(route('users.show', $hp))->assertOk();
+        $this->actingAs($source)->get(route('users.show', $hp))->assertForbidden();
+    }
+
 }

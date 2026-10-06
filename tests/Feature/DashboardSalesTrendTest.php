@@ -27,6 +27,7 @@ class DashboardSalesTrendTest extends TestCase
             $t->date('join_date')->nullable();
             $t->string('dst_code')->nullable();
             $t->string('status')->default('Active');
+            $t->unsignedBigInteger('health_manager_id')->nullable();
             $t->timestamp('deactivated_at')->nullable();
             $t->boolean('is_secondary_account')->default(false);
             $t->unsignedBigInteger('primary_account_id')->nullable();

@@ -28,7 +28,7 @@ class PerformanceController extends Controller
         // ======================================
         // Scope member filter
         // ======================================
-        $authDownlineIds = $authUser->downlineUserIds();
+        $authDownlineIds = $authUser->teamUserIds();
 
         $allowedIds = $isAdminOrHead
             ? User::query()->pluck('id')
@@ -50,8 +50,8 @@ class PerformanceController extends Controller
             $childIds = collect();
             $scopeUserIds = User::query()->pluck('id');
         } else {
-            $childIds = $baseUser->downlineUserIds();
-            $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+            $childIds = $baseUser->teamUserIds();
+            $scopeUserIds = $childIds->concat([$baseUser->id])->unique()->values();
         }
 
         // ======================================
@@ -357,7 +357,9 @@ class PerformanceController extends Controller
         $auth = $request->user();
 
         $isAdminOrHead = $auth->hasAnyRole(['Admin', 'Head Admin']);
-        $isChild = $auth->childrenUsers()->where('users.id', $user->id)->exists();
+        $isChild = $auth->hasAnyRole(['Health Manager', 'Sales Manager'])
+            ? $auth->teamUserIds()->contains((int) $user->id)
+            : $auth->childrenUsers()->where('users.id', $user->id)->exists();
 
         abort_unless($isAdminOrHead || $isChild, 403);
 
@@ -461,7 +463,7 @@ class PerformanceController extends Controller
         // ======================================
         // Scope member filter
         // ======================================
-        $authDownlineIds = $authUser->downlineUserIds();
+        $authDownlineIds = $authUser->teamUserIds();
 
         $allowedIds = $isAdminOrHead
             ? User::query()->pluck('id')
@@ -479,8 +481,8 @@ class PerformanceController extends Controller
             $childIds = collect();
             $scopeUserIds = User::query()->pluck('id');
         } else {
-            $childIds = $baseUser->downlineUserIds();
-            $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+            $childIds = $baseUser->teamUserIds();
+            $scopeUserIds = $childIds->concat([$baseUser->id])->unique()->values();
         }
 
         [$from, $to, $isManual] = $this->normalizeDateRange(
@@ -1091,7 +1093,7 @@ class PerformanceController extends Controller
         $authUser = $request->user();
         $isAdminOrHead = $authUser->hasAnyRole(['Admin', 'Head Admin']);
 
-        $authDownlineIds = $authUser->downlineUserIds();
+        $authDownlineIds = $authUser->teamUserIds();
         $allowedIds = $isAdminOrHead
             ? User::query()->pluck('id')
             : $authDownlineIds->push($authUser->id)->unique()->values();
@@ -1107,7 +1109,7 @@ class PerformanceController extends Controller
         if ($isAdminOrHead && !$hasMemberFilter) {
             $scopeUserIds = User::query()->pluck('id');
         } else {
-            $scopeUserIds = $baseUser->downlineUserIds()->push($baseUser->id)->unique()->values();
+            $scopeUserIds = $baseUser->teamUserIds()->push($baseUser->id)->unique()->values();
         }
 
         [$from, $to, $isManual] = $this->normalizeDateRange(
@@ -1535,7 +1537,7 @@ class PerformanceController extends Controller
         $historyStart = $now->copy()->subMonthsNoOverflow(12)->startOfMonth();
         $historyEnd   = $now->copy()->addMonthsNoOverflow(4)->endOfMonth();
 
-        $downlineIds = $user->downlineUserIds()->unique()->values();
+        $downlineIds = $user->teamUserIds()->unique()->values();
 
         $downlines = User::query()
             ->whereIn('id', $downlineIds)

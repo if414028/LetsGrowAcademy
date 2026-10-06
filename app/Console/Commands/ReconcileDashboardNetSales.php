@@ -47,7 +47,7 @@ class ReconcileDashboardNetSales extends Command
         if ($viewer->hasRole('Health Manager')) {
             HealthManagerNsScope::apply($cardQuery, $viewer, 'sales_orders', 'sales_orders.install_date');
         } elseif (! $admin) {
-            $cardQuery->whereIn('sales_orders.sales_user_id', $viewer->downlineUserIds()->concat([$viewer->id])->unique());
+            $cardQuery->whereIn('sales_orders.sales_user_id', $viewer->teamUserIds()->concat([$viewer->id])->unique());
         }
 
         $columns = ['sales_orders.id', 'sales_orders.order_no', 'sales_orders.sales_user_id', 'sales_orders.key_in_at', 'sales_orders.install_date'];
@@ -102,6 +102,10 @@ class ReconcileDashboardNetSales extends Command
             $this->newLine();
             $this->line('SO tidak masuk tabel: '.($order->order_no ?: '#'.$order->id).' | ID '.$order->id.' | Units '.(int) $order->units);
             $this->line('Sales: '.($seller?->name ?? '(user tidak ditemukan)').' (#'.$order->sales_user_id.') | Status akun: '.($seller?->status ?? '-'));
+            if ($seller?->health_manager_id) {
+                $assigned = $seller->assignedHealthManager;
+                $this->line('HM tersimpan: '.($assigned?->name ?? '-').' (#'.$seller->health_manager_id.') | Role sekarang: '.($assigned?->getRoleNames()->implode(', ') ?? '-'));
+            }
             $this->line('Key-in: '.($order->key_in_at?->format('Y-m-d H:i:s') ?? 'NULL').' | Install: '.($order->install_date?->toDateString() ?? 'NULL'));
             $candidates = $managers->filter(fn ($manager) => $scopes[$manager->id]['scope_ids']->contains((int) $order->sales_user_id));
             if ($candidates->isEmpty()) {
