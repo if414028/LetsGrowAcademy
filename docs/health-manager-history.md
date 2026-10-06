@@ -21,3 +21,9 @@ Angka aktual Myra pada Agustus perlu dicocokkan di database VPS dengan order sel
 ## Batas cakupan
 
 Pohon downline masih memakai hierarki saat ini. Fitur ini menyimpan riwayat jabatan HM, bukan riwayat perpindahan parent/downline. Perubahan hierarki historis dan perubahan role langsung via SQL atau di luar alur UserController memerlukan penanganan tersendiri. Kolom `hm_since` tetap menjadi awal periode HM saat ini untuk siklus recap enam bulan.
+
+## Status HP dan Net Sales
+
+SO selesai milik Health Planner tetap dihitung dalam Net Sales setelah akun menjadi `Inactive`, sesuai periode dan cakupan tim yang berlaku. Aturan ini berlaku untuk Overview, Performance dan ekspornya, leaderboard HP (personal maupun team, termasuk secondary account), Road to HM, recap HM, dan Net Sales di pohon downline. Pohon tetap menampilkan HP inactive beserta cabangnya agar penjualan mereka tidak tersembunyi.
+
+Filter `Active` hanya dipakai untuk metrik jumlah HP aktif, bukan untuk menentukan SO yang menyumbang NS. Daftar HM yang ditampilkan tetap mengikuti filter HM aktif yang sudah ada; perubahan ini tidak mengubah aturan atribusi antar-HM atau periode promosi/demosi.

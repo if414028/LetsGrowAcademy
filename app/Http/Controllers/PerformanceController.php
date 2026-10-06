@@ -91,7 +91,6 @@ class PerformanceController extends Controller
         // ======================================
         $memberOptions = User::query()
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('id', $allowedIds))
-            ->when($isAdminOrHead, fn($q) => $q->where('status', 'Active'))
             ->orderByRaw("COALESCE(NULLIF(full_name,''), name) asc")
             ->get(['id', 'name', 'full_name'])
             ->map(fn($u) => [
@@ -121,7 +120,7 @@ class PerformanceController extends Controller
         $teamPerformanceQ = User::query()
             ->when(
                 $isAdminOrHead && !$hasMemberFilter,
-                fn($q) => $q->role('Health Planner')->where('users.status', 'Active'),
+                fn($q) => $q->role('Health Planner'),
                 fn($q) => $q->whereIn('users.id', $childIds)
             )
             ->leftJoin('sales_orders as so', function ($join) use ($from, $to) {
@@ -333,7 +332,7 @@ class PerformanceController extends Controller
         return view('performances.index', [
             'teamPerformance' => $teamPerformance,
             'teamMemberCount' => ($isAdminOrHead && !$hasMemberFilter)
-                ? User::query()->role('Health Planner')->where('status', 'Active')->count()
+                ? User::query()->role('Health Planner')->count()
                 : $childIds->count(),
             'myTotalUnits'    => $myTotalUnits,
             'q'               => $q,
@@ -1540,10 +1539,11 @@ class PerformanceController extends Controller
 
         $downlines = User::query()
             ->whereIn('id', $downlineIds)
-            ->where('status', 'Active')
             ->orderByRaw("COALESCE(NULLIF(full_name,''), name) asc")
             ->get(['id', 'name', 'full_name']);
 
+        // Completed sales remain in team NS after a planner becomes inactive.
+        // Only the separate Active HP metric filters by account status.
         $trackedUserIds = $downlines->pluck('id')->push($user->id)->unique()->values();
 
         $monthlyUnitsRaw = DB::table('sales_orders as so')

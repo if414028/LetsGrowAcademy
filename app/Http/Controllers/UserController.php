@@ -923,7 +923,6 @@ class UserController extends Controller
             ->select(['id', 'name', 'phone_number', 'photo'])
             ->with('roles')
             ->whereIn('id', $userIds)
-            ->where('status', 'Active')
             ->get()
             ->keyBy('id');
 

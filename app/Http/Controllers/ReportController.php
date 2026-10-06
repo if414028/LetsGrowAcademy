@@ -61,13 +61,12 @@ class ReportController extends Controller
 
         // =========================================================
         // LEADERBOARD HEALTH PLANNER
-        // - Admin-like: semua Health Planner aktif
-        // - selain admin-like: seluruh downline Health Planner aktif user login
+        // - Admin-like: semua Health Planner, termasuk akun inactive dengan NS
+        // - selain admin-like: seluruh downline Health Planner user login
         // HP = mode personal (akun + secondary) atau team (+ seluruh downliner)
         // =========================================================
         if ($isAdminLike) {
             $hpTargets = User::query()
-                ->where('status', 'Active')
                 ->where('is_secondary_account', false)
                 ->whereHas('roles', fn($q) => $q->where('name', 'Health Planner'))
                 ->select('users.id', 'users.name', 'users.full_name')
@@ -76,7 +75,6 @@ class ReportController extends Controller
             $downlineIds = $user->downlineUserIds();
 
             $hpTargets = User::query()
-                ->where('status', 'Active')
                 ->whereIn('users.id', $downlineIds)
                 ->where('is_secondary_account', false)
                 ->whereHas('roles', fn($q) => $q->where('name', 'Health Planner'))
