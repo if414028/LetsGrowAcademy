@@ -6,6 +6,7 @@ use App\Models\PerformanceCutoff;
 use App\Models\SalesOrder;
 use App\Models\User;
 use App\Models\UserHierarchy;
+use App\Services\HealthManagerAssignment;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +59,8 @@ class UserController extends Controller
 
     private function downlinerIds(int $rootUserId)
     {
+        $root = User::find($rootUserId);
+        if ($root?->hasAnyRole(['Health Manager', 'Sales Manager'])) return $root->teamUserIds();
         $visited = collect();
         $queue = collect([$rootUserId]);
 
@@ -97,7 +100,7 @@ class UserController extends Controller
         $this->denyIfTargetIsHeadAdmin($user, $authUser);
 
         // Roles
-        $user->load('roles');
+        $user->load(['roles', 'primaryAccount.roles']);
 
         // Parent (referrer)
         $parentHierarchy = UserHierarchy::with('parentUser')
@@ -107,6 +110,10 @@ class UserController extends Controller
         $parentUser = $parentHierarchy?->parentUser;
 
         $hmUser = $this->findHealthManagerForUser($user->id);
+        $healthManagerOptions = User::role('Health Manager')->where('status', 'Active')
+            ->where('id', '!=', $user->id)->orderBy('name')->get(['id', 'name', 'dst_code']);
+        $transferablePlanners = $this->isAdminLevel($authUser) && $user->hasAnyRole(['Health Manager', 'Sales Manager'])
+            ? HealthManagerAssignment::plannersForTransfer($user) : collect();
 
         // Direct reports (bawahan langsung)
         $childHierarchies = UserHierarchy::with('childUser.roles')
@@ -143,7 +150,9 @@ class UserController extends Controller
             'childrenCount',
             'directReports',
             'downlineTree',
-            'hmUser'
+            'hmUser',
+            'healthManagerOptions',
+            'transferablePlanners'
         ));
     }
 
@@ -165,7 +174,13 @@ class UserController extends Controller
             $oldReferrer = User::with('roles')->find(old('referrer_user_id'));
         }
 
-        return view('users.create', compact('roles', 'roleRanks', 'oldReferrer'));
+        $oldPrimaryAccount = null;
+        if (old('primary_account_id')) {
+            $oldPrimaryAccount = User::with('roles')->find(old('primary_account_id'));
+        }
+
+        $healthManagerOptions = User::role('Health Manager')->where('status', 'Active')->orderBy('name')->get();
+        return view('users.create', compact('roles', 'roleRanks', 'oldReferrer', 'oldPrimaryAccount', 'healthManagerOptions'));
     }
 
     public function store(Request $request)
@@ -180,6 +195,14 @@ class UserController extends Controller
             // hierarchy & role
             'role' => ['required', 'string', 'exists:roles,name'],
             'referrer_user_id' => ['required', 'exists:users,id'],
+            'health_manager_id' => $this->healthManagerRules(),
+            'is_secondary_account' => ['nullable', 'boolean'],
+            'primary_account_id' => [
+                'nullable',
+                'required_if:is_secondary_account,1',
+                'integer',
+                'exists:users,id',
+            ],
 
             // ERD fields
             'status' => ['nullable', 'string', 'max:50'],
@@ -202,6 +225,23 @@ class UserController extends Controller
 
         $authUser = $request->user();
 
+        $isSecondaryAccount = $request->boolean('is_secondary_account');
+        $primaryAccount = null;
+
+        if ($isSecondaryAccount) {
+            $primaryAccount = User::query()
+                ->whereKey($validated['primary_account_id'])
+                ->where('is_secondary_account', false)
+                ->whereHas('roles', fn ($query) => $query->whereIn('name', ['Health Planner', 'Health Manager']))
+                ->first();
+
+            if (!$primaryAccount) {
+                return back()
+                    ->withErrors(['primary_account_id' => 'Primary Account harus berupa akun utama HP atau HM.'])
+                    ->withInput();
+            }
+        }
+
         if ($newRole === 'Head Admin' && !$authUser->hasRole('Head Admin')) {
             return back()
                 ->withErrors(['role' => 'Kamu tidak punya akses untuk membuat user Head Admin.'])
@@ -220,15 +260,11 @@ class UserController extends Controller
                 ->withInput();
         }
 
-        // role baru tidak boleh lebih tinggi dari referrer
-        if ($refRole === 'Health Planner') {
-            $newRole = 'Health Planner';
-        } else {
-            if ($rankMap[$newRole] < $rankMap[$refRole]) {
-                return back()
-                    ->withErrors(['role' => "Role user baru tidak boleh lebih tinggi dari referrer ({$refRole})."])
-                    ->withInput();
-            }
+        // Reject incompatible roles instead of silently replacing the selected role.
+        if ($rankMap[$newRole] < $rankMap[$refRole]) {
+            return back()
+                ->withErrors(['role' => "Role {$newRole} tidak boleh lebih tinggi dari referrer {$referrer->name} ({$refRole}). Pilih referrer dengan role setara atau lebih tinggi."])
+                ->withInput();
         }
 
         $photoPath = $request->file('photo')?->store('users/photos', 'public');
@@ -249,6 +285,11 @@ class UserController extends Controller
 
             'photo' => $photoPath,
             'id_card' => $idCardPath,
+            'is_secondary_account' => $isSecondaryAccount,
+            'primary_account_id' => $primaryAccount?->id,
+            'health_manager_id' => $newRole === 'Health Planner'
+                ? ($validated['health_manager_id'] ?? HealthManagerAssignment::fromReferrer($referrer)?->id)
+                : null,
         ]);
 
         $user->assignRole($newRole);
@@ -278,7 +319,7 @@ class UserController extends Controller
         // Admin tidak boleh edit Head Admin
         $this->denyIfTargetIsHeadAdmin($user, $authUser);
 
-        $user->load('roles');
+        $user->load(['roles', 'primaryAccount.roles']);
 
         $roles = Role::query()
             ->orderBy('name')
@@ -291,7 +332,16 @@ class UserController extends Controller
             ->where('child_user_id', $user->id)
             ->first()?->parentUser;
 
-        return view('users.edit', compact('user', 'roles', 'currentReferrer'));
+        $selectedPrimaryAccount = old('primary_account_id')
+            ? User::with('roles')->find(old('primary_account_id'))
+            : $user->primaryAccount;
+
+        $healthManagerOptions = User::role('Health Manager')->where('status', 'Active')
+            ->where('id', '!=', $user->id)->orderBy('name')->get();
+        $selectedHealthManager = $user->health_manager_id ? User::find($user->health_manager_id) : null;
+        $transferablePlannerCount = $user->hasRole('Health Manager')
+            ? HealthManagerAssignment::plannersForTransfer($user)->count() : 0;
+        return view('users.edit', compact('user', 'roles', 'currentReferrer', 'selectedPrimaryAccount', 'healthManagerOptions', 'selectedHealthManager', 'transferablePlannerCount'));
     }
 
     public function update(Request $request, User $user)
@@ -362,6 +412,15 @@ class UserController extends Controller
             // role & referrer
             'role' => ['required', 'string', 'exists:roles,name'],
             'referrer_user_id' => ['required', 'exists:users,id'],
+            'health_manager_id' => $this->healthManagerRules($user),
+            'replacement_health_manager_id' => $this->healthManagerRules(),
+            'is_secondary_account' => ['nullable', 'boolean'],
+            'primary_account_id' => [
+                'nullable',
+                'required_if:is_secondary_account,1',
+                'integer',
+                'exists:users,id',
+            ],
 
             // uploads
             'photo' => ['nullable', 'image', 'max:2048'],
@@ -384,8 +443,36 @@ class UserController extends Controller
         $manualHmSince = $authUser->hasRole('Head Admin')
             ? ($validated['hm_since'] ?? null)
             : null;
+        $isSecondaryAccount = $request->boolean('is_secondary_account');
+        $primaryAccount = null;
 
-        unset($validated['role'], $validated['referrer_user_id'], $validated['hm_since']);
+        if ($isSecondaryAccount) {
+            if ($user->secondaryAccounts()->exists()) {
+                return back()
+                    ->withErrors([
+                        'is_secondary_account' => 'User ini masih menjadi Primary Account. Pindahkan secondary account miliknya terlebih dahulu.',
+                    ])
+                    ->withInput();
+            }
+
+            $primaryAccount = User::query()
+                ->whereKey($validated['primary_account_id'])
+                ->where('id', '!=', $user->id)
+                ->where('is_secondary_account', false)
+                ->whereHas('roles', fn($query) => $query->whereIn('name', ['Health Planner', 'Health Manager']))
+                ->first();
+
+            if (!$primaryAccount) {
+                return back()
+                    ->withErrors(['primary_account_id' => 'Primary Account harus berupa akun utama HP atau HM dan tidak boleh diri sendiri.'])
+                    ->withInput();
+            }
+        }
+
+        $validated['is_secondary_account'] = $isSecondaryAccount;
+        $validated['primary_account_id'] = $primaryAccount?->id;
+
+        unset($validated['role'], $validated['referrer_user_id'], $validated['hm_since'], $validated['replacement_health_manager_id']);
 
         if ($role === 'Head Admin' && !$authUser->hasRole('Head Admin')) {
             return back()
@@ -414,7 +501,8 @@ class UserController extends Controller
             referrer: $referrer,
             requestedRole: $role,
             actor: $authUser,
-            rankMap: $rankMap
+            rankMap: $rankMap,
+            existingUser: $user
         );
 
         if (is_string($resolvedRoleOrError) && str_starts_with($resolvedRoleOrError, 'ERROR:')) {
@@ -431,9 +519,34 @@ class UserController extends Controller
             $validated['password'] = Hash::make($validated['password']);
         }
 
-        DB::transaction(function () use ($user, $validated, $role, $referrer, $authUser, $manualHmSince) {
+        DB::transaction(function () use ($user, $validated, $role, $referrer, $authUser, $manualHmSince, $request) {
             User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $user->refresh();
             $wasHealthManager = $user->hasRole('Health Manager');
+            $transferIds = $wasHealthManager && $role === 'Sales Manager'
+                ? HealthManagerAssignment::plannersForTransfer($user)->pluck('id') : collect();
+            $replacementId = $request->integer('replacement_health_manager_id');
+            if ($transferIds->isNotEmpty() && (! $replacementId || $replacementId === (int) $user->id)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'replacement_health_manager_id' => 'Pilih HM pengganti untuk seluruh HP sebelum mempromosikan HM menjadi SM.',
+                ]);
+            }
+            if ($transferIds->isNotEmpty()) {
+                $replacement = User::whereKey($replacementId)->lockForUpdate()->firstOrFail();
+                if (! $replacement->hasRole('Health Manager') || $replacement->status !== 'Active') {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['replacement_health_manager_id' => 'Pilih Health Manager yang aktif.']);
+                }
+            }
+            $oldManagerId = HealthManagerAssignment::managerFor($user)?->id;
+            $promotedTeamIds = ! $wasHealthManager && $role === 'Health Manager'
+                ? User::role('Health Planner')->whereIn('id', $user->downlineUserIds())->get()
+                    ->filter(fn ($hp) => HealthManagerAssignment::managerFor($hp)?->id === $oldManagerId)->pluck('id')
+                : collect();
+            $validated['health_manager_id'] = $role === 'Health Planner'
+                ? ($request->has('health_manager_id')
+                    ? ($validated['health_manager_id'] ?? HealthManagerAssignment::fromReferrer($referrer)?->id)
+                    : ($user->health_manager_id ?? HealthManagerAssignment::fromReferrer($referrer)?->id))
+                : null;
             $user->update($validated);
             $user->syncRoles([$role]);
 
@@ -454,9 +567,40 @@ class UserController extends Controller
                     'relation_type' => 'referral',
                 ]
             );
+            if ($transferIds->isNotEmpty()) {
+                User::whereIn('id', $transferIds)->update(['health_manager_id' => $replacementId]);
+            }
+            if ($promotedTeamIds->isNotEmpty()) {
+                User::whereIn('id', $promotedTeamIds)->update(['health_manager_id' => $user->id]);
+            }
         });
 
         return redirect()->route('users.show', $user)->with('success', 'User updated successfully.');
+    }
+
+    private function healthManagerRules(?User $planner = null): array
+    {
+        return ['nullable', 'integer', 'exists:users,id', function ($attribute, $value, $fail) use ($planner) {
+            if ($attribute === 'health_manager_id' && $planner?->health_manager_id === (int) $value) return;
+            $manager = User::find($value);
+            if (! $manager?->hasRole('Health Manager') || $manager->status !== 'Active') {
+                $fail('Pilih Health Manager yang aktif.');
+            }
+        }];
+    }
+
+    public function transferHealthPlanners(Request $request, User $user)
+    {
+        abort_unless($this->isAdminLevel($request->user()), 403);
+        abort_unless($user->hasAnyRole(['Health Manager', 'Sales Manager']), 422);
+        $request->validate(['health_manager_id' => array_merge(['required'], $this->healthManagerRules())]);
+        $destinationId = $request->integer('health_manager_id');
+        if ($destinationId === (int) $user->id) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['health_manager_id' => 'Pilih HM tujuan yang berbeda.']);
+        }
+        $count = HealthManagerAssignment::transferPlanners($user, User::findOrFail($destinationId))->count();
+
+        return redirect()->route('users.show', $user)->with('success', $count.' HP berhasil dialihkan ke HM tujuan. Referrer tetap.');
     }
 
     public function searchReferrers(Request $request)
@@ -488,6 +632,41 @@ class UserController extends Controller
                     'role' => $role,
                     'rank' => $role ? ($roleRanks[$role] ?? 999) : 999,
                     'label' => "{$u->name} ({$u->email}) - " . ($role ?? '-'),
+                ];
+            });
+
+        return response()->json($users);
+    }
+
+    public function searchPrimaryAccounts(Request $request)
+    {
+        $q = trim((string) $request->get('q', ''));
+        $excludeId = (int) $request->get('exclude', 0);
+
+        $users = User::query()
+            ->with('roles')
+            ->where('is_secondary_account', false)
+            ->when($excludeId > 0, fn($query) => $query->where('users.id', '!=', $excludeId))
+            ->whereHas('roles', fn ($query) => $query->whereIn('name', ['Health Planner', 'Health Manager']))
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where(function ($search) use ($q) {
+                    $search->where('name', 'like', "%{$q}%")
+                        ->orWhere('full_name', 'like', "%{$q}%")
+                        ->orWhere('email', 'like', "%{$q}%");
+                });
+            })
+            ->orderBy('name')
+            ->limit(20)
+            ->get()
+            ->map(function (User $user) {
+                $role = $user->getRoleNames()->first();
+
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $role,
+                    'label' => "{$user->name} ({$user->email}) - {$role}",
                 ];
             });
 
@@ -694,6 +873,8 @@ class UserController extends Controller
                         'phone_number' => $row['phone_number'] ?: null,
                         'join_date' => $row['join_date'] ?: null,
                         'city_of_domicile' => $row['city_of_domicile'] ?: null,
+                        'health_manager_id' => $finalRole === 'Health Planner'
+                            ? HealthManagerAssignment::fromReferrer($referrer)?->id : null,
                     ]);
 
                     $user->assignRole($finalRole);
@@ -733,7 +914,7 @@ class UserController extends Controller
         ]);
     }
 
-    private function resolveRoleByReferrerRule(User $referrer, string $requestedRole, User $actor, array $rankMap): string
+    private function resolveRoleByReferrerRule(User $referrer, string $requestedRole, User $actor, array $rankMap, ?User $existingUser = null): string
     {
         if ($requestedRole === 'Head Admin' && !$actor->hasRole('Head Admin')) {
             return 'ERROR:Kamu tidak punya akses untuk membuat user Head Admin.';
@@ -749,12 +930,19 @@ class UserController extends Controller
             return 'ERROR:Role tidak dikenali di config roles.rank';
         }
 
-        if ($refRole === 'Health Planner') {
-            return 'Health Planner';
+        // Promotion changes the role without moving the existing referral branch.
+        // Keep allowing profile edits after the user has become an HM under an HP.
+        if ($refRole === 'Health Planner' && $requestedRole === 'Health Manager'
+            && $existingUser?->hasAnyRole(['Health Planner', 'Health Manager'])) {
+            return $requestedRole;
+        }
+        if ($refRole === 'Health Planner' && $requestedRole === 'Sales Manager'
+            && $existingUser?->hasRole('Health Manager')) {
+            return $requestedRole;
         }
 
         if ($rankMap[$requestedRole] < $rankMap[$refRole]) {
-            return "ERROR:Role user baru tidak boleh lebih tinggi dari referrer ({$refRole}).";
+            return "ERROR:Role {$requestedRole} tidak boleh lebih tinggi dari referrer {$referrer->name} ({$refRole}). Pilih referrer dengan role setara atau lebih tinggi.";
         }
 
         return $requestedRole;
@@ -818,7 +1006,6 @@ class UserController extends Controller
             ->select(['id', 'name', 'phone_number', 'photo'])
             ->with('roles')
             ->whereIn('id', $userIds)
-            ->where('status', 'Active')
             ->get()
             ->keyBy('id');
 
@@ -1000,6 +1187,8 @@ class UserController extends Controller
         if ($rootUserId === $targetUserId) {
             return true;
         }
+        $root = User::find($rootUserId);
+        if ($root?->hasAnyRole(['Health Manager', 'Sales Manager'])) return $root->teamUserIds()->contains($targetUserId);
 
         $exists = DB::selectOne("
             WITH RECURSIVE downline AS (
@@ -1024,29 +1213,7 @@ class UserController extends Controller
 
     private function findHealthManagerForUser(int $userId): ?User
     {
-        $currentId = $userId;
-
-        for ($i = 0; $i < 20; $i++) {
-            $parentId = UserHierarchy::query()
-                ->where('child_user_id', $currentId)
-                ->value('parent_user_id');
-
-            if (!$parentId) {
-                return null;
-            }
-
-            $parent = User::query()->with('roles')->find($parentId);
-            if (!$parent) {
-                return null;
-            }
-
-            if ($parent->hasRole('Health Manager')) {
-                return $parent;
-            }
-
-            $currentId = $parentId;
-        }
-
-        return null;
+        $user = User::find($userId);
+        return $user ? HealthManagerAssignment::managerFor($user) : null;
     }
 }

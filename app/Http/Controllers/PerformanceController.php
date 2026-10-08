@@ -28,7 +28,7 @@ class PerformanceController extends Controller
         // ======================================
         // Scope member filter
         // ======================================
-        $authDownlineIds = $authUser->downlineUserIds();
+        $authDownlineIds = $authUser->teamUserIds();
 
         $allowedIds = $isAdminOrHead
             ? User::query()->pluck('id')
@@ -50,8 +50,8 @@ class PerformanceController extends Controller
             $childIds = collect();
             $scopeUserIds = User::query()->pluck('id');
         } else {
-            $childIds = $baseUser->downlineUserIds();
-            $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+            $childIds = $baseUser->teamUserIds();
+            $scopeUserIds = $childIds->concat([$baseUser->id])->unique()->values();
         }
 
         // ======================================
@@ -84,13 +84,13 @@ class PerformanceController extends Controller
         $statusOptions = $this->salesOrderStatuses;
         $salesType = $this->selectedSalesType($request);
         $productSalesType = $this->selectedProductSalesType($request);
+        $recurringStatus = $this->selectedRecurringStatus($request);
 
         // ======================================
         // Dropdown options
         // ======================================
         $memberOptions = User::query()
             ->when(!$isAdminOrHead, fn($q) => $q->whereIn('id', $allowedIds))
-            ->when($isAdminOrHead, fn($q) => $q->where('status', 'Active'))
             ->orderByRaw("COALESCE(NULLIF(full_name,''), name) asc")
             ->get(['id', 'name', 'full_name'])
             ->map(fn($u) => [
@@ -120,7 +120,7 @@ class PerformanceController extends Controller
         $teamPerformanceQ = User::query()
             ->when(
                 $isAdminOrHead && !$hasMemberFilter,
-                fn($q) => $q->role('Health Planner')->where('users.status', 'Active'),
+                fn($q) => $q->role('Health Planner'),
                 fn($q) => $q->whereIn('users.id', $childIds)
             )
             ->leftJoin('sales_orders as so', function ($join) use ($from, $to) {
@@ -273,6 +273,8 @@ class PerformanceController extends Controller
             $sheetQ->whereIn('so.status', $selectedStatuses);
         }
 
+        $this->applyRecurringStatusFilter($sheetQ, $recurringStatus, 'so');
+
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
             ->orderBy('so.key_in_at')
@@ -330,7 +332,7 @@ class PerformanceController extends Controller
         return view('performances.index', [
             'teamPerformance' => $teamPerformance,
             'teamMemberCount' => ($isAdminOrHead && !$hasMemberFilter)
-                ? User::query()->role('Health Planner')->where('status', 'Active')->count()
+                ? User::query()->role('Health Planner')->count()
                 : $childIds->count(),
             'myTotalUnits'    => $myTotalUnits,
             'q'               => $q,
@@ -345,6 +347,7 @@ class PerformanceController extends Controller
             'selectedStatuses' => $selectedStatuses,
             'salesType'        => $salesType,
             'productSalesType' => $productSalesType,
+            'recurringStatus'   => $recurringStatus,
             'roadToHm'        => $roadToHm,
         ]);
     }
@@ -354,7 +357,9 @@ class PerformanceController extends Controller
         $auth = $request->user();
 
         $isAdminOrHead = $auth->hasAnyRole(['Admin', 'Head Admin']);
-        $isChild = $auth->childrenUsers()->where('users.id', $user->id)->exists();
+        $isChild = $auth->hasAnyRole(['Health Manager', 'Sales Manager'])
+            ? $auth->teamUserIds()->contains((int) $user->id)
+            : $auth->childrenUsers()->where('users.id', $user->id)->exists();
 
         abort_unless($isAdminOrHead || $isChild, 403);
 
@@ -458,7 +463,7 @@ class PerformanceController extends Controller
         // ======================================
         // Scope member filter
         // ======================================
-        $authDownlineIds = $authUser->downlineUserIds();
+        $authDownlineIds = $authUser->teamUserIds();
 
         $allowedIds = $isAdminOrHead
             ? User::query()->pluck('id')
@@ -476,8 +481,8 @@ class PerformanceController extends Controller
             $childIds = collect();
             $scopeUserIds = User::query()->pluck('id');
         } else {
-            $childIds = $baseUser->downlineUserIds();
-            $scopeUserIds = $childIds->push($baseUser->id)->unique()->values();
+            $childIds = $baseUser->teamUserIds();
+            $scopeUserIds = $childIds->concat([$baseUser->id])->unique()->values();
         }
 
         [$from, $to, $isManual] = $this->normalizeDateRange(
@@ -504,6 +509,7 @@ class PerformanceController extends Controller
         $selectedStatuses = $this->selectedSalesOrderStatuses($request);
         $salesType = $this->selectedSalesType($request);
         $productSalesType = $this->selectedProductSalesType($request);
+        $recurringStatus = $this->selectedRecurringStatus($request);
 
         // ======================================
         // Helper units
@@ -608,6 +614,8 @@ class PerformanceController extends Controller
         if (!empty($selectedStatuses)) {
             $sheetQ->whereIn('so.status', $selectedStatuses);
         }
+
+        $this->applyRecurringStatusFilter($sheetQ, $recurringStatus, 'so');
 
         $teamSheetRows = $sheetQ
             ->orderBy('u.name')
@@ -1085,7 +1093,7 @@ class PerformanceController extends Controller
         $authUser = $request->user();
         $isAdminOrHead = $authUser->hasAnyRole(['Admin', 'Head Admin']);
 
-        $authDownlineIds = $authUser->downlineUserIds();
+        $authDownlineIds = $authUser->teamUserIds();
         $allowedIds = $isAdminOrHead
             ? User::query()->pluck('id')
             : $authDownlineIds->push($authUser->id)->unique()->values();
@@ -1101,7 +1109,7 @@ class PerformanceController extends Controller
         if ($isAdminOrHead && !$hasMemberFilter) {
             $scopeUserIds = User::query()->pluck('id');
         } else {
-            $scopeUserIds = $baseUser->downlineUserIds()->push($baseUser->id)->unique()->values();
+            $scopeUserIds = $baseUser->teamUserIds()->push($baseUser->id)->unique()->values();
         }
 
         [$from, $to, $isManual] = $this->normalizeDateRange(
@@ -1127,6 +1135,7 @@ class PerformanceController extends Controller
         $selectedStatuses = $this->selectedSalesOrderStatuses($request);
         $salesType = $this->selectedSalesType($request);
         $productSalesType = $this->selectedProductSalesType($request);
+        $recurringStatus = $this->selectedRecurringStatus($request);
 
         $unitCountExpr = "
             COALESCE(MAX(
@@ -1170,6 +1179,8 @@ class PerformanceController extends Controller
         if (!empty($selectedStatuses)) {
             $q->whereIn('so.status', $selectedStatuses);
         }
+
+        $this->applyRecurringStatusFilter($q, $recurringStatus, 'so');
 
         $rows = $q
             ->select([
@@ -1469,6 +1480,27 @@ class PerformanceController extends Controller
         return in_array($value, ['regular', 'bundle'], true) ? $value : null;
     }
 
+    private function selectedRecurringStatus(Request $request): ?string
+    {
+        $value = (string) $request->input('recurring_status', '');
+
+        return in_array($value, ['not_recurring', 'recurring'], true) ? $value : null;
+    }
+
+    private function applyRecurringStatusFilter(
+        $query,
+        ?string $recurringStatus,
+        string $salesOrderAlias = 'so'
+    ): void {
+        if ($recurringStatus === 'not_recurring') {
+            $query->whereRaw("COALESCE({$salesOrderAlias}.is_recurring, 0) = 0");
+        }
+
+        if ($recurringStatus === 'recurring') {
+            $query->whereRaw("COALESCE({$salesOrderAlias}.is_recurring, 0) = 1");
+        }
+    }
+
     private function applySalesCategoryFilters(
         $query,
         ?string $salesType,
@@ -1505,14 +1537,15 @@ class PerformanceController extends Controller
         $historyStart = $now->copy()->subMonthsNoOverflow(12)->startOfMonth();
         $historyEnd   = $now->copy()->addMonthsNoOverflow(4)->endOfMonth();
 
-        $downlineIds = $user->downlineUserIds()->unique()->values();
+        $downlineIds = $user->teamUserIds()->unique()->values();
 
         $downlines = User::query()
             ->whereIn('id', $downlineIds)
-            ->where('status', 'Active')
             ->orderByRaw("COALESCE(NULLIF(full_name,''), name) asc")
             ->get(['id', 'name', 'full_name']);
 
+        // Completed sales remain in team NS after a planner becomes inactive.
+        // Only the separate Active HP metric filters by account status.
         $trackedUserIds = $downlines->pluck('id')->push($user->id)->unique()->values();
 
         $monthlyUnitsRaw = DB::table('sales_orders as so')
@@ -1541,6 +1574,7 @@ class PerformanceController extends Controller
         $activeHpIds = User::query()
             ->whereIn('id', $downlineIds)
             ->role('Health Planner')
+            ->where('users.status', 'Active')
             ->pluck('id')
             ->values();
 
@@ -1707,6 +1741,7 @@ class PerformanceController extends Controller
         $currentHealthPlannerIds = User::query()
             ->whereIn('id', $downlineUserIds)
             ->role('Health Planner')
+            ->where('users.status', 'Active')
             ->pluck('id')
             ->map(fn($id) => (int) $id)
             ->flip();

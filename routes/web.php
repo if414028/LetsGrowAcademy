@@ -124,12 +124,16 @@ Route::middleware('auth', 'active')->group(function () {
     Route::middleware('role:Admin|Head Admin')->group(function () {
         Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
         Route::post('/users', [UserController::class, 'store'])->name('users.store');
+        Route::post('/users/{user}/transfer-health-planners', [UserController::class, 'transferHealthPlanners'])
+            ->name('users.transfer-health-planners');
 
         Route::resource('users', UserController::class)
             ->only(['destroy']);
 
         Route::get('/users/referrers/search', [UserController::class, 'searchReferrers'])
             ->name('users.referrers.search');
+        Route::get('/users/primary-accounts/search', [UserController::class, 'searchPrimaryAccounts'])
+            ->name('users.primary-accounts.search');
 
         Route::get('/customers/{customer}/documents/{document}', [CustomerController::class, 'document'])->name('customers.document');
 

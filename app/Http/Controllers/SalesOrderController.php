@@ -292,7 +292,7 @@ class SalesOrderController extends Controller
             }
 
             $hm = User::find((int) $validated['health_manager_id']);
-            $downlineIds = $hm ? $this->descendantUserIds($hm->id) : collect();
+            $downlineIds = $hm ? $hm->teamUserIds()->concat([$hm->id]) : collect();
 
             if (!$downlineIds->contains((int) $validated['sales_user_id'])) {
                 return back()
@@ -558,7 +558,7 @@ class SalesOrderController extends Controller
             }
 
             $hm = User::find((int) $validated['health_manager_id']);
-            $downlineIds = $hm ? $this->descendantUserIds($hm->id) : collect();
+            $downlineIds = $hm ? $hm->teamUserIds()->concat([$hm->id]) : collect();
 
             if (!$downlineIds->contains((int) $validated['sales_user_id'])) {
                 return back()
@@ -894,8 +894,8 @@ class SalesOrderController extends Controller
         $hm = User::find($managerId);
         if (!$hm) return response()->json([]);
 
-        // ✅ gunakan relasi yang sudah terbukti dipakai di index()
-        $downlineIds = $this->descendantUserIds($hm->id); // pastikan ini include semua downline
+        // Use assigned HM membership alongside legacy referral membership.
+        $downlineIds = $hm->teamUserIds()->concat([$hm->id]);
         if ($downlineIds->isEmpty()) return response()->json([]);
 
         $users = User::query()
@@ -931,34 +931,6 @@ class SalesOrderController extends Controller
     }
 
 
-    /**
-     * Ambil semua descendant user id dari 1 root user (BFS) via table user_hierarchies.
-     * Mengembalikan collection of ids (include root).
-     */
-    private function descendantUserIds(int $rootId)
-    {
-        $visited = collect([$rootId]);
-        $queue = collect([$rootId]);
-
-        while ($queue->isNotEmpty()) {
-            $batch = $queue->splice(0)->all();
-
-            $children = UserHierarchy::query()
-                ->whereIn('parent_user_id', $batch)
-                ->pluck('child_user_id');
-
-            $children = $children->diff($visited);
-
-            if ($children->isEmpty()) break;
-
-            $visited = $visited->merge($children);
-            $queue = $queue->merge($children);
-        }
-
-        return $visited->values();
-    }
-
-
     public function listHealthPlanners(Request $request)
     {
         abort_unless(
@@ -974,7 +946,7 @@ class SalesOrderController extends Controller
         if (!$hm) return response()->json([]);
 
         // downline HM (yang kamu pakai di search)
-        $downlineIds = $this->descendantUserIds($hm->id);
+        $downlineIds = $hm->teamUserIds()->concat([$hm->id]);
         if ($downlineIds->isEmpty()) return response()->json([]);
 
         $users = User::query()
@@ -1007,26 +979,8 @@ class SalesOrderController extends Controller
 
     private function nearestHealthManagerId(int $userId): ?int
     {
-        $visited = [];
-        $current = $userId;
-
-        while ($current) {
-            if (isset($visited[$current])) break;
-            $visited[$current] = true;
-
-            $parentId = UserHierarchy::query()
-                ->where('child_user_id', $current)
-                ->value('parent_user_id');
-
-            if (!$parentId) return null;
-
-            $isHm = User::role('Health Manager')->whereKey($parentId)->exists();
-            if ($isHm) return (int) $parentId;
-
-            $current = (int) $parentId;
-        }
-
-        return null;
+        $user = User::find($userId);
+        return $user ? \App\Services\HealthManagerAssignment::managerFor($user)?->id : null;
     }
 
     /**
@@ -1043,7 +997,7 @@ class SalesOrderController extends Controller
         }
 
         // ✅ Semua non-admin (termasuk Health Planner): diri sendiri + semua downline
-        $treeIds = $this->descendantUserIds((int) $user->id); // include self + all descendants
+        $treeIds = $user->teamUserIds()->concat([$user->id]); // include self + all descendants
 
         // sales_user_id di SO itu biasanya Health Planner, jadi filter hanya HP
         return User::query()
@@ -1149,7 +1103,7 @@ class SalesOrderController extends Controller
             if ($allowedIds->contains($healthManagerId)) {
                 $healthPlannerIds = User::query()
                     ->role('Health Planner')
-                    ->whereIn('id', $this->descendantUserIds($healthManagerId))
+                    ->whereIn('id', User::findOrFail($healthManagerId)->teamUserIds()->concat([$healthManagerId]))
                     ->pluck('id');
                 $q->whereIn('sales_user_id', $healthPlannerIds);
             }

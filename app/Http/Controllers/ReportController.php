@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\PerformanceCutoff;
 use App\Models\User;
-use App\Models\UserHierarchy;
 use App\Services\HealthManagerNsScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -36,6 +35,9 @@ class ReportController extends Controller
         }
 
         $rangeLabel = $isManual ? 'Custom Range' : 'Closing Date';
+        $hpLeaderboardScope = in_array($request->get('hp_scope'), ['personal', 'team'], true)
+            ? $request->get('hp_scope')
+            : 'personal';
 
         $isAdminLike = $user->hasAnyRole(['Sales Manager', 'Admin', 'Head Admin']);
 
@@ -58,34 +60,42 @@ class ReportController extends Controller
 
         // =========================================================
         // LEADERBOARD HEALTH PLANNER
-        // - Admin-like: semua Health Planner aktif
-        // - selain admin-like: seluruh downline Health Planner aktif user login
-        // HP = pribadi saja, TANPA bawahan
+        // - Admin-like: semua Health Planner, termasuk akun inactive dengan NS
+        // - selain admin-like: seluruh downline Health Planner user login
+        // HP = mode personal (akun + secondary) atau team (+ seluruh downliner)
         // =========================================================
         if ($isAdminLike) {
             $hpTargets = User::query()
-                ->where('status', 'Active')
+                ->where('is_secondary_account', false)
                 ->whereHas('roles', fn($q) => $q->where('name', 'Health Planner'))
                 ->select('users.id', 'users.name', 'users.full_name')
                 ->get();
         } else {
-            $downlineIds = $user->downlineUserIds();
+            $downlineIds = $user->teamUserIds();
 
             $hpTargets = User::query()
-                ->where('status', 'Active')
                 ->whereIn('users.id', $downlineIds)
+                ->where('is_secondary_account', false)
                 ->whereHas('roles', fn($q) => $q->where('name', 'Health Planner'))
                 ->select('users.id', 'users.name', 'users.full_name')
                 ->get();
         }
 
         $hpHealthManagerNames = $this->nearestHealthManagerNames($hpTargets->pluck('id'));
-        $hpLeaderboard = $this->buildPersonalLeaderboard($hpTargets, $from, $to, $hpHealthManagerNames);
+        $hpLeaderboard = $this->buildHealthPlannerLeaderboard(
+            $hpTargets,
+            $from,
+            $to,
+            $hpHealthManagerNames,
+            $hpLeaderboardScope
+        );
 
         return view('reports.index', [
             'from' => $from,
             'to' => $to,
             'rangeLabel' => $rangeLabel,
+            'isManualRange' => $isManual,
+            'hpLeaderboardScope' => $hpLeaderboardScope,
 
             'showHmLeaderboard' => $isAdminLike,
 
@@ -123,7 +133,7 @@ class ReportController extends Controller
                     ->whereDate('so.install_date', '<=', $to);
 
                 HealthManagerNsScope::apply($query, $t, 'so', 'so.install_date');
-                $stats = $query->selectRaw('COALESCE(SUM(sou.unit_count), 0) as units, MIN(so.key_in_at) as first_key_in_at')->first();
+                $stats = $query->selectRaw('COALESCE(SUM(sou.unit_count), 0) as units, MIN(so.key_in_at) as first_key_in_at, MIN(so.install_date) as first_install_date')->first();
 
                 $activeSellerQuery = DB::table('sales_orders as active_so')
                     ->whereNull('active_so.deleted_at')
@@ -145,6 +155,7 @@ class ReportController extends Controller
 
                 $units = (int) ($stats->units ?? 0);
                 $firstKeyIn = $stats->first_key_in_at ?? null;
+                $firstInstallDate = $stats->first_install_date ?? null;
 
                 return [
                     'id' => $id,
@@ -153,12 +164,15 @@ class ReportController extends Controller
                     'active_hp' => $activeHealthPlanners,
                     'first_key_in_at' => $firstKeyIn,
                     'first_key_in_sort' => $firstKeyIn ?? '9999-12-31 23:59:59',
+                    'first_install_date' => $firstInstallDate,
+                    'first_install_date_sort' => $firstInstallDate ?? '9999-12-31',
                 ];
             })
             ->filter(fn($row) => $row['units'] > 0)
             ->sortBy([
                 ['units', 'desc'],
                 ['first_key_in_sort', 'asc'],
+                ['first_install_date_sort', 'asc'],
                 ['name', 'asc'],
             ])
             ->values()
@@ -172,10 +186,17 @@ class ReportController extends Controller
     }
 
     /**
-     * Leaderboard personal saja (tanpa bawahan).
-     * Dipakai untuk Health Planner.
+     * Leaderboard HP berdasarkan keluarga akun.
+     * Personal: akun utama + secondary account.
+     * Team: akun utama + secondary account + seluruh downliner beserta secondary account mereka.
      */
-    private function buildPersonalLeaderboard($targets, string $from, string $to, $healthManagerNames = null)
+    private function buildHealthPlannerLeaderboard(
+        $targets,
+        string $from,
+        string $to,
+        $healthManagerNames = null,
+        string $scope = 'personal'
+    )
     {
         $healthManagerNames ??= collect();
         $targetIds = $targets->pluck('id')->map(fn($v) => (int) $v)->values();
@@ -184,35 +205,58 @@ class ReportController extends Controller
             return collect();
         }
 
-        $activeHpScopeByTarget = $targets
+        // Active HP always counts downlines, independently of the NS display mode.
+        $primaryAccountIdsByTarget = $targets
             ->mapWithKeys(function ($target) {
-                $scopeIds = $target->downlineUserIds()
-                    ->push((int) $target->id)
-                    ->unique()
+                $candidateIds = $target->downlineUserIds()->push((int) $target->id);
+
+                $primaryAccountIds = User::query()
+                    ->whereIn('id', $candidateIds->unique()->all())
+                    ->where('is_secondary_account', false)
+                    ->pluck('id')
+                    ->map(fn($id) => (int) $id)
                     ->values();
 
-                return [(int) $target->id => $scopeIds];
+                return [(int) $target->id => $primaryAccountIds];
             });
 
-        $allActiveHpScopeIds = $activeHpScopeByTarget
-            ->flatMap(fn($scopeIds) => $scopeIds)
+        $allPrimaryAccountIds = $primaryAccountIdsByTarget
+            ->flatMap(fn($primaryIds) => $primaryIds)
+            ->unique()
+            ->values();
+
+        // A primary account can have more than one secondary account.
+        $secondaryAccountIdsByPrimary = User::query()
+            ->where('is_secondary_account', true)
+            ->whereIn('primary_account_id', $allPrimaryAccountIds->all())
+            ->get(['id', 'primary_account_id'])
+            ->groupBy(fn($secondary) => (int) $secondary->primary_account_id)
+            ->map(fn($secondaries) => $secondaries->pluck('id')->map(fn($id) => (int) $id)->values());
+
+        $salesScopeByTarget = $primaryAccountIdsByTarget
+            ->map(function ($primaryIds, $targetId) use ($secondaryAccountIdsByPrimary, $scope) {
+                if ($scope === 'personal') {
+                    $primaryIds = collect([(int) $targetId]);
+                }
+
+                return $primaryIds
+                    ->flatMap(fn($primaryId) => collect([(int) $primaryId])
+                        ->merge($secondaryAccountIdsByPrimary->get((int) $primaryId, collect())))
+                    ->unique()
+                    ->values();
+            });
+
+        $allSalesUserIds = $allPrimaryAccountIds
+            ->flatMap(fn($primaryId) => collect([(int) $primaryId])
+                ->merge($secondaryAccountIdsByPrimary->get((int) $primaryId, collect())))
             ->unique()
             ->values();
 
         $activeHealthPlannerIds = User::query()
             ->role('Health Planner')
             ->where('users.status', 'Active')
-            ->whereIn('users.id', $allActiveHpScopeIds->all())
-            ->whereExists(function ($query) use ($from, $to) {
-                $query->select(DB::raw(1))
-                    ->from('sales_orders')
-                    ->whereColumn('sales_orders.sales_user_id', 'users.id')
-                    ->whereNull('sales_orders.deleted_at')
-                    ->where('sales_orders.status', 'selesai')
-                    ->whereNotNull('sales_orders.install_date')
-                    ->whereDate('sales_orders.install_date', '>=', $from)
-                    ->whereDate('sales_orders.install_date', '<=', $to);
-            })
+            ->where('users.is_secondary_account', false)
+            ->whereIn('users.id', $allPrimaryAccountIds->all())
             ->pluck('users.id')
             ->map(fn($id) => (int) $id)
             ->flip();
@@ -226,12 +270,13 @@ class ReportController extends Controller
             ->whereNotNull('so.install_date')
             ->whereDate('so.install_date', '>=', $from)
             ->whereDate('so.install_date', '<=', $to)
-            ->whereIn('so.sales_user_id', $targetIds->all())
+            ->whereIn('so.sales_user_id', $allSalesUserIds->all())
             ->groupBy('so.sales_user_id')
             ->select(
                 'so.sales_user_id',
                 DB::raw('COALESCE(SUM(sou.unit_count), 0) as units'),
-                DB::raw('MIN(so.key_in_at) as first_key_in_at')
+                DB::raw('MIN(so.key_in_at) as first_key_in_at'),
+                DB::raw('MIN(so.install_date) as first_install_date')
             )
             ->get();
 
@@ -239,31 +284,58 @@ class ReportController extends Controller
             ->mapWithKeys(fn($r) => [(int) $r->sales_user_id => [
                 'units' => (int) $r->units,
                 'first_key_in_at' => $r->first_key_in_at,
+                'first_install_date' => $r->first_install_date,
             ]]);
 
         return $targets
-            ->map(function ($t) use ($leaderboardMap, $healthManagerNames, $activeHealthPlannerIds, $activeHpScopeByTarget) {
+            ->map(function ($t) use (
+                $leaderboardMap,
+                $healthManagerNames,
+                $activeHealthPlannerIds,
+                $primaryAccountIdsByTarget,
+                $secondaryAccountIdsByPrimary,
+                $salesScopeByTarget
+            ) {
                 $id = (int) $t->id;
-                $leaderboard = $leaderboardMap[$id] ?? ['units' => 0, 'first_key_in_at' => null];
-                $activeHealthPlanners = $activeHpScopeByTarget
+                $salesScope = $salesScopeByTarget->get($id, collect([$id]));
+                $stats = $salesScope
+                    ->map(fn($salesUserId) => $leaderboardMap->get((int) $salesUserId))
+                    ->filter();
+                $units = $stats->sum('units');
+                $firstKeyInAt = $stats->pluck('first_key_in_at')->filter()->sort()->first();
+                $firstInstallDate = $stats->pluck('first_install_date')->filter()->sort()->first();
+
+                $activeHealthPlanners = $primaryAccountIdsByTarget
                     ->get($id, collect([$id]))
-                    ->filter(fn($userId) => $activeHealthPlannerIds->has((int) $userId))
+                    ->reject(fn($primaryId) => (int) $primaryId === $id)
+                    ->filter(function ($primaryId) use ($activeHealthPlannerIds, $secondaryAccountIdsByPrimary, $leaderboardMap) {
+                        if (!$activeHealthPlannerIds->has((int) $primaryId)) {
+                            return false;
+                        }
+
+                        return collect([(int) $primaryId])
+                            ->merge($secondaryAccountIdsByPrimary->get((int) $primaryId, collect()))
+                            ->contains(fn($salesUserId) => $leaderboardMap->has((int) $salesUserId));
+                    })
                     ->count();
 
                 return [
                     'id' => $id,
                     'name' => (string) ($t->full_name ?: $t->name),
                     'health_manager_name' => $healthManagerNames->get($id),
-                    'units' => (int) $leaderboard['units'],
+                    'units' => (int) $units,
                     'active_hp' => $activeHealthPlanners,
-                    'first_key_in_at' => $leaderboard['first_key_in_at'],
-                    'first_key_in_sort' => $leaderboard['first_key_in_at'] ?? '9999-12-31 23:59:59',
+                    'first_key_in_at' => $firstKeyInAt,
+                    'first_key_in_sort' => $firstKeyInAt ?? '9999-12-31 23:59:59',
+                    'first_install_date' => $firstInstallDate,
+                    'first_install_date_sort' => $firstInstallDate ?? '9999-12-31',
                 ];
             })
             ->filter(fn($row) => $row['units'] > 0)
             ->sortBy([
                 ['units', 'desc'],
                 ['first_key_in_sort', 'asc'],
+                ['first_install_date_sort', 'asc'],
                 ['name', 'asc'],
             ])
             ->values()
@@ -282,55 +354,10 @@ class ReportController extends Controller
      */
     private function nearestHealthManagerNames($healthPlannerIds)
     {
-        $currentByHealthPlanner = $healthPlannerIds
-            ->mapWithKeys(fn($id) => [(int) $id => (int) $id]);
-        $visitedByHealthPlanner = $currentByHealthPlanner
-            ->map(fn($id) => [$id => true])
-            ->all();
         $names = collect();
-
-        while ($currentByHealthPlanner->isNotEmpty()) {
-            $parentByChild = UserHierarchy::query()
-                ->whereIn('child_user_id', $currentByHealthPlanner->values()->unique()->all())
-                ->pluck('parent_user_id', 'child_user_id')
-                ->mapWithKeys(fn($parentId, $childId) => [(int) $childId => (int) $parentId]);
-
-            if ($parentByChild->isEmpty()) {
-                break;
-            }
-
-            $healthManagers = User::query()
-                ->whereIn('users.id', $parentByChild->values()->unique()->all())
-                ->whereHas('roles', fn($query) => $query->where('name', 'Health Manager'))
-                ->select('users.id', 'users.name', 'users.full_name')
-                ->get()
-                ->mapWithKeys(fn($user) => [
-                    (int) $user->id => trim((string) ($user->full_name ?: $user->name)),
-                ]);
-
-            $next = collect();
-
-            foreach ($currentByHealthPlanner as $healthPlannerId => $currentId) {
-                $parentId = $parentByChild->get($currentId);
-
-                if (!$parentId) {
-                    continue;
-                }
-
-                if ($healthManagers->has($parentId)) {
-                    $names->put((int) $healthPlannerId, $healthManagers->get($parentId));
-                    continue;
-                }
-
-                if (isset($visitedByHealthPlanner[$healthPlannerId][$parentId])) {
-                    continue;
-                }
-
-                $visitedByHealthPlanner[$healthPlannerId][$parentId] = true;
-                $next->put((int) $healthPlannerId, (int) $parentId);
-            }
-
-            $currentByHealthPlanner = $next;
+        foreach (User::with(['roles', 'assignedHealthManager.roles'])->whereIn('id', $healthPlannerIds)->get() as $planner) {
+            $manager = \App\Services\HealthManagerAssignment::managerFor($planner);
+            if ($manager) $names->put((int) $planner->id, $manager->full_name ?: $manager->name);
         }
 
         return $names;

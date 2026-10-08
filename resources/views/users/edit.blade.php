@@ -6,6 +6,7 @@
             $authUser && method_exists($authUser, 'hasAnyRole') && $authUser->hasAnyRole(['Admin', 'Head Admin']);
         $currentRole = $user->getRoleNames()->first();
         $currentReferrerRole = $currentReferrer?->getRoleNames()->first();
+        $isSecondaryAccount = (bool) old('is_secondary_account', $user->is_secondary_account);
     @endphp
 
     <div class="flex items-start justify-between gap-6">
@@ -144,7 +145,10 @@
                                 </option>
                             @endforeach
                         </select>
-                        <p class="mt-2 text-xs text-gray-500">Role user ini akan di-update sesuai pilihan.</p>
+                        <p class="mt-2 text-xs text-gray-500">
+                            HP dapat dipromosikan ke HM meskipun referrer masih HP.
+                            Jika referrer tetap sama, posisi di Partner Tree dan seluruh downline tetap.
+                        </p>
                     </div>
 
                     <div class="relative">
@@ -179,6 +183,82 @@
 
                         <p class="mt-2 text-xs text-gray-500">
                             Cari dan pilih referrer baru. Tidak boleh diri sendiri atau downline user ini.
+                        </p>
+                    </div>
+                </div>
+
+                @include('users.partials.health-manager-field')
+
+                @if ($user->hasRole('Health Manager') && $transferablePlannerCount > 0)
+                    <div id="hm_promotion_field" class="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                        <label for="replacement_health_manager_id" class="text-sm font-semibold text-blue-900">HM pengganti saat promosi menjadi SM</label>
+                        <select name="replacement_health_manager_id" id="replacement_health_manager_id"
+                            class="mt-2 w-full rounded-xl border-blue-200 bg-white focus:border-blue-500 focus:ring-blue-500">
+                            <option value="">Pilih HM pengganti</option>
+                            @foreach ($healthManagerOptions as $manager)
+                                <option value="{{ $manager->id }}" @selected((int) old('replacement_health_manager_id') === (int) $manager->id)>{{ $manager->name }}</option>
+                            @endforeach
+                        </select>
+                        <p class="mt-2 text-xs text-blue-700">Wajib dipilih jika Role diubah menjadi Sales Manager. Seluruh {{ $transferablePlannerCount }} HP, termasuk HP Inactive, akan dialihkan ke HM ini.</p>
+                        @error('replacement_health_manager_id')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                    </div>
+                @endif
+
+                @if ($user->hasRole('Health Manager') && $transferablePlannerCount > 0)
+                    <script>
+                        (() => {
+                            const field = document.getElementById('hm_promotion_field');
+                            const role = field.closest('form').querySelector('select[name="role"]');
+                            const replacement = field.querySelector('select');
+                            const update = () => {
+                                const promoting = role.value === 'Sales Manager';
+                                field.classList.toggle('hidden', !promoting);
+                                replacement.disabled = !promoting;
+                                replacement.required = promoting;
+                            };
+                            role.addEventListener('change', update);
+                            update();
+                        })();
+                    </script>
+                @endif
+
+                {{-- Primary / Secondary account relationship --}}
+                <div class="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                    <label for="is_secondary_account" class="flex cursor-pointer items-start gap-3">
+                        <input type="hidden" name="is_secondary_account" value="0">
+                        <input type="checkbox" id="is_secondary_account" name="is_secondary_account" value="1"
+                            @checked($isSecondaryAccount)
+                            class="mt-0.5 h-5 w-5 rounded border-blue-300 text-blue-600 focus:ring-blue-500">
+                        <span>
+                            <span class="block text-sm font-semibold text-gray-900">Secondary Account</span>
+                            <span class="mt-0.5 block text-xs leading-5 text-gray-600">
+                                Tandai jika akun ini merupakan akun tambahan milik keluarga dari HP atau HM lain.
+                            </span>
+                        </span>
+                    </label>
+
+                    <div id="primary_account_field" class="mt-4 {{ $isSecondaryAccount ? '' : 'hidden' }}">
+                        <label for="primary_account_search" class="text-sm font-medium text-gray-700">
+                            Primary Account <span class="text-red-500" aria-hidden="true">*</span>
+                        </label>
+                        <input type="hidden" name="primary_account_id" id="primary_account_id"
+                            value="{{ old('primary_account_id', $user->primary_account_id) }}">
+
+                        <div class="relative mt-1">
+                            <input type="text" id="primary_account_search" autocomplete="off" role="combobox"
+                                aria-autocomplete="list" aria-expanded="false" aria-controls="primary_account_results"
+                                value="{{ $selectedPrimaryAccount ? $selectedPrimaryAccount->name . ' (' . $selectedPrimaryAccount->email . ') - ' . ($selectedPrimaryAccount->getRoleNames()->first() ?? '-') : '' }}"
+                                class="w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500"
+                                placeholder="Cari nama HP atau HM...">
+
+                            <div id="primary_account_dropdown"
+                                class="absolute z-30 mt-2 hidden w-full overflow-hidden rounded-xl border bg-white shadow-lg">
+                                <ul id="primary_account_results" role="listbox" class="max-h-72 overflow-auto"></ul>
+                            </div>
+                        </div>
+
+                        <p class="mt-2 text-xs text-gray-500">
+                            Hanya akun utama Health Planner atau Health Manager yang dapat dipilih.
                         </p>
                     </div>
                 </div>
@@ -382,6 +462,124 @@
                         resultsBox.classList.add('hidden');
                     }
                 });
+            });
+        </script>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const checkbox = document.getElementById('is_secondary_account');
+                const field = document.getElementById('primary_account_field');
+                const searchInput = document.getElementById('primary_account_search');
+                const hiddenInput = document.getElementById('primary_account_id');
+                const dropdown = document.getElementById('primary_account_dropdown');
+                const results = document.getElementById('primary_account_results');
+                let debounceTimer = null;
+
+                if (!checkbox || !field || !searchInput || !hiddenInput || !dropdown || !results) return;
+
+                function closeDropdown() {
+                    dropdown.classList.add('hidden');
+                    searchInput.setAttribute('aria-expanded', 'false');
+                }
+
+                function openDropdown() {
+                    dropdown.classList.remove('hidden');
+                    searchInput.setAttribute('aria-expanded', 'true');
+                }
+
+                function syncVisibility() {
+                    field.classList.toggle('hidden', !checkbox.checked);
+                    searchInput.required = checkbox.checked;
+
+                    if (!checkbox.checked) {
+                        hiddenInput.value = '';
+                        searchInput.value = '';
+                        results.innerHTML = '';
+                        closeDropdown();
+                    }
+                }
+
+                async function fetchPrimaryAccounts(keyword = '') {
+                    const url = new URL(@json(route('users.primary-accounts.search')), window.location.origin);
+                    url.searchParams.set('q', keyword);
+                    url.searchParams.set('exclude', @json($user->id));
+
+                    const response = await fetch(url, {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json',
+                        }
+                    });
+
+                    return response.ok ? response.json() : [];
+                }
+
+                function selectAccount(item) {
+                    hiddenInput.value = item.id;
+                    searchInput.value = item.label;
+                    closeDropdown();
+                }
+
+                function renderResults(items) {
+                    results.innerHTML = '';
+
+                    if (!items.length) {
+                        const empty = document.createElement('li');
+                        empty.className = 'px-4 py-3 text-sm text-gray-500';
+                        empty.textContent = 'Tidak ada akun HP atau HM yang cocok';
+                        results.appendChild(empty);
+                        openDropdown();
+                        return;
+                    }
+
+                    items.forEach((item) => {
+                        const option = document.createElement('li');
+                        option.setAttribute('role', 'option');
+                        option.tabIndex = 0;
+                        option.className = 'cursor-pointer px-4 py-3 text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none';
+                        option.textContent = item.label;
+                        option.addEventListener('click', () => selectAccount(item));
+                        option.addEventListener('keydown', (event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                selectAccount(item);
+                            }
+                        });
+                        results.appendChild(option);
+                    });
+
+                    openDropdown();
+                }
+
+                async function loadResults(keyword = searchInput.value.trim()) {
+                    renderResults(await fetchPrimaryAccounts(keyword));
+                }
+
+                checkbox.addEventListener('change', function() {
+                    syncVisibility();
+                    if (checkbox.checked) {
+                        searchInput.focus();
+                        loadResults();
+                    }
+                });
+
+                searchInput.addEventListener('focus', function() {
+                    loadResults(hiddenInput.value ? '' : searchInput.value.trim());
+                });
+                searchInput.addEventListener('input', function() {
+                    hiddenInput.value = '';
+                    if (debounceTimer) clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(loadResults, 250);
+                });
+
+                document.addEventListener('click', function(event) {
+                    if (!dropdown.contains(event.target) && event.target !== searchInput) closeDropdown();
+                });
+                document.addEventListener('keydown', function(event) {
+                    if (event.key === 'Escape') closeDropdown();
+                });
+
+                syncVisibility();
             });
         </script>
     @endif

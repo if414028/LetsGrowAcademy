@@ -25,10 +25,15 @@ class HealthManagerHistoryTest extends TestCase
             $t->date('hm_since')->nullable();
             $t->date('join_date')->nullable();
             $t->string('dst_code')->nullable();
+            $t->string('status')->default('Active');
+            $t->unsignedBigInteger('health_manager_id')->nullable();
+            $t->timestamp('deactivated_at')->nullable();
+            $t->boolean('is_secondary_account')->default(false);
+            $t->unsignedBigInteger('primary_account_id')->nullable();
         });
         (require database_path('migrations/2026_09_13_000002_create_health_manager_periods_table.php'))->up();
         Schema::create('sales_orders', function (Blueprint $t) {
-            $t->id(); $t->unsignedBigInteger('sales_user_id'); $t->date('install_date'); $t->integer('units');
+            $t->id(); $t->unsignedBigInteger('sales_user_id'); $t->date('install_date'); $t->timestamp('key_in_at')->nullable(); $t->integer('units');
             $t->string('status')->default('selesai'); $t->timestamp('deleted_at')->nullable();
         });
         Schema::create('products', function (Blueprint $t) { $t->id(); $t->string('type'); });
@@ -44,9 +49,11 @@ class HealthManagerHistoryTest extends TestCase
         $this->travelTo(now()->setDate(2026, 9, 13));
     }
 
-    private function user(string $role, ?User $parent = null): User
+    private function user(string $role, ?User $parent = null, array $attributes = []): User
     {
-        $user = User::factory()->create(['hm_since' => $role === 'Health Manager' ? '2026-08-01' : null]);
+        $user = User::factory()->create(array_merge([
+            'hm_since' => $role === 'Health Manager' ? '2026-08-01' : null,
+        ], $attributes));
         $user->assignRole($role);
         if ($parent) DB::table('user_hierarchies')->insert(['parent_user_id' => $parent->id, 'child_user_id' => $user->id]);
         return $user;
@@ -92,6 +99,105 @@ class HealthManagerHistoryTest extends TestCase
         $q = DB::table('sales_orders as so')->where('install_date', $date);
         HealthManagerNsScope::apply($q, $hm, 'so', 'so.install_date');
         return (int) $q->sum('units');
+    }
+
+    public function test_report_leaderboards_use_install_date_before_name_to_break_a_tie(): void
+    {
+        $laterHm = $this->user('Health Manager', null, ['name' => 'Alpha HM']);
+        $earlierHm = $this->user('Health Manager', null, ['name' => 'Zulu HM']);
+        $laterHp = $this->user('Health Planner', null, ['name' => 'Alpha HP']);
+        $earlierHp = $this->user('Health Planner', null, ['name' => 'Zulu HP']);
+
+        foreach ([
+            [$laterHm, '2026-09-20'],
+            [$earlierHm, '2026-09-15'],
+            [$laterHp, '2026-09-20'],
+            [$earlierHp, '2026-09-15'],
+        ] as [$seller, $installDate]) {
+            $orderId = DB::table('sales_orders')->insertGetId([
+                'sales_user_id' => $seller->id,
+                'install_date' => $installDate,
+                'key_in_at' => '2026-09-10 09:00:00',
+                'units' => 5,
+            ]);
+            DB::table('sales_order_items')->insert([
+                'sales_order_id' => $orderId,
+                'product_id' => 1,
+                'qty' => 5,
+            ]);
+        }
+
+        $controller = app(\App\Http\Controllers\ReportController::class);
+        $hmMethod = new \ReflectionMethod($controller, 'buildLeaderboardWithDescendants');
+        $hpMethod = new \ReflectionMethod($controller, 'buildHealthPlannerLeaderboard');
+
+        $hmLeaderboard = $hmMethod->invoke(
+            $controller,
+            collect([$laterHm, $earlierHm]),
+            '2026-09-01',
+            '2026-09-30'
+        );
+        $hpLeaderboard = $hpMethod->invoke(
+            $controller,
+            collect([$laterHp, $earlierHp]),
+            '2026-09-01',
+            '2026-09-30'
+        );
+
+        $this->assertSame([$earlierHm->id, $laterHm->id], $hmLeaderboard->pluck('id')->all());
+        $this->assertSame([$earlierHp->id, $laterHp->id], $hpLeaderboard->pluck('id')->all());
+    }
+
+    public function test_inactive_hp_with_ns_is_not_counted_as_active_in_hm_recap(): void
+    {
+        $hm = $this->user('Health Manager');
+        $activeHp = $this->user('Health Planner', $hm);
+        $inactiveHp = $this->user('Health Planner', $hm, ['status' => 'Inactive']);
+
+        foreach ([[$activeHp, 4], [$inactiveHp, 6]] as [$seller, $units]) {
+            $orderId = DB::table('sales_orders')->insertGetId([
+                'sales_user_id' => $seller->id,
+                'install_date' => '2026-09-15',
+                'units' => $units,
+            ]);
+            DB::table('sales_order_items')->insert([
+                'sales_order_id' => $orderId,
+                'product_id' => 1,
+                'qty' => $units,
+            ]);
+        }
+
+        $method = new \ReflectionMethod(\App\Http\Controllers\PerformanceController::class, 'buildHealthManagerRecap');
+        $recap = $method->invoke(app(\App\Http\Controllers\PerformanceController::class), $hm);
+
+        $this->assertSame(10, $recap['months'][1]['achievement']);
+        $this->assertSame(1, $recap['months'][1]['active_health_planners']);
+    }
+
+    public function test_inactive_hp_with_ns_is_not_counted_as_active_in_road_to_hm(): void
+    {
+        $owner = $this->user('Health Planner');
+        $activeHp = $this->user('Health Planner', $owner);
+        $inactiveHp = $this->user('Health Planner', $owner, ['status' => 'Inactive']);
+
+        foreach ([[$activeHp, 4], [$inactiveHp, 6]] as [$seller, $units]) {
+            $orderId = DB::table('sales_orders')->insertGetId([
+                'sales_user_id' => $seller->id,
+                'install_date' => '2026-09-15',
+                'units' => $units,
+            ]);
+            DB::table('sales_order_items')->insert([
+                'sales_order_id' => $orderId,
+                'product_id' => 1,
+                'qty' => $units,
+            ]);
+        }
+
+        $method = new \ReflectionMethod(\App\Http\Controllers\PerformanceController::class, 'buildRoadToHmData');
+        $roadToHm = $method->invoke(app(\App\Http\Controllers\PerformanceController::class), $owner);
+        $activeHpRow = collect($roadToHm['rows'])->firstWhere('label', 'Active HP');
+
+        $this->assertSame(1, $activeHpRow['months']['2026-09-01']['ach']);
     }
 
     public function test_nested_hm_remains_excluded_after_parent_demotion(): void

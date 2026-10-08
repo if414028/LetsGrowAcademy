@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\SalesOrder;
 use App\Models\User;
-use App\Models\UserHierarchy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Contest;
@@ -13,6 +12,7 @@ use Carbon\Carbon;
 use App\Models\PerformanceCutoff;
 use App\Models\Customer;
 use App\Services\HealthManagerNsScope;
+use App\Services\DashboardSalesTrend;
 
 class DashboardController extends Controller
 {
@@ -274,76 +274,12 @@ class DashboardController extends Controller
             })->sortByDesc('units')->values();
         }
 
-        // =========================================================
-        // SALES TREND (Weekly / Monthly)
-        // =========================================================
-
-        $trend = $request->string('trend')->toString() ?: 'weekly';
-        if (!in_array($trend, ['weekly', 'monthly'], true)) {
-            $trend = 'weekly';
-        }
-
-        $salesTrendLabels = [];
-        $salesTrendUnits  = [];
-
-        if ($trend === 'weekly') {
-            // last 8 weeks
-            $weeks = 8;
-            $end = now()->endOfWeek();
-            $start = now()->startOfWeek()->subWeeks($weeks - 1);
-
-            $rawWeekly = SalesOrder::query()
-                ->where('sales_orders.status', 'selesai')
-                ->whereBetween('sales_orders.key_in_at', [$start, $end]);
-
-            if ($user->hasRole('Health Manager')) {
-                HealthManagerNsScope::apply($rawWeekly, $user, 'sales_orders', 'sales_orders.install_date');
-            } else {
-                $rawWeekly->whereIn('sales_orders.sales_user_id', $scopeUserIds);
-            }
-
-            $rawWeekly = $applyUnitsJoinsAndSelect($rawWeekly)
-                ->selectRaw("YEARWEEK(sales_orders.key_in_at, 3) as yw, $unitsSelectExpr")
-                ->groupBy('yw')
-                ->pluck('units', 'yw'); // [yw => units]
-
-            $cursor = $start->copy();
-            for ($i = 0; $i < $weeks; $i++) {
-                // YEARWEEK(mode 3) bentuknya: 202605 (ISO year+week)
-                $key = (int) $cursor->format('oW');
-                $salesTrendLabels[] = $cursor->format('d M'); // label start of week
-                $salesTrendUnits[]  = (int) ($rawWeekly[$key] ?? 0);
-                $cursor->addWeek();
-            }
-        } else {
-            // monthly: last 6 months
-            $months = 6;
-            $end = now()->endOfMonth();
-            $start = now()->startOfMonth()->subMonths($months - 1);
-
-            $rawMonthly = SalesOrder::query()
-                ->where('sales_orders.status', 'selesai')
-                ->whereBetween('sales_orders.key_in_at', [$start, $end]);
-
-            if ($user->hasRole('Health Manager')) {
-                HealthManagerNsScope::apply($rawMonthly, $user, 'sales_orders', 'sales_orders.install_date');
-            } else {
-                $rawMonthly->whereIn('sales_orders.sales_user_id', $scopeUserIds);
-            }
-
-            $rawMonthly = $applyUnitsJoinsAndSelect($rawMonthly)
-                ->selectRaw("DATE_FORMAT(sales_orders.key_in_at, '%Y-%m') as ym, $unitsSelectExpr")
-                ->groupBy('ym')
-                ->pluck('units', 'ym'); // [ym => units]
-
-            $cursor = $start->copy();
-            for ($i = 0; $i < $months; $i++) {
-                $key = $cursor->format('Y-m');
-                $salesTrendLabels[] = $cursor->format('M Y');
-                $salesTrendUnits[]  = (int) ($rawMonthly[$key] ?? 0);
-                $cursor->addMonth();
-            }
-        }
+        // Sales trend uses the same HM/team attribution as the performance table.
+        $salesTrend = app(DashboardSalesTrend::class)->build($user, $request->string('trend')->toString());
+        $trend = $salesTrend['trend'];
+        $salesTrendLabels = $salesTrend['labels'];
+        $salesTrendDatasets = $salesTrend['datasets'];
+        $salesTrendPerHealthManager = $salesTrend['perHealthManager'];
 
         // =========================================================
         // ACTIVE CONTEST LIST (Kontes berlangsung sesuai rules final)
@@ -501,7 +437,8 @@ class DashboardController extends Controller
             'healthManagerPerformance',
             'trend',
             'salesTrendLabels',
-            'salesTrendUnits',
+            'salesTrendDatasets',
+            'salesTrendPerHealthManager',
             'activeContests',
             'todayBirthdays',
             'isBirthdayToday',
@@ -515,67 +452,13 @@ class DashboardController extends Controller
      */
     private function getAllDescendantUserIds(int $userId): array
     {
-        $visited = [];
-        $queue = [$userId];
-
-        while (!empty($queue)) {
-            $parentId = array_shift($queue);
-
-            $children = UserHierarchy::query()
-                ->where('parent_user_id', $parentId)
-                ->pluck('child_user_id')
-                ->all();
-
-            foreach ($children as $childId) {
-                $childId = (int) $childId;
-
-                if (isset($visited[$childId])) {
-                    continue;
-                }
-
-                $visited[$childId] = true;
-                $queue[] = $childId;
-            }
-        }
-
-        return array_keys($visited);
+        return User::find($userId)?->teamUserIds()->all() ?? [];
     }
 
     private function nearestHealthManagerName(int $userId): ?string
     {
-        $visited = [];
-        $current = $userId;
-
-        while ($current) {
-            if (isset($visited[$current])) {
-                break;
-            }
-
-            $visited[$current] = true;
-
-            $parentId = UserHierarchy::query()
-                ->where('child_user_id', $current)
-                ->value('parent_user_id');
-
-            if (!$parentId) {
-                return null;
-            }
-
-            $parent = User::query()
-                ->with('roles')
-                ->find($parentId, ['id', 'name', 'full_name']);
-
-            if (!$parent) {
-                return null;
-            }
-
-            if ($parent->hasRole('Health Manager')) {
-                return trim((string) ($parent->full_name ?: $parent->name));
-            }
-
-            $current = (int) $parentId;
-        }
-
-        return null;
+        $user = User::find($userId);
+        $manager = $user ? \App\Services\HealthManagerAssignment::managerFor($user) : null;
+        return $manager ? trim((string) ($manager->full_name ?: $manager->name)) : null;
     }
 }

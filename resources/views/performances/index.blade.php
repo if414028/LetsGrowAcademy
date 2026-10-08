@@ -208,7 +208,7 @@
                 </div>
 
                 @php
-                    $activeFilterCount = collect(['from', 'to', 'member_id', 'status', 'sales_type', 'product_sales_type'])
+                    $activeFilterCount = collect(['from', 'to', 'member_id', 'status', 'sales_type', 'product_sales_type', 'recurring_status'])
                         ->filter(fn($key) => request()->filled($key))
                         ->count();
                 @endphp
@@ -241,7 +241,7 @@
                     </div>
 
                     <form method="GET" class="mobile-modal-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
-                        @foreach (request()->except(['from', 'to', 'member_id', 'status', 'sales_type', 'product_sales_type', 'page']) as $key => $value)
+                        @foreach (request()->except(['from', 'to', 'member_id', 'status', 'sales_type', 'product_sales_type', 'recurring_status', 'page']) as $key => $value)
                             @if (is_array($value))
                                 @foreach ($value as $item)
                                     <input type="hidden" name="{{ $key }}[]" value="{{ $item }}">
@@ -310,6 +310,22 @@
                                     <option value="bundle" @selected(($productSalesType ?? null) === 'bundle')>Bundling</option>
                                 </select>
                             </div>
+                        </div>
+
+                        <div>
+                            <label for="recurring_status" class="mb-1 block text-sm font-medium text-gray-700">
+                                Status Recurring
+                            </label>
+                            <select name="recurring_status" id="recurring_status"
+                                class="w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="">Semua Key-In</option>
+                                <option value="not_recurring" @selected(($recurringStatus ?? null) === 'not_recurring')>
+                                    Key-In Belum Recurring
+                                </option>
+                                <option value="recurring" @selected(($recurringStatus ?? null) === 'recurring')>
+                                    Key-In Sudah Recurring
+                                </option>
+                            </select>
                         </div>
 
                         <div>

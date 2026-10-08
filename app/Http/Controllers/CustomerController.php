@@ -50,7 +50,7 @@ class CustomerController extends Controller
     public function index(Request $request)
     {
         $search = trim((string) $request->query('q', ''));
-        $scopeUserIds = $request->user()->downlineUserIds()
+        $scopeUserIds = $request->user()->teamUserIds()
             ->push($request->user()->id)
             ->unique()
             ->values();
