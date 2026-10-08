@@ -109,12 +109,8 @@
             {{-- Image + Active --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="text-sm font-medium text-gray-700">Product Image</label>
-                    <input type="file" name="product_image" class="mt-1 block w-full text-sm">
-                    @error('product_image')
-                        <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
-                    @enderror
-                    <p class="text-xs text-gray-500 mt-1">JPG, PNG, WEBP • Max 2MB</p>
+                    <label for="upload-product_image" class="text-sm font-medium text-gray-700">Product Image</label>
+                    <x-file-upload name="product_image" label="Product Image" accept=".jpg,.jpeg,.png,.webp" :max-size="2" hint="JPG, PNG, atau WEBP · Maksimal 2 MB" />
                 </div>
 
                 <div class="flex items-center gap-2 mt-6 md:mt-0">

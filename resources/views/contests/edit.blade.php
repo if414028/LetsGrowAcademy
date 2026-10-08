@@ -219,7 +219,7 @@
                 </div>
 
                 <div class="md:col-span-2">
-                    <label class="text-sm font-semibold text-gray-700">Banner (Opsional)</label>
+                    <label for="upload-banner" class="text-sm font-semibold text-gray-700">Banner (Opsional)</label>
 
                     @if ($bannerSrc)
                         <div class="mt-2 flex items-center gap-3">
@@ -234,11 +234,7 @@
                         </div>
                     @endif
 
-                    <input type="file" name="banner" accept="image/*"
-                        class="mt-2 block w-full text-sm text-gray-600
-                            file:mr-4 file:rounded-xl file:border-0 file:bg-gray-100
-                            file:px-4 file:py-2 file:text-sm file:font-semibold
-                            file:text-gray-700 hover:file:bg-gray-200">
+                    <x-file-upload name="banner" label="Banner" accept="image/*" :max-size="2" hint="Gambar · Maksimal 2 MB" />
                     <p class="mt-2 text-xs text-gray-500">
                         Jika diupload, akan mengganti banner sebelumnya.
                     </p>

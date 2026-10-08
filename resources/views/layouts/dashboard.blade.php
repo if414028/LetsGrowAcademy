@@ -10,7 +10,7 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="app-dashboard bg-gray-50 font-sans text-gray-900 antialiased" x-data="{ sidebarOpen: false }" data-dashboard-motion>
+<body class="app-dashboard bg-gray-50 font-sans text-gray-900 antialiased" x-data="dashboardShell" data-dashboard-motion>
     <a href="#main-content" class="skip-link">Lewati ke konten utama</a>
     <div class="flex min-h-screen md:h-screen md:gap-3 md:p-3">
 
@@ -131,29 +131,37 @@
         {{-- Sidebar (Mobile Drawer) --}}
         <div class="md:hidden">
             {{-- Overlay --}}
-            <div x-show="sidebarOpen" x-transition.opacity class="fixed inset-0 bg-black/40 z-40"
-                @click="sidebarOpen = false" style="display: none;"></div>
+            <div x-show="sidebarOpen" x-transition.opacity class="dashboard-navigation-overlay fixed inset-0 bg-black/50 z-50"
+                @click="closeSidebar()" aria-hidden="true" style="display: none;"></div>
 
             {{-- Drawer --}}
             <aside x-show="sidebarOpen" x-transition:enter="transition ease-out duration-200"
                 x-transition:enter-start="-translate-x-full" x-transition:enter-end="translate-x-0"
                 x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-x-0"
                 x-transition:leave-end="-translate-x-full"
-                class="fixed inset-y-0 left-0 w-72 bg-white border-r z-50 overflow-y-auto" style="display: none;"
-                @keydown.escape.window="sidebarOpen = false">
-                <div class="h-16 flex items-center justify-between px-6 border-b shrink-0">
-                    <span class="text-xl font-semibold text-blue-600">Let's Grow Academy</span>
+                class="dashboard-sidebar dashboard-mobile-sidebar fixed inset-y-0 left-0 flex flex-col border-r overflow-y-auto" style="display: none;"
+                id="mobile-navigation" x-ref="mobileSidebar" role="dialog" aria-modal="true" aria-label="Menu navigasi"
+                @keydown.escape.window="if (sidebarOpen) closeSidebar()" @keydown.tab="trapSidebarFocus($event)">
+                <div class="dashboard-mobile-sidebar__header flex items-center justify-between gap-2 border-b shrink-0">
+                    <a href="{{ route('dashboard') }}" @click="sidebarOpen=false" class="flex min-w-0 items-center gap-2" aria-label="Let's Grow Academy">
+                        <img src="{{ asset('images/coway_logo.png') }}" alt="" class="h-10 w-10 shrink-0 object-contain" aria-hidden="true">
+                        <span class="min-w-0 leading-tight">
+                            <span class="block text-base font-extrabold tracking-tight">Let's Grow</span>
+                            <span class="block text-[10px] font-bold uppercase tracking-[0.2em]">Academy</span>
+                        </span>
+                    </a>
 
-                    <button @click="sidebarOpen = false" class="p-2 rounded-lg hover:bg-gray-100"
-                        aria-label="Close menu">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <button type="button" @click="closeSidebar()" x-ref="mobileSidebarClose" class="dashboard-mobile-sidebar__close shrink-0 rounded-xl"
+                        aria-label="Tutup menu navigasi">
+                        <svg class="h-5 w-5" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </div>
 
-                <nav class="p-4 space-y-1">
+                <nav class="dashboard-navigation p-4 space-y-1" aria-label="Navigasi dashboard mobile">
+                    <p class="dashboard-nav-label">Workspace</p>
                     <a href="{{ route('dashboard') }}" @click="sidebarOpen=false"
                         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
                               {{ request()->routeIs('dashboard') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
@@ -239,6 +247,14 @@
                         Kontes
                     </a>
                 </nav>
+                <div class="dashboard-sidebar-note mt-auto p-4">
+                    <div class="rounded-[1.25rem] bg-slate-950 p-4 text-white">
+                        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-sky-300">Let's Grow Academy</p>
+                        <p class="mt-2 text-sm font-semibold leading-snug">Kelola pertumbuhan tim dalam satu ruang kerja.</p>
+                        <span class="mt-4 block h-px w-full bg-white/15"></span>
+                        <p class="mt-3 text-[11px] text-slate-400">Workspace aktif</p>
+                    </div>
+                </div>
             </aside>
         </div>
 
@@ -247,8 +263,8 @@
             <header
                 class="dashboard-topbar sticky top-0 z-40 flex h-20 shrink-0 items-center justify-between gap-4 border-b bg-white px-4 md:rounded-[1.5rem] md:border md:px-8">
                 {{-- Hamburger (Mobile) --}}
-                <button class="md:hidden p-2 rounded-xl hover:bg-gray-100" @click="sidebarOpen = true"
-                    aria-label="Buka menu navigasi" x-bind:aria-expanded="sidebarOpen.toString()">
+                <button class="md:hidden p-2 rounded-xl hover:bg-gray-100" @click="openSidebar()" x-ref="mobileNavigationToggle"
+                    aria-label="Buka menu navigasi" aria-controls="mobile-navigation" x-bind:aria-expanded="sidebarOpen.toString()">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M4 6h16M4 12h16M4 18h16" />
@@ -259,18 +275,24 @@
                 <div class="hidden md:block"></div>
 
                 {{-- Profile dropdown --}}
+                @php($headerHasActiveSubscription = auth()->user()->hasActiveSubscription())
                 <div x-data="{ open: false }" class="relative">
-                    <button @click="open = !open" class="flex items-center gap-3 focus:outline-none" aria-label="Buka menu akun" x-bind:aria-expanded="open.toString()">
+                    <button @click="open = !open" class="dashboard-account-button flex items-center gap-3" aria-label="{{ $headerHasActiveSubscription ? 'Buka menu akun, subscriber aktif' : 'Buka menu akun' }}" x-bind:aria-expanded="open.toString()">
                         <div
-                            class="h-9 w-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold">
+                            class="relative h-9 w-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold">
                             {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 1)) }}
+                            @if ($headerHasActiveSubscription)
+                                <span class="subscriber-avatar-badge sm:hidden" aria-hidden="true">
+                                    <x-diamond-icon class="h-3 w-3" />
+                                </span>
+                            @endif
                         </div>
 
                         <div class="leading-tight hidden sm:block text-left">
                             <div class="flex items-center gap-2 text-sm font-semibold">
                                 {{ auth()->user()->name ?? 'User' }}
-                                @if (auth()->user()->hasActiveSubscription())
-                                    <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-700">Subscriber</span>
+                                @if ($headerHasActiveSubscription)
+                                    <x-subscriber-badge />
                                 @endif
                             </div>
                             <div class="text-xs text-gray-500">

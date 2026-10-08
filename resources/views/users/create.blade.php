@@ -220,17 +220,13 @@
             {{-- Uploads --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="text-sm font-medium text-gray-700">Foto</label>
-                    <input type="file" name="photo" accept="image/*"
-                           class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                    <p class="mt-2 text-xs text-gray-500">JPG/PNG, max 2MB</p>
+                    <label for="upload-photo" class="text-sm font-medium text-gray-700">Foto</label>
+                    <x-file-upload name="photo" label="Foto" accept="image/*" :max-size="2" hint="Gambar · Maksimal 2 MB" />
                 </div>
 
                 <div>
-                    <label class="text-sm font-medium text-gray-700">Foto KTP</label>
-                    <input type="file" name="id_card" accept=".jpg,.jpeg,.png,.pdf"
-                           class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
-                    <p class="mt-2 text-xs text-gray-500">JPG/PNG/PDF, max 4MB</p>
+                    <label for="upload-id_card" class="text-sm font-medium text-gray-700">Foto KTP</label>
+                    <x-file-upload name="id_card" label="Foto KTP" accept=".jpg,.jpeg,.png,.pdf" :max-size="4" hint="JPG, PNG, atau PDF · Maksimal 4 MB" />
                 </div>
             </div>
 

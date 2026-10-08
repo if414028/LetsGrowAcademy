@@ -69,36 +69,7 @@
                 && now()->diffInDays($dashboardSubscription->ends_at, false) <= $subscriptionWarningDays;
         @endphp
 
-        <section class="mt-6 overflow-hidden rounded-2xl border {{ $dashboardSubscription ? 'border-amber-200 bg-gradient-to-r from-amber-50 to-white' : ($pendingDashboardSubscription ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white') }} p-5 shadow-sm sm:p-6">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex items-start gap-4">
-                <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full {{ $dashboardSubscription ? 'bg-amber-100 text-amber-700' : ($pendingDashboardSubscription ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500') }}">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 15.24 7.2 17.76l.92-5.34-3.88-3.78 5.36-.78L12 3z" /></svg>
-                </div>
-                <div>
-                    <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Status subscription</p>
-                    @if ($dashboardSubscription)
-                        <h2 class="mt-1 text-lg font-extrabold text-slate-900">Subscriber aktif</h2>
-                        <p class="mt-1 text-sm text-slate-600">Akses premium aktif sampai {{ $dashboardSubscription->ends_at->translatedFormat('d F Y') }}.</p>
-                        @if ($subscriptionExpiringSoon)
-                            <p class="mt-2 inline-flex items-center gap-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700">
-                                Masa aktif akan habis dalam {{ max(0, now()->diffInDays($dashboardSubscription->ends_at, false)) }} hari. Segera perpanjang subscription.
-                            </p>
-                        @endif
-                    @elseif ($pendingDashboardSubscription)
-                        <h2 class="mt-1 text-lg font-extrabold text-slate-900">Menunggu pengecekan admin</h2>
-                        <p class="mt-1 text-sm text-slate-600">Pembayaran kamu sedang diverifikasi secara manual.</p>
-                    @else
-                        <h2 class="mt-1 text-lg font-extrabold text-slate-900">Belum berlangganan</h2>
-                        <p class="mt-1 text-sm text-slate-600">Berlangganan untuk membuka Selling Kit dan dokumen premium lainnya.</p>
-                    @endif
-                </div>
-            </div>
-            <a href="{{ route('subscriptions.index') }}" class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl {{ $dashboardSubscription ? 'bg-amber-400 text-slate-950 hover:bg-amber-300' : 'bg-blue-600 text-white hover:bg-blue-700' }} px-5 py-2.5 text-sm font-extrabold transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                {{ $dashboardSubscription ? 'Kelola Subscription' : ($pendingDashboardSubscription ? 'Lihat Status' : 'Subscribe Sekarang') }}
-            </a>
-        </div>
-        </section>
+        <x-subscription-status :subscription="$dashboardSubscription" :pending-subscription="$pendingDashboardSubscription" :expiring-soon="$subscriptionExpiringSoon" />
     @endhasanyrole
 
     {{-- Deactivation warning (Month-5) --}}
@@ -111,8 +82,10 @@
         $hasWarning = ($isHP && !empty($selfWarning)) || (!$isHP && $soDeactivationWarnings->count() > 0);
     @endphp
 
+    @if ($hasWarning || $inactiveDownlines->isNotEmpty())
+    <div class="dashboard-notices {{ $hasWarning && $inactiveDownlines->isNotEmpty() ? 'dashboard-notices--paired' : '' }}">
     @if ($hasWarning)
-        <div class="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-6 shadow-sm">
+        <section class="dashboard-notice dashboard-notice--warning rounded-2xl border border-orange-200 bg-orange-50 p-6 shadow-sm" aria-labelledby="sales-warning-heading">
             <div class="flex items-start justify-between gap-4">
                 <div class="flex items-start gap-3">
                     <span class="mt-0.5 text-orange-600">
@@ -123,7 +96,7 @@
                     </span>
 
                     <div>
-                        <h3 class="text-lg font-bold text-orange-900">
+                        <h3 id="sales-warning-heading" class="text-lg font-bold text-orange-900">
                             Peringatan Aktivitas Penjualan
                         </h3>
 
@@ -166,64 +139,30 @@
                             </svg>
                         </span>
                     </summary>
-                <div class="mt-4 -mx-6 sm:mx-0 overflow-x-auto">
-                    <div class="px-6 sm:px-0">
-                        <table class="min-w-[720px] w-full text-sm">
-                            <thead class="text-orange-900/70">
-                                <tr class="border-b border-orange-200">
-                                    <th class="text-left font-semibold py-2">Health Planner</th>
-                                    <th class="text-left font-semibold py-2">Health Manager</th>
-                                    <th class="text-left font-semibold py-2">DST</th>
-                                    <th class="text-left font-semibold py-2">Aktivitas Terakhir</th>
-                                    <th class="text-left font-semibold py-2">Perkiraan Nonaktif</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($soDeactivationWarnings as $u)
-                                    <tr class="border-b border-orange-100">
-                                        <td class="py-2">
-                                            <div class="font-semibold text-orange-900">{{ $u->name }}</div>
-                                            <div class="text-xs text-orange-900/70">{{ $u->email }}</div>
-                                        </td>
-
-                                        <td class="py-2 text-orange-900/80">
-                                            {{ $u->health_manager_name ?? '-' }}
-                                        </td>
-
-                                        <td class="py-2 text-orange-900/80 whitespace-nowrap">
-                                            {{ $u->dst_code ?? '-' }}
-                                        </td>
-
-                                        <td class="py-2 text-orange-900/80 whitespace-nowrap">
-                                            {{ $u->last_activity_at->translatedFormat('d M Y') }}
-                                        </td>
-
-                                        <td class="py-2 text-orange-900 font-semibold whitespace-nowrap">
-                                            {{ $u->deactivate_at->translatedFormat('d M Y') }}
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                    <div class="dashboard-notice__list" role="region" aria-label="Daftar Health Planner dalam peringatan" tabindex="0">
+                        <ul role="list">
+                            @foreach ($soDeactivationWarnings as $u)
+                                <x-dashboard-notice-user :user="$u" warning />
+                            @endforeach
+                        </ul>
                     </div>
-                </div>
 
-                @if ($isManager)
-                    <p class="mt-3 text-xs text-orange-900/70">
-                        *List ini hanya menampilkan bawahan Anda.
-                    </p>
-                @elseif($isAdmin)
-                    <p class="mt-3 text-xs text-orange-900/70">
-                        *List ini menampilkan seluruh Health Planner.
-                    </p>
-                @endif
+                    @if ($isManager)
+                        <p class="mt-3 text-xs text-orange-900/70">
+                            *List ini hanya menampilkan bawahan Anda.
+                        </p>
+                    @elseif($isAdmin)
+                        <p class="mt-3 text-xs text-orange-900/70">
+                            *List ini menampilkan seluruh Health Planner.
+                        </p>
+                    @endif
                 </details>
             @endif
-        </div>
+        </section>
     @endif
 
     @if ($inactiveDownlines->isNotEmpty())
-        <section class="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-sm" aria-labelledby="inactive-downlines-heading">
+        <section class="dashboard-notice rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-sm" aria-labelledby="inactive-downlines-heading">
             <div class="flex items-start justify-between gap-4">
                 <div>
                     <h3 id="inactive-downlines-heading" class="text-lg font-bold text-gray-800">User Nonaktif</h3>
@@ -245,37 +184,18 @@
                         </svg>
                     </span>
                 </summary>
-                <div class="mt-4 overflow-x-auto">
-                    <table class="min-w-[720px] w-full text-sm">
-                        <thead class="text-gray-600">
-                            <tr class="border-b border-gray-300">
-                                <th class="py-2 text-left font-semibold">User</th>
-                                <th class="py-2 text-left font-semibold">Role</th>
-                                <th class="py-2 text-left font-semibold">Health Manager</th>
-                                <th class="py-2 text-left font-semibold">DST</th>
-                                <th class="py-2 text-left font-semibold">Status</th>
-                                <th class="py-2 text-left font-semibold">Tanggal Nonaktif</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($inactiveDownlines as $downline)
-                                <tr class="border-b border-gray-200">
-                                    <td class="py-2 pr-4">
-                                        <div class="font-semibold text-gray-800">{{ $downline->name }}</div>
-                                        <div class="text-xs text-gray-600">{{ $downline->email }}</div>
-                                    </td>
-                                    <td class="py-2 pr-4 text-gray-600">{{ $downline->roles->pluck('name')->join(', ') ?: '-' }}</td>
-                                    <td class="py-2 pr-4 text-gray-600">{{ $downline->health_manager_name }}</td>
-                                    <td class="whitespace-nowrap py-2 pr-4 text-gray-600">{{ $downline->dst_code ?? '-' }}</td>
-                                    <td class="py-2 font-semibold text-gray-700">Inactive</td>
-                                    <td class="whitespace-nowrap py-2 pl-4 text-gray-600">{{ $downline->deactivated_at?->translatedFormat('d M Y') ?? 'Belum tercatat' }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                <div class="dashboard-notice__list" role="region" aria-label="Daftar user nonaktif" tabindex="0">
+                    <ul role="list">
+                        @foreach ($inactiveDownlines as $downline)
+                            <x-dashboard-notice-user :user="$downline" />
+                        @endforeach
+                    </ul>
                 </div>
             </details>
         </section>
+    @endif
+
+    </div>
     @endif
 
     {{-- Birthday celebration section --}}
@@ -721,116 +641,11 @@
         </div>
     </div>
 
-    {{-- Bottom cards --}}
-    <div class="mt-8 rounded-2xl bg-white shadow-sm border">
-        {{-- Sales Trend --}}
-        <div class="rounded-2xl bg-white p-6 shadow-sm border">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-xl font-bold">Sales Trend</h2>
-                    @if ($salesTrendPerHealthManager)
-                        <p class="mt-1 text-sm text-gray-500">Penjualan per HM dan timnya.</p>
-                    @endif
-                </div>
-
-                <form method="GET" class="relative">
-                    @foreach (request()->except('trend') as $k => $v)
-                        <input type="hidden" name="{{ $k }}" value="{{ $v }}">
-                    @endforeach
-
-                    <select name="trend" aria-label="Periode Sales Trend" onchange="this.form.submit()"
-                        class="appearance-none rounded-lg border bg-white pl-3 pr-9 py-2 text-sm text-gray-700 shadow-sm hover:bg-gray-50">
-                        <option value="daily" {{ $trend === 'daily' ? 'selected' : '' }}>Daily</option>
-                        <option value="weekly" {{ ($trend ?? 'weekly') === 'weekly' ? 'selected' : '' }}>Weekly
-                        </option>
-                        <option value="monthly" {{ ($trend ?? 'weekly') === 'monthly' ? 'selected' : '' }}>Monthly
-                        </option>
-                    </select>
-
-                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M19 9l-7 7-7-7" />
-                        </svg>
-                    </span>
-                </form>
-            </div>
-
-            @if ($salesTrendPerHealthManager && empty($salesTrendDatasets))
-                <p class="mt-6 text-sm text-gray-500">Belum ada Health Manager aktif untuk ditampilkan.</p>
-            @endif
-            <div class="mt-6 h-56 rounded-xl bg-gray-50 border p-3">
-                <canvas id="salesTrendChart" class="w-full h-full"></canvas>
-            </div>
-        </div>
-    </div>
+    <x-sales-trend :labels="$salesTrendLabels ?? []" :datasets="$salesTrendDatasets ?? []" :per-health-manager="$salesTrendPerHealthManager" :trend="$trend ?? 'weekly'" />
 
     @push('scripts')
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
         <script>
-            (function() {
-                const el = document.getElementById('salesTrendChart');
-                if (!el) return;
-
-                const labels = @json($salesTrendLabels ?? []);
-                const series = @json($salesTrendDatasets ?? []);
-                const perHealthManager = @json($salesTrendPerHealthManager);
-                const colors = ['#259df5', '#16a085', '#e67e22', '#8e44ad', '#e74c3c', '#0284c7', '#c026d3', '#64748b'];
-
-                // destroy previous instance (jika ada hot reload / livewire)
-                if (window.__salesTrendChart) {
-                    window.__salesTrendChart.destroy();
-                }
-
-                window.__salesTrendChart = new Chart(el, {
-                    type: 'line',
-                    data: {
-                        labels,
-                        datasets: series.map((dataset, index) => ({
-                            ...dataset,
-                            borderColor: colors[index] ?? `hsl(${(index * 137.508) % 360}, 65%, 45%)`,
-                            backgroundColor: colors[index] ?? `hsl(${(index * 137.508) % 360}, 65%, 45%)`,
-                            tension: 0.35,
-                            pointRadius: @json($trend === 'daily' ? 2 : 3),
-                            borderWidth: 2,
-                            fill: false,
-                        }))
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: perHealthManager,
-                                position: 'bottom'
-                            },
-                            tooltip: {
-                                mode: 'index',
-                                intersect: false
-                            }
-                        },
-                        interaction: {
-                            mode: 'index',
-                            intersect: false
-                        },
-                        scales: {
-                            x: {
-                                grid: {
-                                    display: false
-                                }
-                            },
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    precision: 0
-                                }
-                            }
-                        }
-                    }
-                });
-            })();
-
             (function() {
                 // --- tiny confetti engine (no deps) ---
                 window.burstConfetti = function burstConfetti(canvasId, durationMs = 2000) {

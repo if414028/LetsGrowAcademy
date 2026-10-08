@@ -38,10 +38,8 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700">File CSV</label>
-                        <input type="file" name="file" accept=".csv,text/csv"
-                               class="mt-1 block w-full rounded-xl border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                               required>
+                        <label for="upload-file" class="block text-sm font-medium text-gray-700">File CSV</label>
+                        <x-file-upload name="file" label="File CSV" accept=".csv,text/csv" :max-size="5" hint="CSV · Maksimal 5 MB" required />
                         <p class="mt-1 text-xs text-gray-500">
                             Notes: Untuk banyak harga di 1 produk, duplikat baris dengan SKU yang sama.
                             <br>billing_type: <b>one_time</b> / <b>monthly</b>. monthly wajib duration_months.

@@ -42,8 +42,10 @@
             @foreach (['ktp' => 'KTP', 'unit_barcode' => 'Barcode Unit'] as $field => $label)
                 <div>
                     <label for="{{ $field }}" class="text-sm font-medium text-gray-700">Upload {{ $label }} (Opsional)</label>
-                    <input id="{{ $field }}" type="file" name="{{ $field }}" accept=".jpg,.jpeg,.png,.webp,.pdf" class="mt-2 block w-full text-sm text-gray-600">
-                    <p class="mt-2 text-xs text-gray-500">JPG, PNG, WEBP, atau PDF. Maksimal 5 MB. Kosongkan untuk mempertahankan dokumen yang sudah ada.</p>
+                    <x-file-upload :id="$field" :name="$field" :label="$label" accept=".jpg,.jpeg,.png,.webp,.pdf" :max-size="5" hint="JPG, PNG, WEBP, atau PDF · Maksimal 5 MB" />
+                    @if ($customer->exists)
+                        <p class="mt-1 text-xs text-gray-500">Kosongkan untuk mempertahankan dokumen yang sudah ada.</p>
+                    @endif
                     @if ($customer->exists && $customer->{$field . '_path'})
                         <a href="{{ route('customers.document', [$customer, $field]) }}" class="mt-2 inline-block text-sm text-blue-600 underline">Unduh {{ $label }} saat ini</a>
                     @endif

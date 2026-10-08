@@ -3,10 +3,51 @@ import './bootstrap';
 import Alpine from 'alpinejs';
 import gsap from 'gsap';
 import ScrollTrigger from 'gsap/ScrollTrigger';
+import fileUpload from './file-upload';
+import { initSalesTrend } from './sales-trend';
 
 gsap.registerPlugin(ScrollTrigger);
 
 window.Alpine = Alpine;
+
+Alpine.data('fileUpload', fileUpload);
+
+Alpine.data('dashboardShell', () => ({
+    sidebarOpen: false,
+    init() {
+        this.$watch('sidebarOpen', (open) => {
+            document.body.classList.toggle('dashboard-navigation-open', open);
+        });
+        this.desktopViewport = window.matchMedia('(min-width: 768px)');
+        this.onViewportChange = (event) => { if (event.matches) this.sidebarOpen = false; };
+        this.desktopViewport.addEventListener('change', this.onViewportChange);
+    },
+    destroy() {
+        this.desktopViewport.removeEventListener('change', this.onViewportChange);
+        document.body.classList.remove('dashboard-navigation-open');
+    },
+    openSidebar() {
+        this.sidebarOpen = true;
+        this.$nextTick(() => this.$refs.mobileSidebarClose.focus());
+    },
+    closeSidebar() {
+        this.sidebarOpen = false;
+        this.$refs.mobileNavigationToggle.focus();
+    },
+    trapSidebarFocus(event) {
+        const controls = [...this.$refs.mobileSidebar.querySelectorAll('a[href], button:not([disabled])')]
+            .filter((element) => element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    },
+}));
 
 Alpine.data('teamSheet', () => ({
     dragging: false,
@@ -241,10 +282,12 @@ document.readyState === 'loading'
         initPerformanceMotion();
         initPublicMotion();
         initAuthMotion();
+        initSalesTrend();
     }, { once: true })
     : (() => {
         initDashboardMotion();
         initPerformanceMotion();
         initPublicMotion();
         initAuthMotion();
+        initSalesTrend();
     })();

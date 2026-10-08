@@ -77,31 +77,21 @@
         @endif
 
         @if ($activeSubscription)
-            <section class="mt-8 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6 text-white shadow-xl sm:p-8">
-                <div class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <span class="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-300">
-                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l2.4 4.86 5.36.78-3.88 3.78.92 5.34L12 15.24 7.2 17.76l.92-5.34-3.88-3.78 5.36-.78L12 3z"/></svg>
-                            Subscriber
-                        </span>
-                        <h2 class="mt-4 text-2xl font-extrabold">Akses premium kamu aktif</h2>
-                        <p class="mt-2 text-sm text-slate-300">Berlaku sampai {{ $activeSubscription->ends_at->translatedFormat('d F Y, H.i') }} WIB</p>
-                        @if (auth()->user()->whatsapp_url)
-                            <p class="mt-3 break-all text-xs font-semibold text-sky-300">{{ route('subscriber-landing.show', auth()->user()->landing_page_slug) }}</p>
-                        @else
-                            <p class="mt-3 text-xs font-semibold text-amber-300">Tambahkan nomor WhatsApp di profil agar landing page dapat dipublikasikan.</p>
-                        @endif
-                    </div>
-                    <div class="flex flex-col gap-3 sm:items-end">
-                        @if (auth()->user()->whatsapp_url)
-                            <a href="{{ route('subscriber-landing.show', auth()->user()->landing_page_slug) }}" target="_blank" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-sky-500 px-5 py-3 text-sm font-extrabold text-white transition hover:bg-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:ring-offset-2 focus:ring-offset-slate-900">Buka Landing Page</a>
-                        @endif
-                        <a href="{{ route('selling-kit.index') }}" class="inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-400 px-5 py-3 text-sm font-extrabold text-slate-950 transition hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-slate-900">
-                            Buka Selling Kit
-                        </a>
-                    </div>
-                </div>
-            </section>
+            <x-subscription-status :subscription="$activeSubscription" :show-time="true">
+                <x-slot:details>
+                    @if (auth()->user()->whatsapp_url)
+                        <p class="subscription-status-card__detail">{{ route('subscriber-landing.show', auth()->user()->landing_page_slug) }}</p>
+                    @else
+                        <p class="subscription-status-card__detail">Tambahkan nomor WhatsApp di profil agar landing page dapat dipublikasikan.</p>
+                    @endif
+                </x-slot:details>
+                <x-slot:actions>
+                    @if (auth()->user()->whatsapp_url)
+                        <a href="{{ route('subscriber-landing.show', auth()->user()->landing_page_slug) }}" target="_blank" rel="noopener" class="subscription-status-card__action"><span>Buka Landing Page</span></a>
+                    @endif
+                    <a href="{{ route('selling-kit.index') }}" class="subscription-status-card__action"><span>Buka Selling Kit</span></a>
+                </x-slot:actions>
+            </x-subscription-status>
         @elseif ($pendingSubscription)
             <section class="mt-8 rounded-3xl border border-amber-200 bg-amber-50 p-6 sm:p-8">
                 <div class="flex items-start gap-4">

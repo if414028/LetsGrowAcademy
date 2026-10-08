@@ -248,9 +248,8 @@
                             @foreach (['customer_ktp' => 'Upload KTP', 'customer_unit_barcode' => 'Upload Barcode Unit'] as $field => $label)
                                 <div class="md:col-span-2">
                                     <label for="{{ $field }}" class="text-xs font-medium text-gray-600">{{ $label }} (Opsional)</label>
-                                    <input id="{{ $field }}" type="file" name="{{ $field }}" accept=".jpg,.jpeg,.png,.webp,.pdf"
-                                        class="mt-1 block w-full text-sm text-gray-600">
-                                    <p class="mt-1 text-xs text-gray-400">JPG, PNG, WEBP, atau PDF. Maksimal 5 MB. Kosongkan untuk mempertahankan dokumen yang sudah ada.</p>
+                                    <x-file-upload :id="$field" :name="$field" :label="$label" accept=".jpg,.jpeg,.png,.webp,.pdf" :max-size="5" hint="JPG, PNG, WEBP, atau PDF · Maksimal 5 MB" />
+                                    <p class="mt-1 text-xs text-gray-500">Kosongkan untuk mempertahankan dokumen yang sudah ada.</p>
                                 </div>
                             @endforeach
 

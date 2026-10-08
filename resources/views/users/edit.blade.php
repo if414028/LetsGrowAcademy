@@ -268,9 +268,8 @@
             <div
                 class="grid grid-cols-1 gap-4 @if (!$isAdmin) pt-2 @endif @if ($isAdmin) border-t pt-4 @endif md:grid-cols-2">
                 <div>
-                    <label class="text-sm font-medium text-gray-700">Photo</label>
-                    <input type="file" name="photo" accept="image/*"
-                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                    <label for="upload-photo" class="text-sm font-medium text-gray-700">Photo</label>
+                    <x-file-upload name="photo" label="Photo" accept="image/*" :max-size="2" hint="Gambar · Maksimal 2 MB" />
 
                     @if (!empty($user->photo))
                         <p class="mt-2 text-xs text-gray-500">Current file:</p>
@@ -282,9 +281,8 @@
                 </div>
 
                 <div>
-                    <label class="text-sm font-medium text-gray-700">ID Card</label>
-                    <input type="file" name="id_card" accept=".jpg,.jpeg,.png,.pdf"
-                        class="mt-1 w-full rounded-xl border-gray-200 focus:border-blue-500 focus:ring-blue-500">
+                    <label for="upload-id_card" class="text-sm font-medium text-gray-700">ID Card</label>
+                    <x-file-upload name="id_card" label="ID Card" accept=".jpg,.jpeg,.png,.pdf" :max-size="4" hint="JPG, PNG, atau PDF · Maksimal 4 MB" />
 
                     @if (!empty($user->id_card))
                         <p class="mt-2 text-xs text-gray-500">Current file:</p>

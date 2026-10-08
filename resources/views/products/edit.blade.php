@@ -203,15 +203,9 @@
 
                 {{-- Replace Image --}}
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Replace Product Image</label>
-                    <input type="file" name="product_image" accept="image/*"
-                           class="mt-1 w-full rounded-xl border-gray-300 focus:border-blue-500 focus:ring-blue-500" />
-                    <p class="mt-1 text-xs text-gray-500">
-                        JPG, PNG, WEBP • Max 2MB. Kalau kosong, gambar tidak berubah.
-                    </p>
-                    @error('product_image')
-                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                    @enderror
+                    <label for="upload-product_image" class="block text-sm font-medium text-gray-700">Replace Product Image</label>
+                    <x-file-upload name="product_image" label="Product Image" accept=".jpg,.jpeg,.png,.webp" :max-size="2" hint="JPG, PNG, atau WEBP · Maksimal 2 MB" />
+                    <p class="mt-1 text-xs text-gray-500">Kalau kosong, gambar tidak berubah.</p>
                 </div>
 
                 {{-- Status --}}
