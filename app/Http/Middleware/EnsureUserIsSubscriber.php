@@ -13,7 +13,7 @@ class EnsureUserIsSubscriber
         if (!$request->user()?->hasActiveSubscription()) {
             return redirect()
                 ->route('subscriptions.index')
-                ->with('error', 'Selling Kit hanya dapat diakses oleh subscriber aktif.');
+                ->with('error', 'Fitur ini hanya dapat diakses oleh subscriber aktif.');
         }
 
         return $next($request);

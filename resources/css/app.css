@@ -1,4 +1,6 @@
 @import '@fontsource-variable/geist';
+@import './birthday-greetings.css';
+@import './recruitment.css';
 
 @tailwind base;
 @tailwind components;

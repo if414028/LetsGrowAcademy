@@ -11,11 +11,19 @@
     @if (auth()->user()->hasActiveSubscription())
         <div class="ml-5 border-l-2 border-blue-200 pl-3">
             <p class="dashboard-subscription-label px-3 pb-1 pt-2 text-[9px] font-extrabold uppercase tracking-[0.16em] text-sky-600">Khusus subscriber</p>
+            @hasanyrole('Health Planner|Health Manager')
+                <a href="{{ route('birthday-greetings.index') }}" {!! $closeSidebar !!} @if(request()->routeIs('birthday-greetings.*')) aria-current="page" @endif class="flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition {{ request()->routeIs('birthday-greetings.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50' }}">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 11h16v10H4zM3 7h18v4H3zM12 7v14M12 7H8.5A2.5 2.5 0 1 1 11 4.5L12 7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5L12 7Z"/></svg><span class="flex-1">Birthday Greetings</span>
+                </a>
+            @endhasanyrole
             <a href="{{ route('selling-kit.index') }}" {!! $closeSidebar !!} @if(request()->routeIs('selling-kit.*')) aria-current="page" @endif class="flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition {{ request()->routeIs('selling-kit.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50' }}">
                 <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 3h7l5 5v13H7V3z" /></svg><span class="flex-1">Selling Kit</span>
             </a>
             <a href="{{ route('subscriber-landing.index') }}" {!! $closeSidebar !!} @if(request()->routeIs('subscriber-landing.index')) aria-current="page" @endif class="mt-1 flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition {{ request()->routeIs('subscriber-landing.index') ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50' }}">
                 <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3h7v7m0-7-9 9M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" /></svg><span class="flex-1">Landing Page Produk</span>
+            </a>
+            <a href="{{ route('subscriber-recruitment.index') }}" {!! $closeSidebar !!} @if(request()->routeIs('subscriber-recruitment.*')) aria-current="page" @endif class="mt-1 flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition {{ request()->routeIs('subscriber-recruitment.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50' }}">
+                <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.87M15 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/></svg><span class="flex-1">Landing Page Rekrutmen</span>
             </a>
         </div>
     @endif

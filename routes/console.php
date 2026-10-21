@@ -12,3 +12,6 @@ Schedule::command('contests:end-expired')->dailyAt('00:10');
 
 
 Schedule::command('users:deactivate-inactive-planners')->dailyAt('00:00')->withoutOverlapping();
+
+Schedule::command('birthday-greetings:send')->everyFifteenMinutes()
+    ->timezone('Asia/Jakarta')->between('09:00', '18:00')->withoutOverlapping();

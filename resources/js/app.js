@@ -5,12 +5,16 @@ import gsap from 'gsap';
 import ScrollTrigger from 'gsap/ScrollTrigger';
 import fileUpload from './file-upload';
 import { initSalesTrend } from './sales-trend';
+import birthdayGreetings from './birthday-greetings';
+import recruitmentShare from './recruitment';
 
 gsap.registerPlugin(ScrollTrigger);
 
 window.Alpine = Alpine;
 
 Alpine.data('fileUpload', fileUpload);
+Alpine.data('birthdayGreetings', birthdayGreetings);
+Alpine.data('recruitmentShare', recruitmentShare);
 
 Alpine.data('dashboardShell', () => ({
     sidebarOpen: false,
@@ -146,6 +150,14 @@ const initDashboardMotion = () => {
     const scroller = document.querySelector('.dashboard-main');
 
     if (!root || !scroller || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const birthdayPage = document.querySelector('[data-birthday-page]');
+    if (birthdayPage) {
+        gsap.from(birthdayPage.querySelectorAll('.birthday-page__header, .birthday-intro__art, .birthday-step'), {
+            y: 10, opacity: 0, duration: 0.3, stagger: 0.04, ease: 'power2.out', clearProps: 'all',
+        });
+        return;
+    }
 
     const headingBlock = document.querySelector('.dashboard-content > :first-child');
     const contentBlocks = gsap.utils.toArray('.dashboard-content > section, .dashboard-content > form, .dashboard-content > div:not(:first-child)');

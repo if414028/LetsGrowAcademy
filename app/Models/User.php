@@ -158,6 +158,11 @@ class User extends Authenticatable
         return $this->hasMany(Subscription::class);
     }
 
+    public function recruitmentLeads()
+    {
+        return $this->hasMany(RecruitmentLead::class, 'owner_user_id');
+    }
+
     public function activeSubscription(): ?Subscription
     {
         return $this->subscriptions()
