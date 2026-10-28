@@ -33,7 +33,7 @@
             <nav class="p-4 space-y-1">
                 <a href="{{ route('dashboard') }}"
                     class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
-                          {{ request()->routeIs('dashboard') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
+                          {{ request()->routeIs('dashboard', 'dashboard.installations.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
                     <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M4 6h7v7H4V6zm9 0h7v7h-7V6zM4 15h7v7H4v-7zm9 0h7v7h-7v-7z" />
@@ -43,15 +43,7 @@
 
                 @include('layouts.partials.performance-menu', ['mobile' => false])
 
-                <a href="{{ route('reports.index') }}"
-                    class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
-                        {{ request()->routeIs('reports.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
-                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 17v-6a2 2 0 012-2h2a2 2 0 012 2v6m-8 0h8m-10 0a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2" />
-                    </svg>
-                    Reports
-                </a>
+                @include('layouts.partials.reports-menu', ['mobile' => false])
 
                 @hasanyrole('Admin|Head Admin|Health Manager')
                     <a href="{{ route('users.index') }}"
@@ -143,7 +135,7 @@
                 <nav class="p-4 space-y-1">
                     <a href="{{ route('dashboard') }}" @click="sidebarOpen=false"
                         class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
-                              {{ request()->routeIs('dashboard') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
+                              {{ request()->routeIs('dashboard', 'dashboard.installations.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
                         <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M4 6h7v7H4V6zm9 0h7v7h-7V6zM4 15h7v7H4v-7zm9 0h7v7h-7v-7z" />
@@ -153,15 +145,7 @@
 
                     @include('layouts.partials.performance-menu', ['mobile' => true])
 
-                    <a href="{{ route('reports.index') }}" @click="sidebarOpen=false"
-                        class="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium
-                            {{ request()->routeIs('reports.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50' }}">
-                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 17v-6a2 2 0 012-2h2a2 2 0 012 2v6m-8 0h8m-10 0a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2" />
-                        </svg>
-                        Reports
-                    </a>
+                    @include('layouts.partials.reports-menu', ['mobile' => true])
 
                     @hasanyrole('Admin|Head Admin|Health Manager')
                         <a href="{{ route('users.index') }}" @click="sidebarOpen=false"

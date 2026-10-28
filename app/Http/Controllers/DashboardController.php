@@ -13,43 +13,13 @@ use App\Models\PerformanceCutoff;
 use App\Models\Customer;
 use App\Services\HealthManagerNsScope;
 use App\Services\DashboardSalesTrend;
+use Illuminate\Database\Eloquent\Builder;
 
 class DashboardController extends Controller
 {
     public function index(Request $request)
     {
         $user = $request->user();
-
-        $warningsQuery = \App\Services\SalesActivity::planners();
-
-        // =========================
-        // Scope by role
-        // =========================
-        if ($user->hasRole('Sales Manager')) {
-            $downlineIds = $this->getAllDescendantUserIds((int) $user->id);
-            $warningsQuery->whereIn('users.id', $downlineIds ?: [0]);
-        } elseif ($user->hasRole('Health Manager')) {
-            $downlineIds = $this->getAllDescendantUserIds((int) $user->id);
-            $warningsQuery->whereIn('users.id', $downlineIds ?: [0]);
-        } elseif ($user->hasRole('Health Planner')) {
-            $warningsQuery->where('users.id', $user->id);
-        } elseif (!$user->hasAnyRole(['Admin', 'Head Admin'])) {
-            $warningsQuery->whereRaw('1=0');
-        }
-
-        $today = today();
-        $soDeactivationWarnings = $warningsQuery->get()->filter(function ($u) use ($today) {
-            return \App\Services\SalesActivity::lastActivity($u)->addMonths(5)->lte($today);
-        })->map(function ($u) {
-            $u->last_activity_at = \App\Services\SalesActivity::lastActivity($u);
-            $u->deactivate_at = \App\Services\SalesActivity::deactivateAt($u);
-            $u->health_manager_name = $this->nearestHealthManagerName((int) $u->id) ?? '-';
-            return $u;
-        })->sortBy('last_activity_at')->values();
-
-        $selfWarning = $user->hasRole('Health Planner')
-            ? $soDeactivationWarnings->first()
-            : null;
 
         // =========================================================
         // CUTOFF WINDOW (untuk semua stat card berbasis Sales Order)
@@ -72,19 +42,11 @@ class DashboardController extends Controller
         $descendantIds = $this->getAllDescendantUserIds((int) $user->id);
         $scopeUserIds = array_values(array_unique(array_merge([(int) $user->id], $descendantIds)));
 
-        $inactiveDownlinesQuery = User::query()
-            ->where('status', 'Inactive')
-            ->where('id', '!=', $user->id)
-            ->with('roles');
-
-        if (!$isAdminOrHead) {
-            $inactiveDownlinesQuery->whereIn('id', $descendantIds);
-        }
-
-        $inactiveDownlines = $inactiveDownlinesQuery->orderBy('name')->get()->map(function ($downline) {
-            $downline->health_manager_name = $this->nearestHealthManagerName((int) $downline->id) ?? '-';
-            return $downline;
-        });
+        $todayInstallations = $this->todayInstallationsQuery($user)
+            ->with(['salesUser', 'customer'])
+            ->orderBy('order_no')
+            ->paginate(10, ['*'], 'installations_page')
+            ->withQueryString();
 
         // ======================================
         // HELPER HITUNG UNITS
@@ -421,9 +383,7 @@ class DashboardController extends Controller
         }
 
         return view('dashboard', compact(
-            'inactiveDownlines',
-            'soDeactivationWarnings',
-            'selfWarning',
+            'todayInstallations',
             'totalUnitsSold',
             'totalSalesIndividu',
             'totalSalesCorporate',
@@ -446,6 +406,40 @@ class DashboardController extends Controller
         ));
     }
 
+    public function showInstallation(Request $request, SalesOrder $salesOrder)
+    {
+        abort_unless($this->todayInstallationsQuery($request->user())->whereKey($salesOrder->id)->exists(), 404);
+
+        $salesOrder->load([
+            'customer.healthPlanner',
+            'salesUser',
+            'parentItems.product',
+            'parentItems.productPrice',
+            'parentItems.childItems.product',
+        ]);
+
+        return view('sales-orders.show', [
+            'salesOrder' => $salesOrder,
+            'backUrl' => route('dashboard', $request->only(['installations_page', 'trend'])),
+            'backLabel' => '← Kembali ke Overview',
+        ]);
+    }
+
+    private function todayInstallationsQuery(User $user): Builder
+    {
+        $query = SalesOrder::query()->whereDate('install_date', today()->toDateString());
+
+        if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
+            return $query;
+        }
+
+        if ($user->hasAnyRole(['Health Planner', 'Health Manager', 'Sales Manager'])) {
+            return $query->whereIn('sales_user_id', $user->teamUserIds()->push((int) $user->id)->unique());
+        }
+
+        return $query->whereRaw('1=0');
+    }
+
     /**
      * Ambil semua descendant (bawahan) multi-level dari tabel user_hierarchies.
      * Asumsi: user_hierarchies: parent_user_id -> child_user_id (direct).
@@ -453,12 +447,5 @@ class DashboardController extends Controller
     private function getAllDescendantUserIds(int $userId): array
     {
         return User::find($userId)?->teamUserIds()->all() ?? [];
-    }
-
-    private function nearestHealthManagerName(int $userId): ?string
-    {
-        $user = User::find($userId);
-        $manager = $user ? \App\Services\HealthManagerAssignment::managerFor($user) : null;
-        return $manager ? trim((string) ($manager->full_name ?: $manager->name)) : null;
     }
 }

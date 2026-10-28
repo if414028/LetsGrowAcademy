@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\{HealthManagerNsScope, HealthManagerPeriods};
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\{DB, Schema};
+use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -99,6 +100,58 @@ class HealthManagerHistoryTest extends TestCase
         $q = DB::table('sales_orders as so')->where('install_date', $date);
         HealthManagerNsScope::apply($q, $hm, 'so', 'so.install_date');
         return (int) $q->sum('units');
+    }
+
+    public static function promotionHistorySources(): array
+    {
+        return ['recorded HM periods' => [true], 'legacy hm_since fallback' => [false]];
+    }
+
+    #[DataProvider('promotionHistorySources')]
+    public function test_august_promotion_keeps_july_production_with_the_previous_health_manager(bool $recordPeriods): void
+    {
+        $tee = $this->user('Health Manager', attributes: ['name' => 'Tee Pek Tie', 'hm_since' => '2026-07-01']);
+        $paul = $this->user('Health Planner', $tee, ['name' => 'Paul Manuel', 'health_manager_id' => $tee->id]);
+        $planner = $this->user('Health Planner', $paul, ['health_manager_id' => $tee->id]);
+        if ($recordPeriods) HealthManagerPeriods::sync($tee, false);
+
+        foreach ([
+            [$tee, '2026-07-15', 2], [$paul, '2026-07-15', 3], [$planner, '2026-07-15', 5],
+            [$tee, '2026-08-15', 7], [$paul, '2026-08-15', 11], [$planner, '2026-08-15', 13],
+        ] as [$seller, $date, $units]) {
+            $orderId = DB::table('sales_orders')->insertGetId(['sales_user_id' => $seller->id, 'install_date' => $date, 'units' => $units]);
+            DB::table('sales_order_items')->insert(['sales_order_id' => $orderId, 'product_id' => 1, 'qty' => $units]);
+        }
+
+        $method = new \ReflectionMethod(\App\Http\Controllers\PerformanceController::class, 'buildHealthManagerRecap');
+        $before = $method->invoke(app(\App\Http\Controllers\PerformanceController::class), $tee);
+        $this->assertSame(10, $before['months'][0]['achievement']);
+
+        $paul->syncRoles(['Health Manager']);
+        $paul->update(['hm_since' => '2026-08-01', 'health_manager_id' => null]);
+        if ($recordPeriods) HealthManagerPeriods::sync($paul, false);
+        $planner->update(['health_manager_id' => $paul->id]);
+
+        $after = $method->invoke(app(\App\Http\Controllers\PerformanceController::class), $tee);
+        $paulRecap = $method->invoke(app(\App\Http\Controllers\PerformanceController::class), $paul);
+        $this->assertSame(10, $after['months'][0]['achievement']);
+        $this->assertSame(2, $after['months'][0]['active_health_planners']);
+        $this->assertSame(7, $after['months'][1]['achievement']);
+        $this->assertSame(24, $paulRecap['months'][0]['achievement']);
+        $this->assertSame(10, $this->units($tee, '2026-07-15'));
+        $this->assertSame(0, $this->units($paul, '2026-07-15'));
+        $this->assertSame(7, $this->units($tee, '2026-08-15'));
+        $this->assertSame(24, $this->units($paul, '2026-08-15'));
+
+        $controller = app(\App\Http\Controllers\ReportController::class);
+        $leaderboardMethod = new \ReflectionMethod($controller, 'buildLeaderboardWithDescendants');
+        $july = $leaderboardMethod->invoke($controller, collect([$tee, $paul]), '2026-07-01', '2026-07-31');
+        $august = $leaderboardMethod->invoke($controller, collect([$tee, $paul]), '2026-08-01', '2026-08-31');
+        $this->assertSame(10, $july->firstWhere('id', $tee->id)['units']);
+        $this->assertFalse($july->contains('id', $paul->id));
+        $this->assertSame(31, $august->sum('units'));
+        $this->assertSame(7, $august->firstWhere('id', $tee->id)['units']);
+        $this->assertSame(24, $august->firstWhere('id', $paul->id)['units']);
     }
 
     public function test_report_leaderboards_use_install_date_before_name_to_break_a_tie(): void

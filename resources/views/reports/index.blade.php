@@ -3,7 +3,7 @@
         {{-- Header --}}
         <div class="flex items-start justify-between gap-4">
             <div>
-                <h1 class="text-2xl font-semibold text-gray-900">Reports</h1>
+                <h1 class="text-2xl font-semibold text-gray-900">Leaderboards</h1>
                 <p class="text-sm text-gray-500">Pantau perkembangan kinerja penjualan secara berkala.</p>
             </div>
         </div>

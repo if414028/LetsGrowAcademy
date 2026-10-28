@@ -11,6 +11,60 @@ use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
+    public function hpStatus(Request $request)
+    {
+        $user = $request->user();
+        $isAdminOrHead = $user->hasAnyRole(['Admin', 'Head Admin']);
+        $descendantIds = $user->teamUserIds()->all();
+
+        $warningsQuery = \App\Services\SalesActivity::planners();
+
+        // =========================
+        // Scope by role
+        // =========================
+        if ($user->hasRole('Sales Manager')) {
+            $downlineIds = $descendantIds;
+            $warningsQuery->whereIn('users.id', $downlineIds ?: [0]);
+        } elseif ($user->hasRole('Health Manager')) {
+            $downlineIds = $descendantIds;
+            $warningsQuery->whereIn('users.id', $downlineIds ?: [0]);
+        } elseif ($user->hasRole('Health Planner')) {
+            $warningsQuery->where('users.id', $user->id);
+        } elseif (!$user->hasAnyRole(['Admin', 'Head Admin'])) {
+            $warningsQuery->whereRaw('1=0');
+        }
+
+        $today = today();
+        $soDeactivationWarnings = $warningsQuery->get()->filter(function ($u) use ($today) {
+            return \App\Services\SalesActivity::lastActivity($u)->addMonths(5)->lte($today);
+        })->map(function ($u) {
+            $u->last_activity_at = \App\Services\SalesActivity::lastActivity($u);
+            $u->deactivate_at = \App\Services\SalesActivity::deactivateAt($u);
+            $u->health_manager_name = $this->nearestHealthManagerName((int) $u->id) ?? '-';
+            return $u;
+        })->sortBy('last_activity_at')->values();
+
+        $selfWarning = $user->hasRole('Health Planner')
+            ? $soDeactivationWarnings->first()
+            : null;
+
+        $inactiveDownlinesQuery = User::query()
+            ->where('status', 'Inactive')
+            ->where('id', '!=', $user->id)
+            ->with('roles');
+
+        if (!$isAdminOrHead) {
+            $inactiveDownlinesQuery->whereIn('id', $descendantIds);
+        }
+
+        $inactiveDownlines = $inactiveDownlinesQuery->orderBy('name')->get()->map(function ($downline) {
+            $downline->health_manager_name = $this->nearestHealthManagerName((int) $downline->id) ?? '-';
+            return $downline;
+        });
+
+        return view('reports.hp-status', compact('soDeactivationWarnings', 'selfWarning', 'inactiveDownlines'));
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -428,5 +482,12 @@ class ReportController extends Controller
         }
 
         return [$from, $to, $isManual];
+    }
+
+    private function nearestHealthManagerName(int $userId): ?string
+    {
+        $user = User::find($userId);
+        $manager = $user ? \App\Services\HealthManagerAssignment::managerFor($user) : null;
+        return $manager ? trim((string) ($manager->full_name ?: $manager->name)) : null;
     }
 }

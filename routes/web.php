@@ -59,6 +59,10 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified', 'active'])
     ->name('dashboard');
 
+Route::get('/dashboard/installations/{salesOrder}', [DashboardController::class, 'showInstallation'])
+    ->middleware(['auth', 'verified', 'active'])
+    ->name('dashboard.installations.show');
+
 /**
  * Authenticated routes
  */
@@ -188,6 +192,8 @@ Route::middleware('auth', 'active')->group(function () {
     Route::middleware(['auth'])->group(function () {
         Route::get('/reports', [\App\Http\Controllers\ReportController::class, 'index'])
             ->name('reports.index');
+        Route::get('/reports/hp-status', [ReportController::class, 'hpStatus'])
+            ->name('reports.hp-status');
     });
 
     // LIST

@@ -204,7 +204,7 @@ class InactivePlannerNetSalesTest extends TestCase
             ->assertSuccessful();
     }
 
-    public function test_reconciliation_reports_duplicate_attribution_and_correct_inactive_hp_attribution(): void
+    public function test_reconciliation_counts_inactive_hp_and_pre_promotion_sales_exactly_once(): void
     {
         $this->user('Head Admin');
         $hm = $this->user('Health Manager');
@@ -214,11 +214,12 @@ class InactivePlannerNetSalesTest extends TestCase
             ->expectsOutputToContain('Semua SO pada card teratribusi tepat satu kali ke tabel HM.')
             ->assertSuccessful();
 
-        // A newly promoted HM's pre-promotion sale can currently match both rows.
+        // The old HM retains this sale; the new HM's period has not started yet.
         $promoted = $this->user('Health Manager', $hm, ['hm_since' => '2026-10-01']);
         $this->sale($promoted, 2, ['order_no' => 'SO-DUPLICATE']);
         $this->artisan('sales:reconcile-dashboard')
-            ->expectsOutputToContain('Atribusi ganda: SO-DUPLICATE | Units 2')
+            ->doesntExpectOutputToContain('Atribusi ganda: SO-DUPLICATE')
+            ->expectsOutputToContain('Semua SO pada card teratribusi tepat satu kali ke tabel HM.')
             ->assertSuccessful();
     }
 
