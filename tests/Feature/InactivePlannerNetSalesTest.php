@@ -288,6 +288,54 @@ class InactivePlannerNetSalesTest extends TestCase
         }
     }
 
+    public function test_hp_leaderboard_includes_the_logged_in_primary_account_and_its_secondary_sales(): void
+    {
+        $admin = $this->user('Head Admin');
+        $hm = $this->user('Health Manager', null, ['name' => 'Paul Manuel']);
+        $viewer = $this->user('Health Planner', $hm, ['name' => 'Rut', 'full_name' => 'Rut Prihatini Susilaningtyas']);
+        $secondary = $this->user('Health Planner', $hm, [
+            'name' => 'Gabriel Theodore Manuel', 'is_secondary_account' => true, 'primary_account_id' => $viewer->id,
+        ]);
+        $rika = $this->user('Health Planner', $viewer, ['name' => 'Rika Melyanti']);
+        $rikaSecondary = $this->user('Health Planner', $hm, [
+            'name' => 'Agung Wicaksono', 'is_secondary_account' => true, 'primary_account_id' => $rika->id,
+        ]);
+        $this->sale($viewer, 3);
+        $this->sale($secondary, 2);
+        $this->sale($rika, 6);
+        $this->sale($rikaSecondary, 6);
+        foreach (['Ronas' => 7, 'Marsarida' => 4, 'Delfi' => 3, 'Ernawati' => 1] as $name => $units) {
+            $planner = $this->user('Health Planner', $viewer, [
+                'name' => $name, 'status' => $name === 'Ernawati' ? 'Inactive' : 'Active',
+            ]);
+            $this->sale($planner, $units);
+        }
+        $outside = $this->user('Health Planner', null, ['name' => 'Outside team']);
+        $this->sale($outside, 100);
+
+        $reportController = app(ReportController::class);
+        $parameters = ['from' => '2026-09-01', 'to' => '2026-09-30'];
+        $personal = $reportController->index($this->request($viewer, $parameters))->getData()['hpLeaderboard'];
+        $adminData = $reportController->index($this->request($admin, $parameters))->getData();
+        $team = $reportController->index($this->request($viewer, $parameters + ['hp_scope' => 'team']))->getData()['hpLeaderboard'];
+        $performance = app(PerformanceController::class)->index($this->request($hm, $parameters))->getData();
+        $recapMethod = new ReflectionMethod(PerformanceController::class, 'buildHealthManagerRecap');
+        $recap = $recapMethod->invoke(app(PerformanceController::class), $hm);
+
+        $this->assertSame(32, $personal->sum('units'));
+        $this->assertSame(5, $personal->firstWhere('id', $viewer->id)['units']);
+        $this->assertSame($adminData['hpLeaderboard']->firstWhere('id', $viewer->id)['units'], $personal->firstWhere('id', $viewer->id)['units']);
+        $this->assertSame(12, $personal->firstWhere('id', $rika->id)['units']);
+        $this->assertSame(1, $personal->firstWhere('name', 'Ernawati')['units']);
+        $this->assertFalse($personal->contains('id', $secondary->id));
+        $this->assertFalse($personal->contains('id', $rikaSecondary->id));
+        $this->assertFalse($personal->contains('id', $outside->id));
+        $this->assertSame(32, $team->firstWhere('id', $viewer->id)['units']);
+        $this->assertSame(32, $adminData['hmLeaderboard']->firstWhere('id', $hm->id)['units']);
+        $this->assertSame(32, (int) $performance['summary']->total_sudah_install);
+        $this->assertSame(32, $recap['months'][1]['achievement']);
+    }
+
     public function test_road_to_hm_counts_inactive_downline_ns_and_only_active_hp_for_headcount(): void
     {
         $owner = $this->user('Health Planner');
