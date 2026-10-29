@@ -96,9 +96,9 @@ class DashboardInstallationsAndReportsTest extends TestCase
         $grandchild = $this->user('Health Planner', $child, ['status' => 'Inactive']);
         $outside = $this->user('Health Planner', $ancestor);
 
-        $ownOrder = $this->order($viewer, 'TODAY-SELF', status: 'selesai');
+        $ownOrder = $this->order($viewer, 'TODAY-SELF');
         $childOrder = $this->order($child, 'TODAY-CHILD');
-        $grandchildOrder = $this->order($grandchild, 'TODAY-GRANDCHILD', status: 'ditunda');
+        $grandchildOrder = $this->order($grandchild, 'TODAY-GRANDCHILD');
         $outsideOrder = $this->order($outside, 'TODAY-OUTSIDE');
         $ancestorOrder = $this->order($ancestor, 'TODAY-ANCESTOR');
         $yesterday = $this->order($viewer, 'YESTERDAY', '2026-10-27');
@@ -106,6 +106,8 @@ class DashboardInstallationsAndReportsTest extends TestCase
         $undated = $this->order($viewer, 'UNDATED', null);
         $deleted = $this->order($viewer, 'DELETED');
         $deleted->delete();
+        $otherStatuses = collect(['selesai', 'ditunda', 'dibatalkan', 'menunggu verifikasi', 'menunggu jadwal', 'gagal penelponan', 'tinjau ulang'])
+            ->map(fn ($status, $index) => $this->order($viewer, 'OTHER-STATUS-'.$index, status: $status));
         // Visibility follows the SO's salesperson even after customer ownership changes.
         $childOrder->customer->update(['health_planner_id' => $outside->id]);
 
@@ -136,12 +138,13 @@ class DashboardInstallationsAndReportsTest extends TestCase
             $this->get(route('sales-orders.edit', $ownOrder))->assertForbidden();
             $this->put(route('sales-orders.update', $ownOrder), [])->assertForbidden();
         }
-        foreach ([$yesterday, $tomorrow, $undated, $deleted] as $order) {
+        foreach (array_merge([$yesterday, $tomorrow, $undated, $deleted], $otherStatuses->all()) as $order) {
+            $response->assertDontSee($order->order_no);
             $this->get(route('dashboard.installations.show', $order))->assertNotFound();
         }
         // The Overview detail endpoint exposes no mutation method, including for admins.
         $this->put(route('dashboard.installations.show', $ownOrder), ['status' => 'dibatalkan'])->assertStatus(405);
-        $this->assertSame('selesai', $ownOrder->fresh()->status);
+        $this->assertSame('dijadwalkan', $ownOrder->fresh()->status);
     }
 
     public function test_installation_pagination_retains_dashboard_filters_and_return_page(): void

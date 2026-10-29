@@ -427,7 +427,9 @@ class DashboardController extends Controller
 
     private function todayInstallationsQuery(User $user): Builder
     {
-        $query = SalesOrder::query()->whereDate('install_date', today()->toDateString());
+        $query = SalesOrder::query()
+            ->whereDate('install_date', today()->toDateString())
+            ->where('status', 'dijadwalkan');
 
         if ($user->hasAnyRole(['Admin', 'Head Admin'])) {
             return $query;
