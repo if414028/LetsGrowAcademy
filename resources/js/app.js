@@ -6,7 +6,7 @@ import ScrollTrigger from 'gsap/ScrollTrigger';
 import fileUpload from './file-upload';
 import { initSalesTrend } from './sales-trend';
 import birthdayGreetings from './birthday-greetings';
-import recruitmentShare from './recruitment';
+import recruitmentShare, { initRecruitmentLanding } from './recruitment';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -295,6 +295,7 @@ document.readyState === 'loading'
         initPublicMotion();
         initAuthMotion();
         initSalesTrend();
+        initRecruitmentLanding();
     }, { once: true })
     : (() => {
         initDashboardMotion();
@@ -302,4 +303,5 @@ document.readyState === 'loading'
         initPublicMotion();
         initAuthMotion();
         initSalesTrend();
+        initRecruitmentLanding();
     })();

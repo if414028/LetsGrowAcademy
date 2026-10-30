@@ -47,15 +47,95 @@ class SubscriberRecruitmentPageTest extends TestCase
 
         $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))
             ->assertOk()
-            ->assertSee('bangun sumber penghasilan baru.')
-            ->assertSee('The Market')
-            ->assertSee('The Success Path')
-            ->assertSee('Nama lengkap')
+            ->assertSee('Dari Kebutuhan Air Minum Sehari-hari,')
+            ->assertSee('The Concept')
+            ->assertSee('Rp88.000')
+            ->assertSee('Nama Lengkap')
             ->assertSee('Nadia Putri')
             ->assertSee('Health Planner')
             ->assertSee('https://wa.me/6281234567890', false)
             ->assertSee(route('subscriber-recruitment.submit', $owner->landing_page_slug), false)
             ->assertDontSee('Gabrielle');
+    }
+
+    public function test_recruitment_page_uses_generic_drinking_water_content(): void
+    {
+        $owner = $this->subscriber();
+        $response = $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))->assertOk();
+
+        $this->assertStringNotContainsStringIgnoringCase('coway', $response->getContent());
+        $response->assertSee('water purifier');
+    }
+
+    public function test_recruitment_refresh_preserves_all_fifteen_original_sections(): void
+    {
+        $owner = $this->subscriber();
+        $html = $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))->assertOk()->getContent();
+
+        $this->assertSame(15, substr_count($html, '<section '));
+        foreach (['pengenalan', 'tantangan', 'peluang', 'solusi', 'bukti-penghasilan', 'materi', 'cara-kerja', 'mulai-dari-dasar', 'cerita', 'pembimbing', 'dukungan', 'undangan', 'faq', 'langkah-pertama', 'form-minat'] as $section) {
+            $this->assertMatchesRegularExpression('/<section id="'.preg_quote($section, '/').'"/', $html);
+        }
+    }
+
+    public function test_every_section_has_an_image_without_visible_image_captions(): void
+    {
+        $owner = $this->subscriber();
+        $html = $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))->assertOk()->getContent();
+
+        preg_match_all('/<section id="([^"]+)"[^>]*>(.*?)<\/section>/s', $html, $sections, PREG_SET_ORDER);
+        $this->assertCount(15, $sections);
+        foreach ($sections as $section) {
+            $this->assertStringContainsString('<img ', $section[2], 'Missing image in '.$section[1]);
+        }
+        $this->assertStringNotContainsString('<figcaption', $html);
+        foreach (['family', 'learning', 'pour', 'solutions', 'discussion', 'steps', 'mentoring', 'stories', 'workspace', 'support', 'classroom', 'questions', 'choice', 'signup'] as $image) {
+            foreach (['', '-768'] as $size) {
+                $this->assertFileExists(public_path('images/recruitment/drinking-water-'.$image.$size.'.webp'));
+            }
+        }
+    }
+
+    public function test_income_proof_displays_redacted_screenshots_and_enlargement_links(): void
+    {
+        $owner = $this->subscriber();
+        $response = $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))->assertOk();
+
+        foreach (['20-juli', '20-agustus', '18-september', '19-juni', '20-mei'] as $receipt) {
+            $version = in_array($receipt, ['19-juni', '20-mei'], true) ? '-redacted-v2.webp' : '-redacted.webp';
+            $redacted = 'images/recruitment/commission-'.$receipt.$version;
+            $response->assertSee('src="'.asset($redacted).'"', false)
+                ->assertSee('href="'.asset($redacted).'"', false)
+                ->assertDontSee('commission-'.$receipt.'.png', false);
+            $this->assertFileExists(public_path($redacted));
+            $this->assertFileDoesNotExist(public_path('images/recruitment/commission-'.$receipt.'.png'));
+        }
+        $response->assertSee('Masuk Rekening Langsung')->assertSee('Perusahaan yang Urus')->assertSee('10 JUTA RUMAH');
+    }
+
+    public function test_full_draft_wording_and_classroom_invitation_are_rendered(): void
+    {
+        $owner = $this->subscriber();
+        $response = $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))->assertOk();
+
+        $response->assertSee('Air minum adalah kebutuhan pokok setiap keluarga seumur hidup.')
+            ->assertSee('Punya penghasilan rutin bukan jaminan keuangan aman ketika inflasi dan biaya kebutuhan rumah tangga terus bertambah setiap bulan.')
+            ->assertSee('Setiap bulan, rata-rata keluarga di Indonesia mengeluarkan uang Rp200rb–400rb khusus untuk satu hal:')
+            ->assertSee('Mengapa Industri Solusi Pemurnian Air Memiliki Pasar Raksasa?')
+            ->assertSee('Kami akan buka-bukaan semuanya — dari anatomi market, blueprint konsep, sampai cara menghasilkan uang secara nyata.')
+            ->assertSee('keuntungan 500-1.000% dari omset')
+            ->assertSee('4 Langkah Sederhana Memulai dan Memahami Peluang Bisnis Ini')
+            ->assertSee('Belum Berpengalaman Jualan? Mulai dengan Memahami Dasarnya.')
+            ->assertSee('dalam kurun waktu sekitar enam bulan berhasil membalikkan kondisi finansial dan mencatatkan penghasilan rutin dua digit.')
+            ->assertSee('Belajar Langsung dari Praktisi yang Menguasai Lapangan')
+            ->assertSee('Anda Tidak Melangkah Sendirian: Ekosistem Pendampingan Penuh')
+            ->assertSee('Produk apa yang sebenarnya ditawarkan?')
+            ->assertSee('Tutup Halaman Ini')
+            ->assertSee('AMBIIL PELUANG INI')
+            ->assertSee('AMBIL PELUANG NYA')
+            ->assertSee('Ambil Langkah Pertama untuk Mengenal Peluang Ini , Investasi Ilmu dan Pelajari Peluang nya Rp88.000')
+            ->assertSee('src="'.asset('images/recruitment/drinking-water-classroom.webp').'"', false)
+            ->assertDontSee('drinking-water-invitation.webp');
     }
 
     public function test_logged_in_visitor_does_not_replace_the_owner_of_a_shared_page(): void
@@ -134,8 +214,8 @@ class SubscriberRecruitmentPageTest extends TestCase
         $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))
             ->assertOk()
             ->assertSee("disimpan di database Let's Grow Academy untuk didaftarkan ke dalam event", false)
-            ->assertSee("Saya menyetujui penyimpanan data saya di database Let's Grow Academy untuk pendaftaran event", false)
-            ->assertSee('Admin akan menghubungi Anda dalam waktu dekat.')
+            ->assertSee('Saya menyetujui penggunaan data yang saya berikan untuk keperluan tindak lanjut dan penyampaian informasi terkait sesi pengenalan peluang ini, sesuai kebijakan privasi yang berlaku.')
+            ->assertSee('Tim penyelenggara akan menghubungi Anda melalui nomor WhatsApp yang diberikan.')
             ->assertDontSee('diarahkan ke WhatsApp')
             ->assertDontSee('pesan yang sudah terisi');
     }
@@ -173,7 +253,7 @@ class SubscriberRecruitmentPageTest extends TestCase
         $this->get(route('subscriber-landing.show', $owner->landing_page_slug))
             ->assertOk()->assertSee('Kalkulator Hemat Galon');
         $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))
-            ->assertOk()->assertSee('Form minat');
+            ->assertOk()->assertSee('FORM MINAT');
     }
 
     public function test_malformed_form_values_render_errors_without_breaking_the_page(): void
