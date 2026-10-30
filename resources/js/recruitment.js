@@ -1,4 +1,5 @@
 import gsap from 'gsap';
+import ScrollTrigger from 'gsap/ScrollTrigger';
 
 export function initRecruitmentLanding() {
     const page = document.querySelector('[data-recruitment-landing]');
@@ -22,6 +23,48 @@ export function initRecruitmentLanding() {
                 scale: 1,
                 ease: 'none',
                 scrollTrigger: { trigger: photo, start: 'top bottom', end: 'center center', scrub: 0.35 },
+            });
+        });
+    });
+
+    media.add('(min-width: 1100px) and (min-height: 820px) and (prefers-reduced-motion: no-preference)', () => {
+        const intro = page.querySelector('[data-recruitment-pin]');
+        const layout = intro?.closest('.recruitment-learning-layout');
+        const pinTop = 128;
+
+        if (intro && layout && intro.offsetHeight < window.innerHeight - pinTop - 24
+            && layout.offsetHeight > intro.offsetHeight + 64) {
+            ScrollTrigger.create({
+                trigger: layout,
+                start: `top ${pinTop}px`,
+                end: () => `+=${Math.max(0, layout.offsetHeight - intro.offsetHeight)}`,
+                pin: intro,
+                pinSpacing: false,
+                invalidateOnRefresh: true,
+            });
+        }
+
+        const stack = page.querySelector('[data-recruitment-stack]');
+        const cards = stack ? [...stack.querySelectorAll('article')] : [];
+        if (cards.some((card) => card.offsetHeight > window.innerHeight - pinTop - 100)) return;
+
+        cards.forEach((card, index) => {
+            gsap.set(card, { zIndex: index + 1 });
+            if (index === cards.length - 1) return;
+
+            gsap.to(card, {
+                scale: 1 - (cards.length - index - 1) * 0.018,
+                ease: 'none',
+                scrollTrigger: {
+                    trigger: card,
+                    start: `top ${pinTop + index * 20}px`,
+                    endTrigger: stack,
+                    end: () => `bottom ${pinTop + (cards.length - 1) * 20 + card.offsetHeight}px`,
+                    pin: true,
+                    pinSpacing: false,
+                    scrub: true,
+                    invalidateOnRefresh: true,
+                },
             });
         });
     });

@@ -41,7 +41,7 @@ class SubscriberRecruitmentPageTest extends TestCase
             ->assertSee(route('subscriber-recruitment.index'), false);
     }
 
-    public function test_guest_sees_content_and_contacts_belonging_to_the_page_owner(): void
+    public function test_guest_sees_the_page_owner_and_registers_through_the_interest_form(): void
     {
         $owner = $this->subscriber();
 
@@ -53,7 +53,9 @@ class SubscriberRecruitmentPageTest extends TestCase
             ->assertSee('Nama Lengkap')
             ->assertSee('Nadia Putri')
             ->assertSee('Health Planner')
-            ->assertSee('https://wa.me/6281234567890', false)
+            ->assertSee('Kenali Peluang Bersama Tim Kami')
+            ->assertDontSee('Tanya Nadia Putri')
+            ->assertDontSee('wa.me/', false)
             ->assertSee(route('subscriber-recruitment.submit', $owner->landing_page_slug), false)
             ->assertDontSee('Gabrielle');
     }
@@ -64,7 +66,13 @@ class SubscriberRecruitmentPageTest extends TestCase
         $response = $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))->assertOk();
 
         $this->assertStringNotContainsStringIgnoringCase('coway', $response->getContent());
-        $response->assertSee('water purifier');
+        $response->assertSee('water purifier')
+            ->assertSee("Let's Grow Community", false)
+            ->assertSee('Budget air sudah ada.')
+            ->assertSee('Hanya memindahkan anggaran rutin air minum ke pilihan solusi yang lebih praktis.');
+        $response->assertSee('src="'.asset('images/recruitment/letsgrow-logo.png').'"', false)
+            ->assertSee("Let's Grow Community — halaman rekrutmen Nadia Putri", false)
+            ->assertSee("<span>Let's Grow<span>Community</span></span>", false);
     }
 
     public function test_recruitment_refresh_preserves_all_fifteen_original_sections(): void
@@ -149,9 +157,9 @@ class SubscriberRecruitmentPageTest extends TestCase
 
         $this->actingAs($visitor)->get(route('subscriber-recruitment.show', $owner->landing_page_slug))
             ->assertOk()->assertSee('Nadia Putri')
-            ->assertSee('wa.me/6281234567890', false)
+            ->assertSee(route('subscriber-recruitment.submit', $owner->landing_page_slug), false)
             ->assertDontSee('Other Subscriber')
-            ->assertDontSee('wa.me/6289876543210', false);
+            ->assertDontSee(route('subscriber-recruitment.submit', $visitor->landing_page_slug), false);
     }
 
     public function test_missing_whatsapp_shows_profile_prompt_and_keeps_page_private(): void
@@ -197,6 +205,7 @@ class SubscriberRecruitmentPageTest extends TestCase
         $location = $response->headers->get('Location');
         $this->assertNull(parse_url($location, PHP_URL_QUERY));
         $this->get($location)->assertOk()
+            ->assertSee("Let's Grow Community", false)
             ->assertSee('Terima kasih sudah mendaftar!')
             ->assertSee('Dalam waktu dekat, admin akan menghubungi Anda untuk mengikuti event.')
             ->assertDontSee('wa.me', false)
@@ -213,7 +222,7 @@ class SubscriberRecruitmentPageTest extends TestCase
 
         $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))
             ->assertOk()
-            ->assertSee("disimpan di database Let's Grow Academy untuk didaftarkan ke dalam event", false)
+            ->assertSee("disimpan di database Let's Grow Community untuk didaftarkan ke dalam event", false)
             ->assertSee('Saya menyetujui penggunaan data yang saya berikan untuk keperluan tindak lanjut dan penyampaian informasi terkait sesi pengenalan peluang ini, sesuai kebijakan privasi yang berlaku.')
             ->assertSee('Tim penyelenggara akan menghubungi Anda melalui nomor WhatsApp yang diberikan.')
             ->assertDontSee('diarahkan ke WhatsApp')

@@ -49,11 +49,13 @@ return [
     ],
     'market' => [
         'eyebrow' => 'PELUANG EMAS DI SEKITAR KITA',
-        'headline' => '💡 Fakta yang Jarang Orang Sadar.',
+        'headline' => 'Fakta yang Jarang Orang Sadar.',
         'paragraphs' => [
             'Setiap bulan, rata-rata keluarga di Indonesia mengeluarkan uang Rp200rb–400rb khusus untuk satu hal: Kebutuhan Air Minum. Dan ini bukan pengeluaran sekali beli. Ini berulang setiap bulan, selamanya. Karena air minum adalah kebutuhan absolut yang tidak akan pernah bisa dihentikan.',
         ],
         'highlight' => 'Bagaimana jika biaya bulanan yang dikeluarkan oleh ribuan rumah tangga ini menjadi sumber penghasilan berulang untuk Anda?',
+        'budget_title' => 'Budget air sudah ada.',
+        'budget_body' => 'Hanya memindahkan anggaran rutin air minum ke pilihan solusi yang lebih praktis.',
     ],
     'needs' => [
         [
@@ -86,7 +88,7 @@ return [
         ],
     ],
     'proof' => [
-        'headline' => '💸 Bukti Penghasilan Nyata, Bukan Janji Manis.',
+        'headline' => 'Bukti Penghasilan Nyata, Bukan Janji Manis.',
         'receipts' => [
             [
                 'date' => '20 Juli',

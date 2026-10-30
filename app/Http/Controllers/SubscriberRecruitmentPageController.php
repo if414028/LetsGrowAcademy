@@ -63,9 +63,6 @@ class SubscriberRecruitmentPageController extends Controller
             'consultantRole' => $consultant->getRoleNames()
                 ->first(fn ($role) => in_array($role, ['Sales Manager', 'Health Manager', 'Health Planner']))
                 ?: 'Pendamping Kemitraan',
-            'whatsappUrl' => $consultant->whatsapp_url.'?text='.rawurlencode(
-                'Halo '.$consultantName.', saya ingin mengenal peluang kemitraan air minum dan sesi pengenalannya.'
-            ),
             'content' => config('recruitment'),
         ]);
     }

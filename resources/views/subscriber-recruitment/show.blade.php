@@ -4,8 +4,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Kenali kebutuhan air minum sehari-hari dan peluang di sekitarnya. Daftar sesi pengenalan bersama {{ $consultantName }} di Let's Grow Academy.">
-    <meta property="og:title" content="Peluang Bisnis Kebutuhan Air Minum | Let's Grow Academy">
+    <meta name="description" content="Kenali kebutuhan air minum sehari-hari dan peluang di sekitarnya. Daftar sesi pengenalan bersama {{ $consultantName }} di Let's Grow Community.">
+    <meta property="og:title" content="Peluang Bisnis Kebutuhan Air Minum | Let's Grow Community">
     <meta property="og:description" content="Mulai dari kebutuhan air minum. Kenali peluangnya melalui sesi pengenalan bersama pendamping Anda.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ route('subscriber-recruitment.show', $consultant->landing_page_slug) }}">
@@ -16,13 +16,13 @@
     @include('partials.nunito-font')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="recruitment-page" data-recruitment-landing>
+<body class="recruitment-page recruitment-community-page" data-recruitment-landing>
     <a href="#main-content" class="skip-link">Lewati ke konten utama</a>
     <header class="recruitment-header">
         <nav class="recruitment-container recruitment-nav" aria-label="Navigasi rekrutmen">
-            <a href="{{ route('subscriber-recruitment.show', $consultant->landing_page_slug) }}" class="recruitment-brand" aria-label="Let's Grow Academy — halaman rekrutmen {{ $consultantName }}">
+            <a href="{{ route('subscriber-recruitment.show', $consultant->landing_page_slug) }}" class="recruitment-brand" aria-label="Let's Grow Community — halaman rekrutmen {{ $consultantName }}">
                 <img src="{{ asset('images/recruitment/letsgrow-logo.png') }}" alt="" width="42" height="42" aria-hidden="true">
-                <span>Let's Grow<span>Academy</span></span>
+                <span>Let's Grow<span>Community</span></span>
             </a>
             <div class="recruitment-nav-links"><a href="#peluang">Air minum</a><a href="#materi">Materi sesi</a><a href="#cerita">Cerita mitra</a><a href="#faq">FAQ</a></div>
             <a href="#form-minat" class="recruitment-button recruitment-button-small">Daftar sesi <x-recruitment-icon /></a>
@@ -38,14 +38,19 @@
                     <p class="recruitment-lead">{{ $content['hero']['body'] }}</p>
                     <div class="recruitment-actions">
                         <a href="#form-minat" class="recruitment-button">{{ $content['hero']['primary_cta'] }} <x-recruitment-icon /></a>
-                        <a href="#cara-kerja" class="recruitment-text-link">{{ $content['hero']['secondary_cta'] }} <span aria-hidden="true">↘</span></a>
+                        <a href="#cara-kerja" class="recruitment-button recruitment-button-secondary">{{ $content['hero']['secondary_cta'] }} <span aria-hidden="true">↘</span></a>
                     </div>
                     <p class="recruitment-microcopy">{{ $content['hero']['microcopy'] }}</p>
                 </div>
                 <figure class="recruitment-photo recruitment-hero-photo" data-recruitment-photo>
-                    <img src="{{ asset('images/recruitment/drinking-water-family.webp') }}" srcset="{{ asset('images/recruitment/drinking-water-family-768.webp') }} 768w, {{ asset('images/recruitment/drinking-water-family.webp') }} 1536w" sizes="(max-width: 800px) 100vw, 45vw" alt="Keluarga menikmati air minum bersama saat sarapan di rumah" width="1536" height="1024" fetchpriority="high">
+                    <img src="{{ asset('images/recruitment/drinking-water-family.webp') }}" srcset="{{ asset('images/recruitment/drinking-water-family-768.webp') }} 768w, {{ asset('images/recruitment/drinking-water-family.webp') }} 1536w" sizes="(max-width: 1152px) 100vw, 1120px" alt="Keluarga menikmati air minum bersama saat sarapan di rumah" width="1536" height="1024" fetchpriority="high">
                 </figure>
             </div>
+            <div class="recruitment-marquee" aria-hidden="true"><div class="recruitment-marquee-track">
+                @for ($repeat = 0; $repeat < 2; $repeat++)
+                    <div class="recruitment-marquee-group"><span>Budget air sudah ada</span><i></i><span>Kebutuhan harian</span><i></i><span>Pilihan lebih praktis</span><i></i></div>
+                @endfor
+            </div></div>
         </section>
 
         <section id="tantangan" class="recruitment-section" aria-labelledby="recruitment-problems-title">
@@ -68,6 +73,10 @@
                     <h2 id="recruitment-needs-title">{{ $content['market']['headline'] }}</h2>
                     <p>{{ $content['market']['paragraphs'][0] }}</p>
                     <ul class="recruitment-needs-list">@foreach ($content['needs'] as $item)<li><x-recruitment-icon name="check" /><div><h3>{{ $item['title'] }}</h3><p>{{ $item['body'] }}</p></div></li>@endforeach</ul>
+                    <aside class="recruitment-budget" data-recruitment-reveal>
+                        <h3>{{ $content['market']['budget_title'] }} <span class="recruitment-inline-photo"><img src="{{ asset('images/recruitment/drinking-water-pour-768.webp') }}" alt="" width="768" height="512" loading="lazy" decoding="async"></span></h3>
+                        <p>{{ $content['market']['budget_body'] }}</p>
+                    </aside>
                     <p class="recruitment-callout">{{ $content['market']['highlight'] }}</p>
                 </div>
             </div>
@@ -80,7 +89,7 @@
                     <h2 id="recruitment-solutions-title">{{ $content['product']['headline'] }}</h2>
                     <p>{{ $content['product']['body'] }}</p>
                     <div class="recruitment-compact-list">@foreach ($content['product_points'] as $item)<article data-recruitment-reveal><h3>{{ $item['title'] }}</h3><p>{{ $item['body'] }}</p></article>@endforeach</div>
-                    <a href="#form-minat" class="recruitment-text-link recruitment-section-link">{{ $content['product']['cta'] }} <x-recruitment-icon /></a>
+                    <a href="#form-minat" class="recruitment-button recruitment-section-link">{{ $content['product']['cta'] }} <x-recruitment-icon /></a>
                 </div>
                 <x-recruitment-photo name="drinking-water-solutions" alt="Gelas air minum dan perangkat filtrasi tanpa merek di dapur rumah" />
             </div>
@@ -102,9 +111,13 @@
 
         <section id="materi" class="recruitment-section" aria-labelledby="recruitment-learning-title">
             <div class="recruitment-container">
-                <div class="recruitment-learning-heading" data-recruitment-reveal><div><p class="recruitment-eyebrow">{{ $content['curriculum']['eyebrow'] }}</p><h2 id="recruitment-learning-title">{{ $content['curriculum']['headline'] }}</h2></div><p>{{ $content['curriculum']['body'] }}</p></div>
-                <x-recruitment-photo name="drinking-water-discussion" class="recruitment-discussion-photo" sizes="(max-width: 1280px) 100vw, 1200px" alt="Kelompok peserta berdiskusi dan mempelajari catatan bersama" />
-                <div class="recruitment-materials recruitment-materials-five">@foreach ($content['materials'] as $item)<article data-recruitment-reveal><span class="recruitment-material-number">0{{ $loop->iteration }}</span><h3>{{ $item['title'] }}</h3><p>{{ $item['body'] }}</p></article>@endforeach</div>
+                <div class="recruitment-learning-layout">
+                    <div class="recruitment-learning-intro" data-recruitment-pin>
+                        <div class="recruitment-learning-heading" data-recruitment-reveal><div><p class="recruitment-eyebrow">{{ $content['curriculum']['eyebrow'] }}</p><h2 id="recruitment-learning-title">{{ $content['curriculum']['headline'] }}</h2></div><p>{{ $content['curriculum']['body'] }}</p></div>
+                        <x-recruitment-photo name="drinking-water-discussion" class="recruitment-discussion-photo" sizes="(max-width: 900px) 100vw, 520px" alt="Kelompok peserta berdiskusi dan mempelajari catatan bersama" />
+                    </div>
+                    <div class="recruitment-materials recruitment-materials-five">@foreach ($content['materials'] as $item)<article data-recruitment-reveal><span class="recruitment-material-number">0{{ $loop->iteration }}</span><h3>{{ $item['title'] }}</h3><p>{{ $item['body'] }}</p></article>@endforeach</div>
+                </div>
             </div>
         </section>
 
@@ -123,16 +136,16 @@
             <div class="recruitment-container">
                 <div class="recruitment-centered-heading" data-recruitment-reveal><p class="recruitment-eyebrow">{{ $content['journeys']['eyebrow'] }}</p><h2 id="recruitment-stories-title">{{ $content['journeys']['headline'] }}</h2><p>{{ $content['journeys']['body'] }}</p></div>
                 <x-recruitment-photo name="drinking-water-stories" class="recruitment-stories-photo" sizes="(max-width: 1280px) 100vw, 1200px" alt="Orang dari berbagai usia berjalan bersama setelah kegiatan belajar" />
-                <div class="recruitment-compact-grid recruitment-grid-four recruitment-story-grid">@foreach ($content['stories'] as $item)<article data-recruitment-reveal><h3>{{ $item['title'] }}</h3><p>{{ $item['body'] }}</p></article>@endforeach</div>
+                <div class="recruitment-compact-grid recruitment-grid-four recruitment-story-grid" data-recruitment-stack>@foreach ($content['stories'] as $item)<article><h3>{{ $item['title'] }}</h3><p>{{ $item['body'] }}</p></article>@endforeach</div>
                 <p class="recruitment-note">{{ $content['journeys']['note'] }}</p>
-                <div class="recruitment-centered-action"><a href="#form-minat" class="recruitment-text-link">{{ $content['journeys']['cta'] }} <x-recruitment-icon /></a></div>
+                <div class="recruitment-centered-action"><a href="#form-minat" class="recruitment-button recruitment-button-secondary">{{ $content['journeys']['cta'] }} <x-recruitment-icon /></a></div>
             </div>
         </section>
 
         <section id="pembimbing" class="recruitment-section" aria-labelledby="recruitment-mentor-title">
             <div class="recruitment-container recruitment-needs-grid">
                 <div class="recruitment-mentor-visual"><x-recruitment-photo name="drinking-water-workspace" alt="Meja pendamping dengan buku catatan, laptop, dan segelas air minum" /><div class="recruitment-mentor"><span class="recruitment-mentor-initials" aria-hidden="true">{{ \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($consultantName, 0, 1)) }}</span><div><span>Pendamping Anda</span><strong>{{ $consultantName }}</strong><span>{{ $consultantRole }}</span></div></div></div>
-                <div class="recruitment-section-copy" data-recruitment-reveal><p class="recruitment-eyebrow">{{ $content['mentor']['eyebrow'] }}</p><h2 id="recruitment-mentor-title">{{ $content['mentor']['headline'] }}</h2><p>{{ $content['mentor']['body'] }}</p><a href="#form-minat" class="recruitment-button recruitment-section-link">{{ $content['mentor']['cta'] }} <x-recruitment-icon /></a><a href="{{ $whatsappUrl }}" class="recruitment-text-link recruitment-section-link" target="_blank" rel="noopener">Tanya {{ $consultantName }} <span aria-hidden="true">↗</span></a></div>
+                <div class="recruitment-section-copy" data-recruitment-reveal><p class="recruitment-eyebrow">{{ $content['mentor']['eyebrow'] }}</p><h2 id="recruitment-mentor-title">{{ $content['mentor']['headline'] }}</h2><p>{{ $content['mentor']['body'] }}</p><a href="#form-minat" class="recruitment-button recruitment-section-link">{{ $content['mentor']['cta'] }} <x-recruitment-icon /></a></div>
             </div>
         </section>
 
@@ -180,11 +193,11 @@
                     <div class="recruitment-consent"><input id="consent" name="consent" type="checkbox" value="1" @checked(old('consent')) required @error('consent') aria-invalid="true" aria-describedby="consent-error" @enderror><label for="consent">{{ $content['form']['consent'] }}</label></div>@error('consent')<p id="consent-error" class="recruitment-field-error">{{ $message }}</p>@enderror
                     <button type="submit" class="recruitment-button recruitment-submit">{{ $content['form']['cta'] }} <x-recruitment-icon /></button><p class="recruitment-form-helper">{{ $content['form']['helper'] }}</p>
                 </form>
-                <details id="privasi" class="recruitment-privacy"><summary>Informasi penggunaan data</summary><p>Nama, nomor WhatsApp, domisili, aktivitas, topik pilihan, waktu pendaftaran, dan persetujuan Anda disimpan di database Let's Grow Academy untuk didaftarkan ke dalam event. Data ini dikaitkan dengan halaman rekrutmen {{ $consultantName }} dan dapat dilihat oleh pemilik halaman untuk proses pendaftaran serta tindak lanjut event. Admin akan menghubungi Anda dalam waktu dekat melalui nomor WhatsApp yang Anda berikan. Anda dapat meminta penghentian tindak lanjut atau penghapusan data melalui kontak pendamping pada halaman ini.</p></details>
+                <details id="privasi" class="recruitment-privacy"><summary>Informasi penggunaan data</summary><p>Nama, nomor WhatsApp, domisili, aktivitas, topik pilihan, waktu pendaftaran, dan persetujuan Anda disimpan di database Let's Grow Community untuk didaftarkan ke dalam event. Data ini dikaitkan dengan halaman rekrutmen {{ $consultantName }} dan dapat dilihat oleh pemilik halaman untuk proses pendaftaran serta tindak lanjut event. Admin akan menghubungi Anda dalam waktu dekat melalui nomor WhatsApp yang Anda berikan. Anda dapat meminta penghentian tindak lanjut atau penghapusan data kepada admin saat Anda dihubungi.</p></details>
             </div>
             </div>
         </section>
     </main>
-    <footer class="recruitment-footer"><div class="recruitment-container recruitment-footer-content"><div><strong>{{ $content['footer']['brand'] }}</strong><p>{{ $content['footer']['body'] }}</p><p>{{ $content['footer']['disclaimer'] }}</p><span>© {{ now()->year }} Let's Grow Academy</span></div><div><a href="#privasi">Informasi penggunaan data</a><a href="#main-content">Kembali ke atas ↑</a></div></div></footer>
+    <footer class="recruitment-footer"><div class="recruitment-container recruitment-footer-content"><div><strong>{{ $content['footer']['brand'] }}</strong><p>{{ $content['footer']['body'] }}</p><p>{{ $content['footer']['disclaimer'] }}</p><span>© {{ now()->year }} Let's Grow Community</span></div><div><a href="#privasi">Informasi penggunaan data</a><a href="#main-content">Kembali ke atas ↑</a></div></div></footer>
 </body>
 </html>
