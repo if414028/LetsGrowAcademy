@@ -31,6 +31,17 @@
                                 @if ($subscription->midtrans_order_id)
                                     <p class="font-bold text-slate-800">Midtrans</p>
                                     <p class="mt-1 text-xs text-slate-500">{{ ucfirst($subscription->payment_status) }}</p>
+                                    @if ($subscription->pricing_details)
+                                        <details class="mt-2 min-w-56">
+                                            <summary class="cursor-pointer text-xs font-semibold text-blue-600">Rincian biaya</summary>
+                                            <div class="mt-2">
+                                                <x-subscription-payment-details :subscription="$subscription" />
+                                                @if ($subscription->pricing_details['merchant_covers_fee'])
+                                                    <p class="mt-2 text-xs leading-5 text-slate-500">Estimasi biaya gateway merchant: Rp {{ number_format($subscription->pricing_details['estimated_gateway_fee'], 0, ',', '.') }} + PPN Rp {{ number_format($subscription->pricing_details['estimated_gateway_vat_amount'], 0, ',', '.') }}.</p>
+                                                @endif
+                                            </div>
+                                        </details>
+                                    @endif
                                     <p class="mt-1 max-w-40 truncate font-mono text-[10px] text-slate-400" title="{{ $subscription->midtrans_order_id }}">{{ $subscription->midtrans_order_id }}</p>
                                 @elseif ($subscription->payment_proof)
                                     @php

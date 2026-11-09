@@ -51,6 +51,7 @@
                                 @endforeach
                             </ul>
                             <p class="mt-7 rounded-xl bg-sky-50 px-4 py-3 text-sm font-bold leading-6 text-sky-900">Tersedia dalam pilihan {{ implode(', ', $durations) }} bulan. Total pembayaran dihitung sesuai durasi yang dipilih.</p>
+                            <p class="mt-3 text-xs leading-5 text-slate-500">Biaya transaksi sesuai metode pembayaran dan PPN atas biaya transaksi ditampilkan sebelum membayar.</p>
                         </div>
                     </div>
                 </div>

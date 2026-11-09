@@ -19,16 +19,17 @@ class RecruitmentLeadsTest extends TestCase
         $owner = $this->subscriber('Nadia Planner');
         $visitor = $this->subscriber('Hendra Manager', 'Health Manager');
 
-        $this->actingAs($visitor)->post(route('subscriber-recruitment.submit', $owner->landing_page_slug), [
+        $response = $this->actingAs($visitor)->post(route('subscriber-recruitment.submit', $owner->landing_page_slug), [
             ...$this->form(),
             'owner_user_id' => $visitor->id,
             'user_id' => $visitor->id,
             'source' => 'another_form',
             'source_slug' => $visitor->landing_page_slug,
             'source_url' => 'https://example.test/forged-source',
-        ])->assertStatus(303)
-            ->assertRedirect(route('subscriber-recruitment.thank-you', $owner->landing_page_slug));
+        ])->assertStatus(303);
 
+        $lead = RecruitmentLead::sole();
+        $response->assertRedirect(route('subscriber-recruitment.payment.show', [$owner->landing_page_slug, $lead->event_checkout_id]));
         $this->assertDatabaseCount('recruitment_leads', 1);
         $this->assertDatabaseHas('recruitment_leads', [
             'owner_user_id' => $owner->id,
@@ -41,8 +42,8 @@ class RecruitmentLeadsTest extends TestCase
             'activity' => 'Karyawan',
             'interest' => 'Memahami skema komisi',
         ]);
-        $this->assertNotNull(RecruitmentLead::first()->consented_at);
-        $this->assertTrue(RecruitmentLead::first()->owner->is($owner));
+        $this->assertNotNull($lead->consented_at);
+        $this->assertTrue($lead->owner->is($owner));
         $this->assertDatabaseCount('customers', 0);
 
         $this->get(route('subscriber-recruitment.show', $owner->landing_page_slug))

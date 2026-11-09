@@ -15,6 +15,11 @@
     <title>Kebutuhan Air Minum & Peluangnya | {{ $consultantName }}</title>
     @include('partials.nunito-font')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('grow-ads.pixel', [
+        'pixelId' => $growAdPixelId,
+        'formClickUrl' => route('subscriber-recruitment.form-click', $consultant->landing_page_slug),
+        'checkoutValue' => array_sum($content['event_payment']),
+    ])
 </head>
 <body class="recruitment-page recruitment-community-page" data-recruitment-landing>
     <a href="#main-content" class="skip-link">Lewati ke konten utama</a>
@@ -181,8 +186,11 @@
                 @if ($errors->any())
                     <div class="recruitment-form-errors" role="alert" tabindex="-1"><strong>Periksa kembali data Anda.</strong><ul>@foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>
                 @endif
-                <form method="POST" action="{{ route('subscriber-recruitment.submit', $consultant->landing_page_slug) }}">
+                <form method="POST" action="{{ route('subscriber-recruitment.submit', $consultant->landing_page_slug) }}" data-grow-ad-registration>
                     @csrf
+                    @if ($growAdToken)
+                        <input type="hidden" name="grow_ad_token" value="{{ $growAdToken }}">
+                    @endif
                     <div class="recruitment-field"><label for="full_name">Nama Lengkap <span aria-hidden="true">*</span></label><input id="full_name" name="full_name" type="text" value="{{ $oldText('full_name') }}" placeholder="Masukkan nama lengkap" autocomplete="name" maxlength="120" required @error('full_name') aria-invalid="true" aria-describedby="full_name-error" @enderror>@error('full_name')<p id="full_name-error" class="recruitment-field-error">{{ $message }}</p>@enderror</div>
                     <div class="recruitment-form-row">
                         <div class="recruitment-field"><label for="phone_number">Nomor WhatsApp <span aria-hidden="true">*</span></label><input id="phone_number" name="phone_number" type="tel" value="{{ $oldText('phone_number') }}" placeholder="08xxxxxxxxxx" autocomplete="tel" inputmode="tel" maxlength="25" required @error('phone_number') aria-invalid="true" aria-describedby="phone_number-error" @enderror>@error('phone_number')<p id="phone_number-error" class="recruitment-field-error">{{ $message }}</p>@enderror</div>
@@ -193,7 +201,7 @@
                     <div class="recruitment-consent"><input id="consent" name="consent" type="checkbox" value="1" @checked(old('consent')) required @error('consent') aria-invalid="true" aria-describedby="consent-error" @enderror><label for="consent">{{ $content['form']['consent'] }}</label></div>@error('consent')<p id="consent-error" class="recruitment-field-error">{{ $message }}</p>@enderror
                     <button type="submit" class="recruitment-button recruitment-submit">{{ $content['form']['cta'] }} <x-recruitment-icon /></button><p class="recruitment-form-helper">{{ $content['form']['helper'] }}</p>
                 </form>
-                <details id="privasi" class="recruitment-privacy"><summary>Informasi penggunaan data</summary><p>Nama, nomor WhatsApp, domisili, aktivitas, topik pilihan, waktu pendaftaran, dan persetujuan Anda disimpan di database Let's Grow Community untuk didaftarkan ke dalam event. Data ini dikaitkan dengan halaman rekrutmen {{ $consultantName }} dan dapat dilihat oleh pemilik halaman untuk proses pendaftaran serta tindak lanjut event. Admin akan menghubungi Anda dalam waktu dekat melalui nomor WhatsApp yang Anda berikan. Anda dapat meminta penghentian tindak lanjut atau penghapusan data kepada admin saat Anda dihubungi.</p></details>
+                <details id="privasi" class="recruitment-privacy"><summary>Informasi penggunaan data</summary><p>Nama, nomor WhatsApp, domisili, aktivitas, topik pilihan, waktu pendaftaran, dan persetujuan Anda disimpan di database Let's Grow Community untuk didaftarkan ke dalam event. Data ini dikaitkan dengan halaman rekrutmen {{ $consultantName }} dan dapat dilihat oleh pemilik halaman untuk proses pendaftaran serta tindak lanjut event. Admin akan menghubungi Anda dalam waktu dekat melalui nomor WhatsApp yang Anda berikan. Anda dapat meminta penghentian tindak lanjut atau penghapusan data kepada admin saat Anda dihubungi.</p><p>Saat pengukuran iklan aktif, halaman ini memakai Meta Pixel untuk mencatat kunjungan dan pendaftaran.</p></details>
             </div>
             </div>
         </section>

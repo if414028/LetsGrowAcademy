@@ -16,6 +16,8 @@ class EnsureUserIsSubscriber
                 ->with('error', 'Fitur ini hanya dapat diakses oleh subscriber aktif.');
         }
 
+        $request->user()->ensureLandingPageSlug();
+
         return $next($request);
     }
 }

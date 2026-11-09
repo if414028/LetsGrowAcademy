@@ -1,0 +1,23 @@
+<x-dashboard-layout>
+    <section class="ga-page" data-grow-ads x-data="growAdBudget(@js(old('daily_budget', $quote['daily_budget'])), @js(old('duration_days', $quote['duration_days'])), @js(config('grow-ads')))">
+        <header class="ga-page-header"><div><a href="{{ route('grow-ads.create') }}" class="ga-back"><x-grow-ad-icon name="back" />Pilih konten</a><h1>Atur budget iklan</h1><p>Kamu pegang kendali atas biaya dan durasinya.</p></div></header>
+        @include('grow-ads.partials.steps', ['step' => 2])
+        @include('grow-ads.partials.feedback')
+        <form class="ga-checkout-layout" method="POST" action="{{ route('grow-ads.checkout', $campaign) }}" @submit="busy=true">
+            @csrf
+            <div class="ga-panel"><h2>Seberapa jauh kamu ingin menjangkau?</h2><p class="ga-panel-description">Budget berlaku untuk satu kampanye, termasuk semua konten yang kamu pilih.</p>
+                <div class="ga-field"><label for="daily_budget">Budget harian</label><div class="ga-input-prefix"><span>Rp</span><input id="daily_budget" name="daily_budget" type="number" inputmode="numeric" min="{{ config('grow-ads.min_daily_budget') }}" max="{{ config('grow-ads.max_daily_budget') }}" step="1" x-model.number="dailyBudget" value="{{ old('daily_budget', $quote['daily_budget']) }}" required aria-describedby="daily-budget-hint"></div><p id="daily-budget-hint">Minimal Rp{{ number_format(config('grow-ads.min_daily_budget'), 0, ',', '.') }} per hari.</p></div>
+                <div class="ga-presets" aria-label="Pilihan budget harian">@foreach([50000,100000,150000] as $amount)<button type="button" :aria-pressed="dailyBudget === {{ $amount }}" :class="{'is-selected': dailyBudget === {{ $amount }}}" @click="dailyBudget = {{ $amount }}">Rp{{ number_format($amount, 0, ',', '.') }}</button>@endforeach</div>
+                <div class="ga-field"><label for="duration_days">Lama iklan ditampilkan</label><div class="ga-input-suffix"><input id="duration_days" name="duration_days" type="number" inputmode="numeric" min="1" max="{{ config('grow-ads.max_duration_days') }}" step="1" x-model.number="days" value="{{ old('duration_days', $quote['duration_days']) }}" required aria-describedby="duration-hint"><span>hari</span></div><p id="duration-hint">1–{{ config('grow-ads.max_duration_days') }} hari, dihitung sejak Admin mulai menjalankan iklan.</p></div>
+                <div class="ga-presets" aria-label="Pilihan durasi">@foreach([7,14,30] as $days)<button type="button" :aria-pressed="days === {{ $days }}" :class="{'is-selected': days === {{ $days }}}" @click="days = {{ $days }}">{{ $days }} hari</button>@endforeach</div>
+                <div class="ga-selected-list"><div class="ga-section-heading"><h3>{{ $campaign->placements->count() }} konten pilihan</h3><a href="{{ route('grow-ads.create') }}" class="ga-text-link">Ubah konten</a></div>@foreach($campaign->placements as $placement)<div><x-grow-ad-icon name="image" /><span>{{ $placement->title }}</span></div>@endforeach</div>
+            </div>
+            <aside class="ga-panel ga-summary"><span class="ga-feature-icon"><x-grow-ad-icon name="wallet" /></span><h2>Rincian pembayaran</h2>
+                <dl class="ga-cost" aria-live="polite" aria-atomic="true"><div><dt>Budget iklan<small x-text="`${days || 0} hari × ${rupiah(dailyBudget)}`"></small></dt><dd x-text="rupiah(adBudget)">{{ 'Rp'.number_format($quote['ad_budget'], 0, ',', '.') }}</dd></div><div><dt>PPN {{ config('grow-ads.vat_percent') }}%</dt><dd x-text="rupiah(vat)">{{ 'Rp'.number_format($quote['vat_amount'], 0, ',', '.') }}</dd></div><div><dt>Biaya layanan aplikasi</dt><dd x-text="rupiah(config.service_fee)">{{ 'Rp'.number_format($quote['service_fee'], 0, ',', '.') }}</dd></div><div class="ga-cost-total"><dt>Total pembayaran</dt><dd x-text="rupiah(total)">{{ 'Rp'.number_format($quote['total_amount'], 0, ',', '.') }}</dd></div></dl>
+                <p class="ga-summary-note"><x-grow-ad-icon name="clock" />Iklan disiapkan setelah pembayaran terkonfirmasi. Budget mulai digunakan saat iklan berjalan.</p>
+                @if (! auth()->user()->whatsapp_url)<p class="ga-inline-error">Lengkapi nomor WhatsApp agar landing page kamu dapat digunakan.</p><a href="{{ route('profile') }}" class="ga-button">Lengkapi profil</a>@else<button class="ga-button" type="submit" :disabled="busy || !valid"><span x-text="busy ? 'Menyiapkan pembayaran…' : 'Lanjut ke pembayaran'">Lanjut ke pembayaran</span><x-grow-ad-icon /></button>@endif
+                <p class="ga-secure-note">Pembayaran diproses melalui Midtrans.</p>
+            </aside>
+        </form>
+    </section>
+</x-dashboard-layout>

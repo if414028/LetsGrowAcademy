@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\GrowAdCampaign;
+use App\Models\RecruitmentEventPayment;
 use App\Models\Subscription;
+use App\Services\GrowAdPaymentUpdater;
 use App\Services\MidtransPaymentUpdater;
 use App\Services\MidtransService;
+use App\Services\RecruitmentEventCheckout;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -15,6 +19,8 @@ class MidtransWebhookController extends Controller
     public function __construct(
         private readonly MidtransService $midtrans,
         private readonly MidtransPaymentUpdater $paymentUpdater,
+        private readonly GrowAdPaymentUpdater $growAdPaymentUpdater,
+        private readonly RecruitmentEventCheckout $eventCheckout,
     ) {}
 
     public function handle(Request $request): JsonResponse
@@ -54,7 +60,22 @@ class MidtransWebhookController extends Controller
         }
 
         $orderId = (string) ($status->order_id ?? '');
+        abort_unless($orderId === $request->string('order_id')->toString(), 422, 'Payment order does not match.');
         $grossAmount = (int) round((float) ($status->gross_amount ?? 0));
+
+        if (str_starts_with($orderId, 'GADS-')) {
+            $campaign = GrowAdCampaign::where('midtrans_order_id', $orderId)->firstOrFail();
+            $this->growAdPaymentUpdater->update($campaign, $status);
+
+            return response()->json(['message' => 'Notification processed.']);
+        }
+
+        if (str_starts_with($orderId, 'REVT-')) {
+            $payment = RecruitmentEventPayment::where('midtrans_order_id', $orderId)->firstOrFail();
+            $this->eventCheckout->update($payment, $status);
+
+            return response()->json(['message' => 'Notification processed.']);
+        }
 
         $subscription = Subscription::where('midtrans_order_id', $orderId)->firstOrFail();
         abort_unless($grossAmount === (int) $subscription->amount, 422, 'Payment amount does not match.');

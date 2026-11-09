@@ -13,6 +13,8 @@ class Subscription extends Model
         'user_id',
         'duration_months',
         'amount',
+        'selected_payment_method',
+        'pricing_details',
         'midtrans_order_id',
         'midtrans_transaction_id',
         'payment_status',
@@ -33,6 +35,7 @@ class Subscription extends Model
     protected function casts(): array
     {
         return [
+            'pricing_details' => 'array',
             'submitted_at' => 'datetime',
             'paid_at' => 'datetime',
             'payment_payload' => 'array',

@@ -1,0 +1,7 @@
+<x-dashboard-layout>
+    <section class="ga-page" data-grow-ads><header class="ga-page-header"><div><p class="ga-kicker">Admin workspace</p><h1>Koleksi konten Grow Ads</h1><p>Kelola konten yang dapat dipilih HP/HM untuk beriklan.</p></div><a href="{{ route('admin.grow-ads.contents.create') }}" class="ga-button"><x-grow-ad-icon name="plus" />Tambah konten</a></header>
+        @include('grow-ads.admin.partials.nav')
+        @include('grow-ads.partials.feedback')
+        <div class="ga-content-grid">@forelse($contents as $content)<article class="ga-content"><div class="ga-content-media">@include('grow-ads.partials.media', ['item' => $content])</div><div class="ga-content-body"><span class="ga-status {{ $content->is_active ? 'ga-status--active' : '' }}">{{ $content->is_active ? 'Tersedia untuk dipilih' : 'Diarsipkan' }}</span><h2>{{ $content->title }}</h2><p>{{ $content->description }}</p><a class="ga-button ga-button--secondary" href="{{ route('admin.grow-ads.contents.edit', $content) }}">Edit konten <x-grow-ad-icon /></a></div></article>@empty<div class="ga-empty ga-grid-full"><x-grow-ad-icon name="image" /><h2>Siapkan konten pertama.</h2><p>Tambahkan gambar atau video event agar HP/HM bisa mulai memilih iklan.</p><a class="ga-button" href="{{ route('admin.grow-ads.contents.create') }}">Tambah konten</a></div>@endforelse</div>{{ $contents->links() }}
+    </section>
+</x-dashboard-layout>

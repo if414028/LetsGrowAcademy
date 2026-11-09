@@ -1,0 +1,1 @@
+<nav class="ga-tabs" aria-label="Kelola Grow Ads"><a href="{{ route('admin.grow-ads.index') }}" @if(!request()->routeIs('admin.grow-ads.contents*')) aria-current="page" @endif>Kampanye pengguna</a><a href="{{ route('admin.grow-ads.contents') }}" @if(request()->routeIs('admin.grow-ads.contents*')) aria-current="page" @endif>Koleksi konten</a></nav>

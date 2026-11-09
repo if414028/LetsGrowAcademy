@@ -148,6 +148,27 @@
 .recruitment-community-page .recruitment-footer { padding-block: 2.5rem; border-color: #c8dfef; background: #e3eff9; }
 .recruitment-community-page .recruitment-success { background: radial-gradient(ellipse at 75% 25%, #aeeaff, transparent 60%), #edf6ff; }
 .recruitment-community-page .recruitment-success-icon { border-color: #a1d7ef; color: #087eaf; background: #d5f1ff; }
+.recruitment-checkout { display: grid; place-items: center; min-height: 100svh; padding: 2rem 1rem; }
+.recruitment-checkout-card {
+    width: min(100%, 30rem);
+    padding: clamp(1.25rem, 5vw, 2.5rem);
+    border: 1px solid var(--recruitment-line);
+    border-radius: 1.5rem;
+    background: #fff;
+}
+.recruitment-checkout-card h1 { margin: 1.5rem 0 .5rem; font-size: clamp(1.65rem, 5vw, 2rem); line-height: 1.2; letter-spacing: -.04em; }
+.recruitment-checkout-intro { color: var(--recruitment-muted); line-height: 1.55; }
+.recruitment-checkout-prices { margin: 1.5rem 0; font-variant-numeric: tabular-nums; }
+.recruitment-checkout-prices > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem .75rem; padding: .45rem 0; }
+.recruitment-checkout-prices dd { margin: 0; font-weight: 650; }
+.recruitment-checkout-prices > .recruitment-checkout-total { margin-top: .65rem; padding-top: .9rem; border-top: 1px solid var(--recruitment-line); align-items: baseline; }
+.recruitment-checkout-total dt { font-weight: 700; }
+.recruitment-checkout-total dd { font-size: 1.375rem; font-weight: 750; }
+.recruitment-checkout-status { margin: 0 0 1rem; padding: .75rem 1rem; background: var(--recruitment-surface); border-radius: .75rem; line-height: 1.5; }
+.recruitment-community-page .recruitment-checkout .recruitment-button { width: 100%; min-height: 48px; animation: none; transform: none; }
+.recruitment-community-page .recruitment-checkout .recruitment-button::before { content: none; }
+.recruitment-checkout-refresh { display: grid; min-height: 44px; place-items: center; margin-top: .5rem; text-decoration: underline; font-weight: 650; }
+.recruitment-checkout :is(button, a):focus-visible { outline: 2px solid var(--recruitment-navy); outline-offset: 4px; }
 @media (max-width: 1100px) {
     .recruitment-community-page .recruitment-nav-links { gap: .9rem; }
     .recruitment-learning-layout { gap: 2.5rem; }

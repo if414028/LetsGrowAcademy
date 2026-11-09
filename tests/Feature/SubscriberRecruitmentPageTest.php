@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\RecruitmentLead;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\MidtransService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -190,7 +193,7 @@ class SubscriberRecruitmentPageTest extends TestCase
         }
     }
 
-    public function test_valid_interest_form_redirects_to_the_url_owners_thank_you_page(): void
+    public function test_checkout_confirms_registration_only_after_verified_payment(): void
     {
         $owner = $this->subscriber();
         $other = $this->subscriber(['name' => 'Other', 'phone_number' => '089876543210']);
@@ -199,21 +202,89 @@ class SubscriberRecruitmentPageTest extends TestCase
             ...$this->lead(),
             'user_id' => $other->id,
             'whatsapp_url' => $other->whatsapp_url,
-        ])->assertStatus(303)
-            ->assertRedirect(route('subscriber-recruitment.thank-you', $owner->landing_page_slug));
+            'gross_amount' => 1,
+        ])->assertStatus(303);
 
-        $location = $response->headers->get('Location');
-        $this->assertNull(parse_url($location, PHP_URL_QUERY));
-        $this->get($location)->assertOk()
+        $lead = RecruitmentLead::sole();
+        $parameters = [$owner->landing_page_slug, $lead->event_checkout_id];
+        $checkout = route('subscriber-recruitment.payment.show', $parameters);
+        $pay = route('subscriber-recruitment.payment.pay', $parameters);
+        $return = route('subscriber-recruitment.payment.return', $parameters);
+        $success = route('subscriber-recruitment.thank-you', $parameters);
+        $response->assertRedirect($checkout);
+        $this->get($checkout)->assertOk()
+            ->assertSeeInOrder(['Harga kelas', 'Rp88.000', 'Biaya layanan aplikasi', 'Rp5.000', 'Total pembayaran', 'Rp93.000', 'Bayar'])
+            ->assertDontSee('Midtrans')->assertDontSee('Calon Mitra');
+        $this->get($success)->assertRedirect($checkout);
+        $this->get(route('subscriber-recruitment.thank-you', [$other->landing_page_slug, $lead->event_checkout_id]))->assertNotFound();
+        $this->get(route('subscriber-recruitment.thank-you', $owner->landing_page_slug))->assertNotFound();
+
+        config(['midtrans.server_key' => 'server-test']);
+        $gateway = $this->mock(MidtransService::class);
+        $gatewayUrl = 'https://app.sandbox.midtrans.com/snap/v2/vtweb/checkout-test';
+        $gateway->shouldReceive('createSnapRedirectUrl')->once()
+            ->with(Mockery::on(fn ($payload) => $payload['transaction_details']['gross_amount'] === 93000
+                && array_column($payload['item_details'], 'price') === [88000, 5000]
+                && $payload['callbacks']['finish'] === $return))
+            ->andReturn($gatewayUrl);
+        $this->post($pay, ['gross_amount' => 1])->assertStatus(303)->assertRedirect($gatewayUrl);
+        $this->post($pay)->assertStatus(303)->assertRedirect($gatewayUrl);
+        $payment = $lead->eventPayments()->sole();
+
+        $status = ['order_id' => $payment->midtrans_order_id, 'gross_amount' => '93000.00', 'status_code' => '200'];
+        $gateway->shouldReceive('transactionStatus')->with($payment->midtrans_order_id)
+            ->twice()->andReturn((object) ($status + ['transaction_status' => 'pending']), (object) ($status + ['transaction_status' => 'settlement']));
+        $this->get($return.'?transaction_status=settlement')->assertRedirect($checkout);
+        $this->assertSame('awaiting_payment', $lead->fresh()->event_payment_status);
+        $this->get($return)->assertRedirect($success);
+        $this->get($success)->assertOk()
             ->assertSee("Let's Grow Community", false)
             ->assertSee('Terima kasih sudah mendaftar!')
             ->assertSee('Dalam waktu dekat, admin akan menghubungi Anda untuk mengikuti event.')
             ->assertDontSee('wa.me', false)
             ->assertDontSee('Calon Mitra')
             ->assertDontSee('<form', false);
-        $this->get($location)->assertOk();
+        $this->assertSame('paid', $lead->fresh()->event_payment_status);
+        $this->get($success)->assertOk();
+        $this->post($pay)->assertStatus(303)->assertRedirect($checkout);
         $this->assertDatabaseCount('recruitment_leads', 1);
         $this->assertDatabaseHas('recruitment_leads', ['owner_user_id' => $owner->id, 'full_name' => 'Calon Mitra']);
+    }
+
+    public function test_event_webhook_verifies_order_amount_and_allows_retry_after_expiry(): void
+    {
+        $owner = $this->subscriber();
+        $this->post(route('subscriber-recruitment.submit', $owner->landing_page_slug), $this->lead())->assertStatus(303);
+        $lead = RecruitmentLead::sole();
+        $pay = route('subscriber-recruitment.payment.pay', [$owner->landing_page_slug, $lead->event_checkout_id]);
+        config(['midtrans.server_key' => 'server-test']);
+        $gateway = $this->mock(MidtransService::class);
+        $gateway->shouldReceive('createSnapRedirectUrl')->twice()->andReturn('https://app.sandbox.midtrans.com/snap/v2/vtweb/event-test');
+        $this->post($pay)->assertStatus(303);
+        $expired = $lead->eventPayments()->sole();
+        $gateway->shouldReceive('transactionStatus')->once()->with($expired->midtrans_order_id)
+            ->andReturn((object) ['order_id' => $expired->midtrans_order_id, 'gross_amount' => '93000.00', 'transaction_status' => 'expire']);
+        $this->get(route('subscriber-recruitment.payment.return', [$owner->landing_page_slug, $lead->event_checkout_id]))->assertRedirect();
+        $this->assertSame('failed', $expired->fresh()->status);
+
+        $this->post($pay)->assertStatus(303);
+        $payment = $lead->eventPayments()->latest('id')->first();
+        $this->assertNotSame($expired->midtrans_order_id, $payment->midtrans_order_id);
+        $notification = ['order_id' => $payment->midtrans_order_id, 'status_code' => '200', 'gross_amount' => '93000.00'];
+        $endpoint = route('payments.midtrans.notification');
+        $this->postJson($endpoint, $notification + ['signature_key' => 'invalid'])->assertForbidden();
+        $notification['signature_key'] = hash('sha512', implode('', $notification).'server-test');
+        $status = (object) ['order_id' => $payment->midtrans_order_id, 'status_code' => '200', 'gross_amount' => '93000.00', 'transaction_status' => 'settlement'];
+        $wrongAmount = clone $status;
+        $wrongAmount->gross_amount = '88000.00';
+        $gateway->shouldReceive('transactionStatus')->with($payment->midtrans_order_id)->times(3)->andReturn($wrongAmount, $status, $status);
+        $this->postJson($endpoint, $notification)->assertUnprocessable();
+        $this->assertSame('awaiting_payment', $lead->fresh()->event_payment_status);
+        $this->postJson($endpoint, $notification)->assertOk();
+        $paidAt = $lead->fresh()->event_paid_at;
+        $this->travel(1)->minutes();
+        $this->postJson($endpoint, $notification)->assertOk();
+        $this->assertTrue($paidAt->equalTo($lead->fresh()->event_paid_at));
     }
 
     public function test_form_and_privacy_copy_explain_event_registration_and_admin_follow_up(): void
@@ -224,7 +295,7 @@ class SubscriberRecruitmentPageTest extends TestCase
             ->assertOk()
             ->assertSee("disimpan di database Let's Grow Community untuk didaftarkan ke dalam event", false)
             ->assertSee('Saya menyetujui penggunaan data yang saya berikan untuk keperluan tindak lanjut dan penyampaian informasi terkait sesi pengenalan peluang ini, sesuai kebijakan privasi yang berlaku.')
-            ->assertSee('Tim penyelenggara akan menghubungi Anda melalui nomor WhatsApp yang diberikan.')
+            ->assertSee('Lanjutkan ke pembayaran setelah mengirim form.')
             ->assertDontSee('diarahkan ke WhatsApp')
             ->assertDontSee('pesan yang sudah terisi');
     }

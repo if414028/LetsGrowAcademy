@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'event_payment' => [
+        'class_amount' => 88000,
+        'service_fee' => 5000,
+    ],
     'activities' => [
         'Karyawan',
         'Mahasiswa atau Fresh Graduate',
@@ -312,7 +316,7 @@ return [
         'body' => 'Isi informasi berikut agar tim dapat menghubungi Anda dan memberikan jadwal sesi pengenalan serta langkah selanjutnya.',
         'consent' => 'Saya menyetujui penggunaan data yang saya berikan untuk keperluan tindak lanjut dan penyampaian informasi terkait sesi pengenalan peluang ini, sesuai kebijakan privasi yang berlaku.',
         'cta' => 'KIRIM MINAT SAYA',
-        'helper' => 'Tim penyelenggara akan menghubungi Anda melalui nomor WhatsApp yang diberikan.',
+        'helper' => 'Lanjutkan ke pembayaran setelah mengirim form. Setelah pembayaran terkonfirmasi, tim penyelenggara akan menghubungi Anda melalui WhatsApp.',
     ],
     'footer' => [
         'brand' => 'PROYEK KEMITRAAN AIR MINUM',

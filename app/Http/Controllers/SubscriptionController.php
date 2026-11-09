@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Subscription;
 use App\Services\MidtransPaymentUpdater;
 use App\Services\MidtransService;
+use App\Services\SubscriptionPricing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,19 +18,35 @@ class SubscriptionController extends Controller
     public function __construct(
         private readonly MidtransService $midtrans,
         private readonly MidtransPaymentUpdater $paymentUpdater,
+        private readonly SubscriptionPricing $pricing,
     ) {}
 
     public function index(Request $request)
     {
         $user = $request->user();
+        $activeSubscription = $user->activeSubscription();
+
+        if ($activeSubscription) {
+            $user->ensureLandingPageSlug();
+        }
+
+        $paymentMethods = $this->pricing->paymentMethods();
+        $quotes = [];
+
+        foreach (config('subscription.durations') as $months) {
+            foreach ($paymentMethods as $method => $details) {
+                $quotes[$months][$method] = $this->pricing->quote($months, $method);
+            }
+        }
 
         return view('subscriptions.index', [
-            'activeSubscription' => $user->activeSubscription(),
+            'activeSubscription' => $activeSubscription,
             'pendingSubscription' => $user->pendingSubscription(),
             'latestSubscription' => $user->subscriptions()->latest()->first(),
             'durations' => config('subscription.durations'),
             'monthlyPrice' => config('subscription.monthly_price'),
-            'bank' => config('subscription.bank'),
+            'paymentMethods' => $paymentMethods,
+            'quotes' => $quotes,
         ]);
     }
 
@@ -41,6 +58,7 @@ class SubscriptionController extends Controller
                 'integer',
                 Rule::in(config('subscription.durations')),
             ],
+            'payment_method' => ['required', 'string', Rule::in(array_keys($this->pricing->paymentMethods()))],
         ]);
 
         $user = $request->user();
@@ -58,16 +76,32 @@ class SubscriptionController extends Controller
         }
 
         $months = (int) $validated['duration_months'];
+        $quote = $this->pricing->quote($months, $validated['payment_method']);
         $subscription = Subscription::create([
             'user_id' => $user->id,
             'duration_months' => $months,
-            'amount' => $months * (int) config('subscription.monthly_price'),
+            'amount' => $quote['total'],
+            'selected_payment_method' => $validated['payment_method'],
+            'pricing_details' => $quote,
             'payment_status' => 'pending',
             'status' => 'pending',
             'submitted_at' => now(),
         ]);
 
         $orderId = 'SUB-'.$subscription->id.'-'.str()->uuid();
+        $items = [[
+            'id' => 'subscription-'.$months.'m',
+            'price' => $quote['subtotal'],
+            'quantity' => 1,
+            'name' => "Subscription {$months} bulan",
+        ]];
+
+        if ($quote['transaction_fee'] > 0) {
+            $items[] = ['id' => 'transaction-fee', 'price' => $quote['transaction_fee'], 'quantity' => 1, 'name' => 'Biaya transaksi'];
+        }
+        if ($quote['gateway_vat_amount'] > 0) {
+            $items[] = ['id' => 'gateway-vat', 'price' => $quote['gateway_vat_amount'], 'quantity' => 1, 'name' => 'PPN biaya transaksi '.$quote['gateway_vat_percent'].'%'];
+        }
 
         try {
             $snapToken = $this->midtrans->createSnapToken([
@@ -75,12 +109,8 @@ class SubscriptionController extends Controller
                     'order_id' => $orderId,
                     'gross_amount' => (int) $subscription->amount,
                 ],
-                'item_details' => [[
-                    'id' => 'subscription-'.$months.'m',
-                    'price' => (int) $subscription->amount,
-                    'quantity' => 1,
-                    'name' => "Subscription {$months} bulan",
-                ]],
+                'item_details' => $items,
+                'enabled_payments' => [$quote['snap_payment_method']],
                 'customer_details' => [
                     'first_name' => $user->name,
                     'email' => $user->email,

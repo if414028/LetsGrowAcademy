@@ -21,6 +21,11 @@ class MidtransService
         return Snap::getSnapToken($payload);
     }
 
+    public function createSnapRedirectUrl(array $payload): string
+    {
+        return Snap::getSnapUrl($payload);
+    }
+
     public function transactionStatus(string $orderId): object
     {
         return Transaction::status($orderId);

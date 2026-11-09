@@ -86,6 +86,7 @@
                         <th class="text-left font-semibold px-6 py-3">Name</th>
                         <th class="text-left font-semibold px-6 py-3">Email</th>
                         <th class="text-left font-semibold px-6 py-3">Roles</th>
+                        <th class="text-left font-semibold px-6 py-3">Subscription</th>
                         <th class="text-left font-semibold px-6 py-3">Created</th>
                         <th class="text-left font-semibold px-6 py-3">Actions</th>
                     </tr>
@@ -115,6 +116,17 @@
                                             </span>
                                         @endforeach
                                     </div>
+                                @endif
+                            </td>
+                            <td class="px-6 py-4">
+                                @if ($user->is_subscriber)
+                                    <span class="inline-flex items-center whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                                        Subscriber aktif
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
+                                        Bukan subscriber
+                                    </span>
                                 @endif
                             </td>
                             <td class="px-6 py-4 text-gray-700">
@@ -159,7 +171,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-6 py-10 text-center text-gray-500">
+                            <td colspan="6" class="px-6 py-10 text-center text-gray-500">
                                 No users
                                 found{{ !empty($q ?? request('q')) ? " for \"" . ($q ?? request('q')) . "\"" : '' }}.
                             </td>

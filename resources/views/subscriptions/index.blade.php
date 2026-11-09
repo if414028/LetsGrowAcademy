@@ -1,9 +1,19 @@
 <x-dashboard-layout>
     @php
         $selectedMonths = (int) old('duration_months', 6);
+        $selectedMonths = in_array($selectedMonths, $durations, true) ? $selectedMonths : $durations[0];
+        $selectedPaymentMethod = old('payment_method', array_key_first($paymentMethods));
+        $selectedPaymentMethod = is_string($selectedPaymentMethod) && isset($paymentMethods[$selectedPaymentMethod]) ? $selectedPaymentMethod : array_key_first($paymentMethods);
+        $initialQuote = $quotes[$selectedMonths][$selectedPaymentMethod] ?? null;
+        $checkoutData = ['months' => $selectedMonths, 'paymentMethod' => $selectedPaymentMethod, 'quotes' => $quotes];
+        $snapUiMode = $pendingSubscription?->pricing_details['snap_ui_mode'] ?? 'auto';
     @endphp
 
-    <div class="mx-auto max-w-6xl" x-data="{ months: {{ $selectedMonths }}, monthlyPrice: {{ $monthlyPrice }} }">
+    <div class="mx-auto max-w-6xl" x-data="{
+        ...@js($checkoutData),
+        get quote() { return this.quotes[this.months]?.[this.paymentMethod] ?? null; },
+        money(amount) { return 'Rp ' + (amount ?? 0).toLocaleString('id-ID'); }
+    }">
         @if (session('payment_success'))
             <div x-data="{ open: true }" x-show="open" x-cloak
                 @keydown.escape.window="open = false"
@@ -104,6 +114,11 @@
                             Checkout {{ $pendingSubscription->duration_months }} bulan senilai Rp {{ number_format($pendingSubscription->amount, 0, ',', '.') }} sudah dibuat.
                             Subscription akan aktif otomatis setelah pembayaran dikonfirmasi Midtrans.
                         </p>
+                        @if ($pendingSubscription->pricing_details)
+                            <div class="mt-4 max-w-md rounded-xl bg-white/70 p-4">
+                                <x-subscription-payment-details :subscription="$pendingSubscription" />
+                            </div>
+                        @endif
                         @if ($pendingSubscription->snap_token)
                             <button type="button" data-snap-token="{{ $pendingSubscription->snap_token }}"
                                 data-sync-url="{{ route('subscriptions.sync-payment', $pendingSubscription) }}"
@@ -128,6 +143,7 @@
                     <div class="mt-6 grid gap-3 sm:grid-cols-3">
                         @foreach ($durations as $duration)
                             <button type="button" @click="months = {{ $duration }}"
+                                :aria-pressed="months === {{ $duration }}"
                                 :class="months === {{ $duration }} ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200' : 'border-slate-200 bg-white hover:border-slate-300'"
                                 class="min-h-28 cursor-pointer rounded-2xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-amber-400">
                                 <span class="block text-2xl font-extrabold text-slate-900">{{ $duration }}</span>
@@ -137,32 +153,78 @@
                         @endforeach
                     </div>
 
-                    <div class="mt-8 rounded-2xl bg-slate-50 p-5">
-                        <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Total transfer</p>
-                        <p class="mt-2 text-3xl font-extrabold text-slate-950" x-text="'Rp ' + (months * monthlyPrice).toLocaleString('id-ID')"></p>
-                        <p class="mt-1 text-sm text-slate-500"><span x-text="months"></span> bulan × Rp {{ number_format($monthlyPrice, 0, ',', '.') }}</p>
-                    </div>
+                    <p class="mt-3 text-xs leading-5 text-slate-500">Harga paket belum termasuk biaya transaksi dan PPN atas biaya transaksi.</p>
+
+                    @if ($initialQuote)
+                        <div class="mt-6 rounded-2xl bg-slate-50 p-5" aria-live="polite" aria-atomic="true">
+                            <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Rincian pembayaran</p>
+                            <dl class="mt-4 space-y-3 text-sm text-slate-600">
+                                <div class="flex justify-between gap-4">
+                                    <dt>Subscription <span x-text="months">{{ $selectedMonths }}</span> bulan</dt>
+                                    <dd class="shrink-0 font-semibold" x-text="money(quote?.subtotal)">Rp {{ number_format($initialQuote['subtotal'], 0, ',', '.') }}</dd>
+                                </div>
+                                <div class="flex justify-between gap-4">
+                                    <dt>Biaya transaksi</dt>
+                                    <dd class="shrink-0 font-semibold" x-text="money(quote?.transaction_fee)">Rp {{ number_format($initialQuote['transaction_fee'], 0, ',', '.') }}</dd>
+                                </div>
+                                <div class="flex justify-between gap-4">
+                                    <dt>PPN {{ $initialQuote['gateway_vat_percent'] }}% biaya transaksi</dt>
+                                    <dd class="shrink-0 font-semibold" x-text="money(quote?.gateway_vat_amount)">Rp {{ number_format($initialQuote['gateway_vat_amount'], 0, ',', '.') }}</dd>
+                                </div>
+                                <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4 text-slate-950">
+                                    <dt class="font-bold">Total pembayaran</dt>
+                                    <dd class="text-2xl font-extrabold" x-text="money(quote?.total)">Rp {{ number_format($initialQuote['total'], 0, ',', '.') }}</dd>
+                                </div>
+                            </dl>
+                            <p class="mt-3 text-xs leading-5 text-slate-500" x-text="quote?.merchant_covers_fee ? 'Biaya QRIS dan PPN atas biaya tersebut ditanggung oleh Let\'s Grow Academy.' : 'PPN hanya dihitung dari biaya transaksi, bukan harga subscription.'">
+                                {{ $initialQuote['merchant_covers_fee'] ? "Biaya QRIS dan PPN atas biaya tersebut ditanggung oleh Let's Grow Academy." : 'PPN hanya dihitung dari biaya transaksi, bukan harga subscription.' }}
+                            </p>
+                        </div>
+                    @endif
                 </section>
 
                 <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
                     <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Langkah 2</p>
-                    <h2 class="mt-1 text-xl font-extrabold text-slate-900">Bayar dengan Midtrans</h2>
-
-                    <div class="mt-6 rounded-2xl border border-blue-100 bg-blue-50 p-5">
-                        <p class="font-extrabold text-blue-950">Pembayaran aman melalui Snap</p>
-                        <p class="mt-2 text-sm leading-6 text-blue-900/75">Pilih metode pembayaran yang tersedia di popup Midtrans. Status akses diperbarui otomatis setelah pembayaran berhasil.</p>
-                    </div>
-
-                    <ol class="mt-5 space-y-3 text-sm leading-6 text-slate-600">
-                        <li class="flex gap-3"><span class="font-extrabold text-amber-600">1.</span>Pastikan durasi dan total pembayaran sudah benar.</li>
-                        <li class="flex gap-3"><span class="font-extrabold text-amber-600">2.</span>Klik tombol bayar dan pilih metode pembayaran.</li>
-                        <li class="flex gap-3"><span class="font-extrabold text-amber-600">3.</span>Selesaikan instruksi pembayaran dari Midtrans.</li>
-                    </ol>
+                    <h2 class="mt-1 text-xl font-extrabold text-slate-900">Pilih metode pembayaran</h2>
 
                     <form method="POST" action="{{ route('subscriptions.store') }}" class="mt-6">
                         @csrf
-                        <input type="hidden" name="duration_months" :value="months">
-                        <button type="submit" class="min-h-11 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        <input type="hidden" name="duration_months" value="{{ $selectedMonths }}" :value="months">
+                        <label for="subscription-payment-method" class="block text-sm font-bold text-slate-700">Metode pembayaran</label>
+                        <select id="subscription-payment-method" name="payment_method" x-model="paymentMethod" required
+                            aria-describedby="subscription-fee-help @error('payment_method') subscription-method-error @enderror"
+                            @disabled(! $paymentMethods)
+                            class="mt-2 min-h-12 w-full rounded-xl border-slate-300 bg-white text-sm text-slate-900 focus:border-amber-400 focus:ring-amber-400">
+                            @foreach (collect($paymentMethods)->groupBy('group', preserveKeys: true) as $group => $methods)
+                                <optgroup label="{{ $group }}">
+                                    @foreach ($methods as $method => $details)
+                                        <option value="{{ $method }}" @selected($selectedPaymentMethod === $method)>{{ $details['label'] }}</option>
+                                    @endforeach
+                                </optgroup>
+                            @endforeach
+                        </select>
+                        @error('payment_method')<p id="subscription-method-error" class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                        @error('duration_months')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+
+                        @if ($initialQuote)
+                            <p id="subscription-fee-help" class="mt-3 text-sm leading-6 text-slate-500"
+                                x-text="quote?.merchant_covers_fee ? 'Biaya QRIS ' + (quote.fee_basis_points / 100).toLocaleString('id-ID') + '% ditanggung merchant. Tidak ada biaya tambahan untuk kamu.' : 'Tarif gateway: ' + (quote?.fee_basis_points > 0 ? (quote.fee_basis_points / 100).toLocaleString('id-ID') + '% dari total pembayaran' : money(quote?.fixed_fee) + ' per transaksi') + ', belum termasuk PPN.'">
+                                Biaya transaksi dan PPN menyesuaikan metode pilihanmu. Lihat total pada rincian pembayaran.
+                            </p>
+                            <p class="mt-2 text-xs leading-5 text-slate-500" x-show="quote?.fee_basis_points > 0 && !quote?.merchant_covers_fee">
+                                Biaya persentase dihitung dari total pembayaran, termasuk biaya transaksi, lalu dibulatkan ke atas ke rupiah penuh.
+                            </p>
+                        @else
+                            <p id="subscription-fee-help" class="mt-3 text-sm leading-6 text-slate-500">Metode pembayaran belum tersedia. Hubungi administrator.</p>
+                        @endif
+
+                        <div class="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-5">
+                            <p class="font-extrabold text-blue-950">Pembayaran aman melalui Midtrans</p>
+                            <p class="mt-2 text-sm leading-6 text-blue-900/75">Periksa durasi, metode, dan total pembayaran, lalu selesaikan instruksi di popup Midtrans. Subscription aktif otomatis setelah pembayaran berhasil.</p>
+                            <p class="mt-2 text-xs leading-5 text-blue-900/75" x-show="['gopay', 'shopeepay'].includes(paymentMethod)">Untuk GoPay dan ShopeePay, buka halaman ini di ponsel agar bisa melanjutkan ke aplikasi e-wallet.</p>
+                        </div>
+
+                        <button type="submit" @disabled(! $paymentMethods) class="mt-6 min-h-11 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
                             Bayar Sekarang
                         </button>
                     </form>
@@ -244,6 +306,9 @@
                 if (!token || !window.snap) return;
 
                 window.snap.pay(token, {
+                    // Keep charged e-wallet checkouts in app mode; their desktop QRIS
+                    // fallback must not turn an e-wallet fee into a QRIS surcharge.
+                    uiMode: @json($snapUiMode),
                     onSuccess: () => syncPayment(syncUrl),
                     onPending: () => syncPayment(syncUrl),
                     onError: () => syncPayment(syncUrl),

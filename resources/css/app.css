@@ -2,6 +2,7 @@
 @import './birthday-greetings.css';
 @import './recruitment.css';
 @import './recruitment-community.css';
+@import './grow-ads.css';
 
 @tailwind base;
 @tailwind components;
@@ -856,14 +857,14 @@
         background: linear-gradient(90deg, var(--dashboard-navy), var(--dashboard-cyan));
     }
 
-    .dashboard-content > :first-child h1 {
+    .dashboard-content > :first-child:not(.ga-page) h1 {
         max-width: 64rem;
         font-size: clamp(2.25rem, 4.2vw, 4.75rem) !important;
         line-height: 0.98;
         text-wrap: balance;
     }
 
-    .dashboard-content > :first-child p {
+    .dashboard-content > :first-child:not(.ga-page) p {
         max-width: 48rem;
         color: #607487;
     }
@@ -987,9 +988,9 @@
         transform: translateY(-2px);
     }
 
-    .app-dashboard main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-    .app-dashboard main select,
-    .app-dashboard main textarea,
+    .app-dashboard main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(.ga-page input),
+    .app-dashboard main select:not(.ga-page select),
+    .app-dashboard main textarea:not(.ga-page textarea),
     .app-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
     .app-shell select,
     .app-shell textarea {
@@ -1010,7 +1011,7 @@
         box-shadow: 0 0 0 3px rgb(2 132 199 / 0.14);
     }
 
-    .app-dashboard main label,
+    .app-dashboard main label:not(.ga-page label),
     .app-shell label {
         color: #334155;
         font-weight: 700;

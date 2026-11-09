@@ -7,6 +7,7 @@ import fileUpload from './file-upload';
 import { initSalesTrend } from './sales-trend';
 import birthdayGreetings from './birthday-greetings';
 import recruitmentShare, { initRecruitmentLanding } from './recruitment';
+import { growAdSelection, growAdBudget, growAdPayment, growAdCopy, initGrowAdMotion } from './grow-ads';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -15,6 +16,10 @@ window.Alpine = Alpine;
 Alpine.data('fileUpload', fileUpload);
 Alpine.data('birthdayGreetings', birthdayGreetings);
 Alpine.data('recruitmentShare', recruitmentShare);
+Alpine.data('growAdSelection', growAdSelection);
+Alpine.data('growAdBudget', growAdBudget);
+Alpine.data('growAdPayment', growAdPayment);
+Alpine.data('growAdCopy', growAdCopy);
 
 Alpine.data('dashboardShell', () => ({
     sidebarOpen: false,
@@ -159,8 +164,8 @@ const initDashboardMotion = () => {
         return;
     }
 
-    const headingBlock = document.querySelector('.dashboard-content > :first-child');
-    const contentBlocks = gsap.utils.toArray('.dashboard-content > section, .dashboard-content > form, .dashboard-content > div:not(:first-child)');
+    const headingBlock = document.querySelector('.dashboard-content > :first-child:not(.ga-page)');
+    const contentBlocks = gsap.utils.toArray('.dashboard-content > section:not(.ga-page), .dashboard-content > form, .dashboard-content > div:not(:first-child)');
 
     if (headingBlock) {
         gsap.from(headingBlock, {
@@ -296,6 +301,7 @@ document.readyState === 'loading'
         initAuthMotion();
         initSalesTrend();
         initRecruitmentLanding();
+        initGrowAdMotion();
     }, { once: true })
     : (() => {
         initDashboardMotion();
@@ -304,4 +310,5 @@ document.readyState === 'loading'
         initAuthMotion();
         initSalesTrend();
         initRecruitmentLanding();
+        initGrowAdMotion();
     })();

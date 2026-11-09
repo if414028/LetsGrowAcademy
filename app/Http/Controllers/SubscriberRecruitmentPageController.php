@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\RecruitmentLead;
 use App\Models\User;
+use App\Services\GrowAdTracking;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class SubscriberRecruitmentPageController extends Controller
@@ -52,10 +54,17 @@ class SubscriberRecruitmentPageController extends Controller
         ])->header('Cache-Control', 'private, no-store');
     }
 
-    public function show(string $slug)
+    public function show(Request $request, string $slug, GrowAdTracking $tracking)
     {
         $consultant = $this->consultant($slug);
         $consultantName = $consultant->full_name ?: $consultant->name;
+        $placement = $tracking->placementForPage($request, $consultant);
+        $oldToken = $request->old('grow_ad_token');
+        $token = $placement ? $tracking->tokenForPlacement($placement) : null;
+        if (! $placement && is_string($oldToken)) {
+            $placement = $tracking->placementFromToken($oldToken, $consultant);
+            $token = $placement ? $oldToken : null;
+        }
 
         return view('subscriber-recruitment.show', [
             'consultant' => $consultant,
@@ -64,10 +73,23 @@ class SubscriberRecruitmentPageController extends Controller
                 ->first(fn ($role) => in_array($role, ['Sales Manager', 'Health Manager', 'Health Planner']))
                 ?: 'Pendamping Kemitraan',
             'content' => config('recruitment'),
+            'growAdToken' => $token,
+            'growAdPixelId' => $tracking->pixelId($placement),
         ]);
     }
 
-    public function submit(Request $request, string $slug)
+    public function trackFormClick(Request $request, string $slug, GrowAdTracking $tracking)
+    {
+        $data = $request->validate(['grow_ad_token' => ['required', 'string', 'max:2048']]);
+        $placement = $tracking->placementFromToken($data['grow_ad_token'], $this->consultant($slug));
+        if ($tracking->pixelId($placement)) {
+            $placement->increment('form_cta_clicks');
+        }
+
+        return response()->noContent();
+    }
+
+    public function submit(Request $request, string $slug, GrowAdTracking $tracking)
     {
         // Resolve the owner from the public URL, never from a visitor-supplied user ID or phone.
         $consultant = $this->consultant($slug);
@@ -101,13 +123,14 @@ class SubscriberRecruitmentPageController extends Controller
         if ($validator->fails()) {
             return redirect(route('subscriber-recruitment.show', $slug).'#form-minat')
                 ->withErrors($validator)
-                ->withInput($request->only(array_keys($data)));
+                ->withInput($request->only([...array_keys($data), 'grow_ad_token']));
         }
 
         $validated = $validator->validated();
+        $placement = $tracking->placementFromToken(is_string($request->input('grow_ad_token')) ? $request->input('grow_ad_token') : null, $consultant);
 
         // Save before confirming registration. The URL determines attribution, not hidden form fields.
-        $consultant->recruitmentLeads()->create([
+        $lead = $consultant->recruitmentLeads()->create([
             'source' => RecruitmentLead::SOURCE,
             'source_slug' => $consultant->landing_page_slug,
             'source_url' => route('subscriber-recruitment.show', $consultant->landing_page_slug),
@@ -117,16 +140,12 @@ class SubscriberRecruitmentPageController extends Controller
             'activity' => $validated['activity'],
             'interest' => $validated['interest'] ?? null,
             'consented_at' => now(),
+            'grow_ad_placement_id' => $placement?->id,
+            'event_checkout_id' => (string) Str::uuid(),
+            'event_payment_status' => 'awaiting_payment',
         ]);
 
-        return redirect()->route('subscriber-recruitment.thank-you', ['slug' => $slug], 303);
-    }
-
-    public function thankYou(string $slug)
-    {
-        $this->consultant($slug);
-
-        return view('subscriber-recruitment.thank-you');
+        return redirect()->route('subscriber-recruitment.payment.show', [$slug, $lead->event_checkout_id], 303);
     }
 
     private function consultant(string $slug): User

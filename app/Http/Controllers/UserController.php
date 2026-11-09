@@ -40,6 +40,9 @@ class UserController extends Controller
 
         $users = User::query()
             ->with('roles')
+            ->withExists(['subscriptions as is_subscriber' => fn ($query) => $query
+                ->where('status', 'active')
+                ->where('ends_at', '>', now())])
             ->when($authUser->hasRole('Health Manager'), function ($query) use ($authUser) {
                 $query->whereIn('id', $this->downlinerIds((int) $authUser->id));
             })

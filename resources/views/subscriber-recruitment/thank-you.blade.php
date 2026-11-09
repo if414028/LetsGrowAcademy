@@ -8,12 +8,14 @@
     <title>Terima kasih sudah mendaftar | Let's Grow Community</title>
     @include('partials.nunito-font')
     @vite('resources/css/app.css')
+    @include('grow-ads.pixel', ['pixelId' => $growAdPixelId, 'registration' => true, 'purchase' => $purchase])
 </head>
 <body class="recruitment-page recruitment-community-page">
     <main class="recruitment-success" aria-labelledby="registration-success-title">
         <div class="recruitment-success-content">
             <span class="recruitment-success-icon" aria-hidden="true"><x-recruitment-icon name="check" /></span>
             <h1 id="registration-success-title">Terima kasih sudah mendaftar!</h1>
+            <p>Pembayaran Anda sudah terkonfirmasi.</p>
             <p>Dalam waktu dekat, admin akan menghubungi Anda untuk mengikuti event.</p>
         </div>
     </main>

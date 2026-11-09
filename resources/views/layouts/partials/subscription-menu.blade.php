@@ -12,6 +12,9 @@
         <div class="ml-5 border-l-2 border-blue-200 pl-3">
             <p class="dashboard-subscription-label px-3 pb-1 pt-2 text-[9px] font-extrabold uppercase tracking-[0.16em] text-sky-600">Khusus subscriber</p>
             @hasanyrole('Health Planner|Health Manager')
+                <a href="{{ route('grow-ads.index') }}" {!! $closeSidebar !!} @if(request()->routeIs('grow-ads.*')) aria-current="page" @endif class="flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition {{ request()->routeIs('grow-ads.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50' }}">
+                    <x-grow-ad-icon name="megaphone" class="h-4 w-4 shrink-0" /><span class="flex-1">Grow Ads</span>
+                </a>
                 <a href="{{ route('birthday-greetings.index') }}" {!! $closeSidebar !!} @if(request()->routeIs('birthday-greetings.*')) aria-current="page" @endif class="flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition {{ request()->routeIs('birthday-greetings.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50' }}">
                     <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 11h16v10H4zM3 7h18v4H3zM12 7v14M12 7H8.5A2.5 2.5 0 1 1 11 4.5L12 7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5L12 7Z"/></svg><span class="flex-1">Birthday Greetings</span>
                 </a>
@@ -42,6 +45,7 @@
             <a href="{{ route('admin.selling-kit.index') }}" {!! $closeSidebar !!} @if(request()->routeIs('admin.selling-kit.*')) aria-current="page" @endif class="mt-1 flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition {{ request()->routeIs('admin.selling-kit.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800' }}">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6.5A2.5 2.5 0 0 1 6.5 4H9l2 2h6.5A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-10Z" /></svg><span>Manage Selling Kit</span>
             </a>
+            <a href="{{ route('admin.grow-ads.index') }}" {!! $closeSidebar !!} @if(request()->routeIs('admin.grow-ads.*')) aria-current="page" @endif class="mt-1 flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition {{ request()->routeIs('admin.grow-ads.*') ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50' }}"><x-grow-ad-icon name="megaphone" class="h-4 w-4 shrink-0" /><span>Kelola Grow Ads</span></a>
         </div>
     </div>
 @endrole

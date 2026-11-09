@@ -302,4 +302,32 @@ class User extends Authenticatable
 
         return $slug;
     }
+
+    public function ensureLandingPageSlug(): string
+    {
+        if (filled($this->landing_page_slug)) {
+            return $this->landing_page_slug;
+        }
+
+        $slug = $this->getConnection()->transaction(function (): string {
+            // Another request may already have repaired this legacy/imported user.
+            $user = $this->newQuery()->lockForUpdate()->findOrFail($this->getKey());
+
+            if (blank($user->landing_page_slug)) {
+                $user->forceFill([
+                    'landing_page_slug' => static::uniqueLandingPageSlug(
+                        collect([$user->name ?: 'member', $user->dst_code])->filter()->implode('-'),
+                        $user->id,
+                    ),
+                ])->saveQuietly();
+            }
+
+            return $user->landing_page_slug;
+        }, 3);
+
+        $this->setAttribute('landing_page_slug', $slug);
+        $this->syncOriginalAttribute('landing_page_slug');
+
+        return $slug;
+    }
 }

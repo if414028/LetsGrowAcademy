@@ -25,7 +25,7 @@
 
             @if ($leads->count())
                 <div class="recruitment-leads-result-count" role="status">{{ $search !== '' ? 'Hasil pencarian: ' : 'Menampilkan ' }}{{ $leads->firstItem() }}–{{ $leads->lastItem() }} dari {{ $leads->total() }} pendaftaran</div>
-                <div class="recruitment-leads-columns" aria-hidden="true"><span>Peminat</span><span>Data form</span><span>Asal pendaftaran</span><span>Terdaftar</span></div>
+                <div class="recruitment-leads-columns" aria-hidden="true"><span>Peminat</span><span>Data form</span><span>Asal pendaftaran</span><span>Tindak lanjut</span></div>
                 <div class="recruitment-leads-list" role="list" aria-label="Peminat dari landing page Anda">
                     @foreach ($leads as $lead)
                         <article class="recruitment-lead-row" role="listitem" aria-labelledby="lead-name-{{ $lead->id }}">
@@ -45,6 +45,9 @@
                             </div>
                             <div class="recruitment-lead-followup">
                                 <time datetime="{{ $lead->created_at->toIso8601String() }}">{{ $lead->created_at->timezone('Asia/Jakarta')->locale('id')->translatedFormat('d M Y') }}<span>{{ $lead->created_at->timezone('Asia/Jakarta')->format('H.i') }} WIB</span></time>
+                                @if ($lead->event_checkout_id)
+                                    <p>{{ match ($lead->event_payment_status) { 'paid' => 'Sudah dibayar', 'refunded' => 'Pembayaran dikembalikan', default => 'Menunggu pembayaran' } }}</p>
+                                @endif
                                 <a href="{{ $lead->whatsapp_url }}" target="_blank" rel="noopener" aria-label="Hubungi {{ $lead->full_name }} melalui WhatsApp (tab baru)">Hubungi WhatsApp <span aria-hidden="true">↗</span></a>
                             </div>
                         </article>

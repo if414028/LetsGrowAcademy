@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\BirthdayGreetingController;
+use App\Http\Controllers\AdminGrowAdController;
+use App\Http\Controllers\GrowAdController;
 use App\Http\Controllers\BundleController;
 use App\Http\Controllers\ContestController;
 use App\Http\Controllers\CustomerController;
@@ -12,6 +14,7 @@ use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\SellingKitController;
 use App\Http\Controllers\SubscriberLandingPageController;
 use App\Http\Controllers\SubscriberRecruitmentPageController;
+use App\Http\Controllers\RecruitmentEventPaymentController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -97,6 +100,17 @@ Route::middleware('auth', 'active')->group(function () {
     });
 
     Route::middleware('role:Admin|Head Admin')->group(function () {
+        Route::prefix('admin/grow-ads')->name('admin.grow-ads.')->group(function () {
+            Route::get('/', [AdminGrowAdController::class, 'index'])->name('index');
+            Route::get('/contents', [AdminGrowAdController::class, 'contents'])->name('contents');
+            Route::get('/contents/create', [AdminGrowAdController::class, 'createContent'])->name('contents.create');
+            Route::post('/contents', [AdminGrowAdController::class, 'storeContent'])->name('contents.store');
+            Route::get('/contents/{content}/edit', [AdminGrowAdController::class, 'editContent'])->name('contents.edit');
+            Route::put('/contents/{content}', [AdminGrowAdController::class, 'updateContent'])->name('contents.update');
+            Route::get('/{campaign}', [AdminGrowAdController::class, 'show'])->name('show');
+            Route::put('/{campaign}', [AdminGrowAdController::class, 'update'])->name('update');
+            Route::patch('/{campaign}/leads/{lead}', [AdminGrowAdController::class, 'updateLead'])->name('leads.update');
+        });
         Route::get('/admin/subscriptions', [SubscriptionController::class, 'adminIndex'])->name('admin.subscriptions.index');
         Route::patch('/admin/subscriptions/{subscription}/approve', [SubscriptionController::class, 'approve'])->name('admin.subscriptions.approve');
         Route::patch('/admin/subscriptions/{subscription}/reject', [SubscriptionController::class, 'reject'])->name('admin.subscriptions.reject');
@@ -107,6 +121,17 @@ Route::middleware('auth', 'active')->group(function () {
     });
 
     Route::middleware('subscriber')->group(function () {
+        Route::middleware('role:Health Planner|Health Manager')->prefix('grow-ads')->name('grow-ads.')->group(function () {
+            Route::get('/', [GrowAdController::class, 'index'])->name('index');
+            Route::post('/activate', [GrowAdController::class, 'activate'])->name('activate');
+            Route::get('/create', [GrowAdController::class, 'create'])->name('create');
+            Route::post('/select', [GrowAdController::class, 'select'])->name('select');
+            Route::get('/payment-finish', [GrowAdController::class, 'finishPayment'])->name('payment-finish');
+            Route::get('/{campaign}/budget', [GrowAdController::class, 'budget'])->name('budget');
+            Route::post('/{campaign}/checkout', [GrowAdController::class, 'checkout'])->name('checkout');
+            Route::post('/{campaign}/sync-payment', [GrowAdController::class, 'syncPayment'])->name('sync-payment');
+            Route::get('/{campaign}', [GrowAdController::class, 'show'])->name('show');
+        });
         Route::middleware('role:Health Planner|Health Manager')->prefix('birthday-greetings')->name('birthday-greetings.')->group(function () {
             Route::get('/', [BirthdayGreetingController::class, 'index'])->name('index');
             Route::post('/activate', [BirthdayGreetingController::class, 'activate'])->name('activate');
@@ -292,8 +317,20 @@ Route::post('/rekrutmen/{slug}', [SubscriberRecruitmentPageController::class, 's
     ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
     ->middleware('throttle:10,1')
     ->name('subscriber-recruitment.submit');
-Route::get('/rekrutmen/{slug}/terima-kasih', [SubscriberRecruitmentPageController::class, 'thankYou'])
+Route::post('/rekrutmen/{slug}/klik-form', [SubscriberRecruitmentPageController::class, 'trackFormClick'])
     ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
+    ->middleware('throttle:90,1,grow-ads-cta')
+    ->name('subscriber-recruitment.form-click');
+Route::prefix('/rekrutmen/{slug}/pembayaran/{checkout}')
+    ->where(['slug' => '[a-z0-9]+(?:-[a-z0-9]+)*', 'checkout' => '[0-9a-f-]{36}'])
+    ->name('subscriber-recruitment.payment.')
+    ->group(function () {
+        Route::get('/', [RecruitmentEventPaymentController::class, 'show'])->name('show');
+        Route::post('/', [RecruitmentEventPaymentController::class, 'pay'])->middleware('throttle:10,1')->name('pay');
+        Route::get('/status', [RecruitmentEventPaymentController::class, 'refresh'])->middleware('throttle:10,1')->name('return');
+    });
+Route::get('/rekrutmen/{slug}/terima-kasih/{checkout?}', [RecruitmentEventPaymentController::class, 'thankYou'])
+    ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')->whereUuid('checkout')
     ->name('subscriber-recruitment.thank-you');
 
 // Harus menjadi route terakhir agar slug member tidak mengambil route aplikasi.
