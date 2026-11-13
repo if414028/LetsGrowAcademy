@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\RecruitmentLead;
 use App\Models\User;
+use App\Services\CrmWebhookOutbox;
 use App\Services\GrowAdTracking;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -89,11 +91,11 @@ class SubscriberRecruitmentPageController extends Controller
         return response()->noContent();
     }
 
-    public function submit(Request $request, string $slug, GrowAdTracking $tracking)
+    public function submit(Request $request, string $slug, GrowAdTracking $tracking, CrmWebhookOutbox $crm)
     {
         // Resolve the owner from the public URL, never from a visitor-supplied user ID or phone.
         $consultant = $this->consultant($slug);
-        $data = $request->only(['full_name', 'phone_number', 'domicile', 'activity', 'interest', 'consent']);
+        $data = $request->only(['full_name', 'phone_number', 'domicile', 'activity', 'interest', 'consent', 'whatsapp_consent']);
         if (is_string($data['phone_number'] ?? null)) {
             $data['phone_number'] = str_replace([' ', '-', '(', ')'], '', $data['phone_number']);
         }
@@ -105,6 +107,7 @@ class SubscriberRecruitmentPageController extends Controller
             'activity' => ['required', Rule::in(config('recruitment.activities'))],
             'interest' => ['nullable', Rule::in(config('recruitment.interests'))],
             'consent' => ['accepted'],
+            'whatsapp_consent' => ['sometimes', 'boolean'],
         ], [
             'required' => ':attribute wajib diisi.',
             'string' => ':attribute harus berupa teks.',
@@ -130,20 +133,28 @@ class SubscriberRecruitmentPageController extends Controller
         $placement = $tracking->placementFromToken(is_string($request->input('grow_ad_token')) ? $request->input('grow_ad_token') : null, $consultant);
 
         // Save before confirming registration. The URL determines attribution, not hidden form fields.
-        $lead = $consultant->recruitmentLeads()->create([
-            'source' => RecruitmentLead::SOURCE,
-            'source_slug' => $consultant->landing_page_slug,
-            'source_url' => route('subscriber-recruitment.show', $consultant->landing_page_slug),
-            'full_name' => $validated['full_name'],
-            'phone_number' => RecruitmentLead::normalizePhoneNumber($validated['phone_number']),
-            'domicile' => $validated['domicile'],
-            'activity' => $validated['activity'],
-            'interest' => $validated['interest'] ?? null,
-            'consented_at' => now(),
-            'grow_ad_placement_id' => $placement?->id,
-            'event_checkout_id' => (string) Str::uuid(),
-            'event_payment_status' => 'awaiting_payment',
-        ]);
+        $lead = DB::transaction(function () use ($consultant, $validated, $placement, $crm) {
+            $lead = $consultant->recruitmentLeads()->create([
+                'source' => RecruitmentLead::SOURCE,
+                'source_slug' => $consultant->landing_page_slug,
+                'source_url' => route('subscriber-recruitment.show', $consultant->landing_page_slug),
+                'full_name' => $validated['full_name'],
+                'phone_number' => RecruitmentLead::normalizePhoneNumber($validated['phone_number']),
+                'domicile' => $validated['domicile'],
+                'activity' => $validated['activity'],
+                'interest' => $validated['interest'] ?? null,
+                'consented_at' => now(),
+                'whatsapp_consent' => (bool) ($validated['whatsapp_consent'] ?? false),
+                'whatsapp_consented_at' => ! empty($validated['whatsapp_consent']) ? now() : null,
+                'whatsapp_consent_version' => config('recruitment.form.whatsapp_consent_version'),
+                'grow_ad_placement_id' => $placement?->id,
+                'event_checkout_id' => (string) Str::uuid(),
+                'event_payment_status' => 'awaiting_payment',
+            ]);
+            $crm->record($lead, 'registration.created');
+
+            return $lead;
+        });
 
         return redirect()->route('subscriber-recruitment.payment.show', [$slug, $lead->event_checkout_id], 303);
     }

@@ -154,7 +154,13 @@ class AdminGrowAdController extends Controller
             && $campaign->placements()->whereKey($lead->grow_ad_placement_id)->exists(), 404);
         abort_unless($lead->event_checkout_id === null, 422, 'Pembayaran online diverifikasi otomatis.');
         $data = $request->validate(['event_payment_status' => ['required', Rule::in(['unconfirmed', 'paid'])]]);
-        $lead->update($data + ['event_paid_at' => $data['event_payment_status'] === 'paid' ? ($lead->event_paid_at ?? now()) : null]);
+        DB::transaction(function () use ($lead, $data) {
+            $lead = RecruitmentLead::lockForUpdate()->findOrFail($lead->id);
+            $lead->update($data + ['event_paid_at' => $data['event_payment_status'] === 'paid' ? ($lead->event_paid_at ?? now()) : null]);
+            if ($lead->wasChanged(['event_payment_status', 'event_paid_at'])) {
+                app(\App\Services\CrmWebhookOutbox::class)->record($lead, 'payment.updated');
+            }
+        });
 
         return back()->with('success', 'Status pembayaran peserta diperbarui.');
     }

@@ -265,7 +265,8 @@ class SubscriberRecruitmentPageTest extends TestCase
         $gateway->shouldReceive('transactionStatus')->once()->with($expired->midtrans_order_id)
             ->andReturn((object) ['order_id' => $expired->midtrans_order_id, 'gross_amount' => '93000.00', 'transaction_status' => 'expire']);
         $this->get(route('subscriber-recruitment.payment.return', [$owner->landing_page_slug, $lead->event_checkout_id]))->assertRedirect();
-        $this->assertSame('failed', $expired->fresh()->status);
+        $this->assertSame('expired', $expired->fresh()->status);
+        $this->assertSame('expired', $lead->fresh()->event_payment_status);
 
         $this->post($pay)->assertStatus(303);
         $payment = $lead->eventPayments()->latest('id')->first();

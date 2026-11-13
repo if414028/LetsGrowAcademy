@@ -30,7 +30,7 @@
                 <p class="recruitment-checkout-status" role="alert">{{ session('payment_error') }}</p>
             @elseif ($lead->event_payment_status === 'refunded')
                 <p class="recruitment-checkout-status">Pembayaran ini telah dikembalikan.</p>
-            @elseif ($payment?->status === 'failed')
+            @elseif (in_array($payment?->status, ['failed', 'expired'], true))
                 <p class="recruitment-checkout-status">Pembayaran sebelumnya tidak selesai. Anda bisa mencoba lagi.</p>
             @elseif ($payment?->status === 'pending')
                 <p class="recruitment-checkout-status">Pembayaran belum terkonfirmasi. Jika sudah membayar, cek status pembayaran.</p>

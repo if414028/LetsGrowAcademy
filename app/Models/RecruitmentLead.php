@@ -21,6 +21,9 @@ class RecruitmentLead extends Model
         'activity',
         'interest',
         'consented_at',
+        'whatsapp_consent',
+        'whatsapp_consented_at',
+        'whatsapp_consent_version',
         'grow_ad_placement_id',
         'event_payment_status',
         'event_paid_at',
@@ -29,7 +32,10 @@ class RecruitmentLead extends Model
 
     protected function casts(): array
     {
-        return ['consented_at' => 'datetime', 'event_paid_at' => 'datetime'];
+        return [
+            'consented_at' => 'datetime', 'event_paid_at' => 'datetime',
+            'whatsapp_consent' => 'boolean', 'whatsapp_consented_at' => 'datetime',
+        ];
     }
 
     public function owner(): BelongsTo
@@ -40,6 +46,11 @@ class RecruitmentLead extends Model
     public function eventPayments(): HasMany
     {
         return $this->hasMany(RecruitmentEventPayment::class);
+    }
+
+    public function crmWebhookDeliveries(): HasMany
+    {
+        return $this->hasMany(CrmWebhookDelivery::class);
     }
 
     public function growAdPlacement(): BelongsTo

@@ -292,7 +292,7 @@ return [
         ],
         [
             'question' => 'Apa yang terjadi setelah saya mengisi form?',
-            'answer' => 'Tim kami akan menghubungi Anda melalui kontak WhatsApp yang diberikan untuk menyampaikan jadwal sesi pengenalan serta panduan langkah selanjutnya.',
+            'answer' => 'Tim kami akan menyampaikan informasi pendaftaran dan jadwal sesi pengenalan melalui WhatsApp jika Anda memberikan persetujuan komunikasi WhatsApp pada form.',
         ],
     ],
     'final_cta' => [
@@ -315,8 +315,10 @@ return [
         'headline' => 'Ambil Langkah Pertama untuk Mengenal Peluang Ini , Investasi Ilmu dan Pelajari Peluang nya Rp88.000',
         'body' => 'Isi informasi berikut agar tim dapat menghubungi Anda dan memberikan jadwal sesi pengenalan serta langkah selanjutnya.',
         'consent' => 'Saya menyetujui penggunaan data yang saya berikan untuk keperluan tindak lanjut dan penyampaian informasi terkait sesi pengenalan peluang ini, sesuai kebijakan privasi yang berlaku.',
+        'whatsapp_consent' => 'Saya bersedia dihubungi melalui WhatsApp oleh tim Let’s Grow Community dan penyedia CRM yang ditunjuk untuk informasi pendaftaran, pengingat pembayaran, dan jadwal sesi ini. (Opsional)',
+        'whatsapp_consent_version' => '2026-11-13',
         'cta' => 'KIRIM MINAT SAYA',
-        'helper' => 'Lanjutkan ke pembayaran setelah mengirim form. Setelah pembayaran terkonfirmasi, tim penyelenggara akan menghubungi Anda melalui WhatsApp.',
+        'helper' => 'Lanjutkan ke pembayaran setelah mengirim form. Informasi pendaftaran, pengingat pembayaran, dan jadwal dapat dikirim melalui WhatsApp jika Anda menyetujuinya.',
     ],
     'footer' => [
         'brand' => 'PROYEK KEMITRAAN AIR MINUM',

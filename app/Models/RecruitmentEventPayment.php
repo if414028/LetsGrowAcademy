@@ -6,7 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class RecruitmentEventPayment extends Model
 {
-    protected $fillable = ['midtrans_order_id', 'class_amount', 'service_fee', 'checkout_url', 'status'];
+    protected $attributes = ['status' => 'pending'];
+
+    protected $fillable = ['midtrans_order_id', 'midtrans_transaction_id', 'class_amount', 'service_fee', 'checkout_url', 'status', 'paid_at'];
+
+    protected function casts(): array
+    {
+        return ['paid_at' => 'datetime'];
+    }
 
     public function total(): int
     {

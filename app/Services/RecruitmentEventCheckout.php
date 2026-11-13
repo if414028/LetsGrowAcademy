@@ -4,13 +4,17 @@ namespace App\Services;
 
 use App\Models\RecruitmentEventPayment;
 use App\Models\RecruitmentLead;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 
 class RecruitmentEventCheckout
 {
-    public function __construct(private readonly MidtransService $midtrans) {}
+    public function __construct(
+        private readonly MidtransService $midtrans,
+        private readonly CrmWebhookOutbox $crm,
+    ) {}
 
     public function start(RecruitmentLead $lead): ?RecruitmentEventPayment
     {
@@ -42,7 +46,12 @@ class RecruitmentEventCheckout
                 'callbacks' => ['finish' => $returnUrl, 'error' => $returnUrl],
             ]);
 
-            return $lead->eventPayments()->create($price + ['midtrans_order_id' => $orderId, 'checkout_url' => $url]);
+            $payment = $lead->eventPayments()->create($price + ['midtrans_order_id' => $orderId, 'checkout_url' => $url]);
+            $lead->update(['event_payment_status' => 'awaiting_payment', 'event_paid_at' => null]);
+            $lead->touch();
+            $this->crm->record($lead, 'payment.updated', $payment);
+
+            return $payment;
         });
     }
 
@@ -60,28 +69,63 @@ class RecruitmentEventCheckout
         DB::transaction(function () use ($payment, $status) {
             $lead = RecruitmentLead::lockForUpdate()->findOrFail($payment->recruitment_lead_id);
             $payment = RecruitmentEventPayment::lockForUpdate()->findOrFail($payment->id);
-            $transactionStatus = $status->transaction_status ?? null;
-
-            if ($payment->status === 'paid' && in_array($transactionStatus, ['refund', 'chargeback'], true)) {
-                $payment->update(['status' => 'refunded']);
-                $lead->update(['event_payment_status' => 'refunded', 'event_paid_at' => null]);
-            }
-
-            if ($payment->status !== 'pending') {
-                return;
-            }
-
+            $transactionStatus = strtolower((string) ($status->transaction_status ?? ''));
             $fraud = $status->fraud_status ?? null;
             $paid = (string) ($status->status_code ?? '') === '200'
                 && (($transactionStatus === 'settlement' && ($fraud === null || $fraud === 'accept'))
                     || ($transactionStatus === 'capture' && $fraud === 'accept'));
 
-            if ($paid) {
-                $payment->update(['status' => 'paid']);
-                $lead->update(['event_payment_status' => 'paid', 'event_paid_at' => now()]);
-            } elseif (in_array($transactionStatus, ['deny', 'cancel', 'expire', 'failure'], true)) {
-                $payment->update(['status' => 'failed']);
+            $nextStatus = $payment->status;
+            if ($payment->status === 'paid' && in_array($transactionStatus, ['refund', 'chargeback'], true)) {
+                $nextStatus = 'refunded';
+            } elseif (! in_array($payment->status, ['paid', 'refunded'], true)) {
+                $nextStatus = match (true) {
+                    $paid => 'paid',
+                    $transactionStatus === 'expire' => 'expired',
+                    in_array($transactionStatus, ['deny', 'cancel', 'failure'], true) => 'failed',
+                    default => $payment->status,
+                };
             }
+
+            $payment->fill([
+                'status' => $nextStatus,
+                'midtrans_transaction_id' => $status->transaction_id ?? $payment->midtrans_transaction_id,
+                'paid_at' => $nextStatus === 'paid'
+                    ? ($payment->paid_at ?? ($payment->status === 'paid' ? $lead->event_paid_at : null) ?? $this->paidAt($status))
+                    : $payment->paid_at,
+            ]);
+            if (! $payment->isDirty()) {
+                return;
+            }
+            $payment->save();
+            $payment->refresh();
+
+            // A late failure on an older attempt must not undo a successful payment.
+            $payments = $lead->eventPayments()->latest('id')->get();
+            $effective = $payments->firstWhere('status', 'paid')
+                ?? $payments->firstWhere('status', 'refunded') ?? $payments->first();
+            $lead->update([
+                'event_payment_status' => $effective->status === 'pending' ? 'awaiting_payment' : $effective->status,
+                'event_paid_at' => $effective->status === 'paid' ? $effective->paid_at : null,
+            ]);
+            // Include transaction-ID-only changes in incremental backup synchronization.
+            $lead->touch();
+            $this->crm->record($lead, 'payment.updated', $payment);
         });
+    }
+
+    private function paidAt(object $status): Carbon
+    {
+        // Midtrans timestamps without an offset use GMT+7; never use transaction_time
+        // (the time the transaction was created) as proof of the time it was paid.
+        if (! empty($status->settlement_time)) {
+            try {
+                return Carbon::parse($status->settlement_time, 'Asia/Jakarta')->setTimezone(config('app.timezone'));
+            } catch (\Throwable) {
+                // Retain the first server verification time if no usable time is supplied.
+            }
+        }
+
+        return now();
     }
 }
