@@ -8,6 +8,7 @@ import { initSalesTrend } from './sales-trend';
 import birthdayGreetings from './birthday-greetings';
 import recruitmentShare, { initRecruitmentLanding } from './recruitment';
 import recruitmentPayment from './recruitment-payment';
+import recruitmentPaymentLink from './recruitment-payment-link';
 import { growAdSelection, growAdBudget, growAdPayment, growAdCopy, initGrowAdMotion } from './grow-ads';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -18,6 +19,7 @@ Alpine.data('fileUpload', fileUpload);
 Alpine.data('birthdayGreetings', birthdayGreetings);
 Alpine.data('recruitmentShare', recruitmentShare);
 Alpine.data('recruitmentPayment', recruitmentPayment);
+Alpine.data('recruitmentPaymentLink', recruitmentPaymentLink);
 Alpine.data('growAdSelection', growAdSelection);
 Alpine.data('growAdBudget', growAdBudget);
 Alpine.data('growAdPayment', growAdPayment);

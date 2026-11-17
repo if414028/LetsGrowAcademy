@@ -26,6 +26,7 @@
 .recruitment-leads-search > a:hover { background: #f1f5f9; }
 .recruitment-leads-search-error { padding-inline: 1.5rem; font-size: .8125rem; color: #b91c1c; }
 .recruitment-leads-result-count { padding: 0 1.5rem 1rem; font-size: .8125rem; color: #526b7b; }
+.recruitment-leads-status-help { padding: 0 1.5rem 1rem; color: #526b7b; font-size: .75rem; line-height: 1.7; }
 .recruitment-leads-columns, .recruitment-lead-row { display: grid; grid-template-columns: 1.05fr 1.3fr 1.1fr 1fr; gap: 1.5rem; }
 .recruitment-leads-columns { padding: .9rem 1.5rem; border-top: 1px solid #dce8ee; background: #f5f9fb; color: #526b7b; font-size: .75rem; font-weight: 800; }
 .recruitment-lead-row { padding: 1.5rem; border-top: 1px solid #e4edf2; font-size: .875rem; line-height: 1.65; }
@@ -51,8 +52,13 @@
 .recruitment-lead-payment-badge--failed { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
 .recruitment-lead-payment-badge--neutral { border-color: #cbd5e1; background: #f1f5f9; color: #475569; }
 .recruitment-lead-payment-badge--refunded { border-color: #bfdbfe; background: #eff6ff; color: #1e40af; }
-.recruitment-lead-followup > a { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; margin-top: .9rem; padding: .55rem .75rem; border: 1px solid #cce5f2; border-radius: 10px; color: #075985; font-size: .75rem; font-weight: 800; transition: background .2s; }
-.recruitment-lead-followup > a:hover { background: #edf7fc; }
+.recruitment-lead-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .9rem; }
+.recruitment-lead-actions > a, .recruitment-lead-actions button { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; padding: .55rem .75rem; border: 1px solid #cce5f2; border-radius: 10px; background: #fff; color: #075985; font-size: .75rem; font-weight: 800; cursor: pointer; transition: background .2s; }
+.recruitment-lead-actions > a:hover, .recruitment-lead-actions button:hover { background: #edf7fc; }
+.recruitment-lead-actions > form { margin: 0; }
+.recruitment-lead-copy-status { flex-basis: 100%; color: #43687b; font-size: .6875rem; }
+.recruitment-lead-copy-status:empty { display: none; }
+.recruitment-lead-payment-link { width: 100%; min-width: 0; min-height: 44px; padding: .5rem; border: 1px solid #cce5f2; border-radius: 6px; font-size: .75rem; }
 .recruitment-leads-pagination { border-top: 1px solid #dce8ee; padding: 1.2rem 1.5rem; }
 .recruitment-leads-pagination a { min-height: 44px; min-width: 44px; }
 .recruitment-leads-empty { padding: 3rem 1.5rem 3.5rem; border-top: 1px solid #dce8ee; text-align: center; }
@@ -74,7 +80,7 @@
     .recruitment-lead-row { grid-template-columns: 1fr; gap: 1rem; padding: 1.3rem; }
     .recruitment-lead-contact { padding-bottom: .9rem; border-bottom: 1px solid #e4edf2; }
     .recruitment-lead-followup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
-    .recruitment-lead-followup > a { margin-top: 0; }
+    .recruitment-lead-actions { flex-basis: 100%; margin-top: 0; }
     .recruitment-leads-owner { align-items: flex-start; }
 }
 

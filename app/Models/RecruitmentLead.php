@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class RecruitmentLead extends Model
 {
@@ -52,6 +53,11 @@ class RecruitmentLead extends Model
     public function eventPayments(): HasMany
     {
         return $this->hasMany(RecruitmentEventPayment::class);
+    }
+
+    public function latestEventPayment(): HasOne
+    {
+        return $this->hasOne(RecruitmentEventPayment::class)->latestOfMany();
     }
 
     public function crmWebhookDeliveries(): HasMany
@@ -108,5 +114,18 @@ class RecruitmentLead extends Model
         // Use the configured Academy origin rather than the incoming Host header.
         return rtrim((string) config('app.url'), '/')
             .route('subscriber-recruitment.payment.show', [$this->source_slug, $this->event_checkout_id], false);
+    }
+
+    public function paymentFollowupWhatsappUrl(): ?string
+    {
+        $url = $this->continuePaymentUrl();
+        if ($url === null) {
+            return null;
+        }
+
+        $message = 'Halo '.$this->full_name.", pendaftaran seminar Anda sudah kami terima. Silakan lanjutkan pembayaran melalui link berikut:\n\n"
+            .$url."\n\nKode pendaftaran: ".$this->registrationId();
+
+        return $this->whatsapp_url.'?text='.rawurlencode($message);
     }
 }

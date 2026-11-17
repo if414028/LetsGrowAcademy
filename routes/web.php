@@ -1,20 +1,20 @@
 <?php
 
-use App\Http\Controllers\BirthdayGreetingController;
 use App\Http\Controllers\AdminGrowAdController;
-use App\Http\Controllers\GrowAdController;
+use App\Http\Controllers\BirthdayGreetingController;
 use App\Http\Controllers\BundleController;
 use App\Http\Controllers\ContestController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GrowAdController;
 use App\Http\Controllers\MidtransWebhookController;
 use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\RecruitmentEventPaymentController;
 use App\Http\Controllers\SalesOrderController;
 use App\Http\Controllers\SellingKitController;
 use App\Http\Controllers\SubscriberLandingPageController;
 use App\Http\Controllers\SubscriberRecruitmentPageController;
-use App\Http\Controllers\RecruitmentEventPaymentController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
@@ -155,6 +155,10 @@ Route::middleware('auth', 'active')->group(function () {
     Route::get('/landing-page-rekrutmen/pendaftar', [SubscriberRecruitmentPageController::class, 'leads'])
         ->middleware('subscriber')
         ->name('subscriber-recruitment.leads');
+
+    Route::post('/landing-page-rekrutmen/pendaftar/{lead}/link-pembayaran', [SubscriberRecruitmentPageController::class, 'preparePaymentLink'])
+        ->whereNumber('lead')->middleware(['subscriber', 'throttle:20,1'])
+        ->name('subscriber-recruitment.payment-link');
 
     // Profile (semua role): redirect ke halaman detail user yang login
     Route::get('/profile', function (\Illuminate\Http\Request $request) {

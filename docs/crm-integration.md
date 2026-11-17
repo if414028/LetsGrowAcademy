@@ -9,7 +9,7 @@ Base URL memakai domain HTTPS aplikasi yang disepakati untuk masing-masing envir
 | Fitur | Arah | Endpoint/event |
 | --- | --- | --- |
 | Registration Webhook | Academy → CRM | POST ke URL vendor; `registration.created` |
-| Pembaruan persetujuan WA | Academy → CRM | POST ke URL pendaftaran; `registration.updated` |
+| Pembaruan pendaftar/persetujuan WA | Academy → CRM | POST ke URL pendaftaran; `registration.updated` |
 | Penghapusan pendaftar | Academy → CRM | POST ke URL pendaftaran; `registration.deleted` |
 | Payment Status Webhook | Academy → CRM | POST ke URL vendor; `payment.updated` |
 | Daftar pendaftar | CRM → Academy | `GET /api/v1/crm/registrations` |
@@ -126,6 +126,8 @@ Envelope:
 | `data` | Objek pendaftaran dengan schema dan contoh di atas |
 
 Payload merupakan snapshot saat event terjadi. Retry mengirim snapshot yang sama, walaupun peserta sudah membayar setelah event awal dibuat.
+
+`registration.updated` memakai envelope dan snapshot pendaftaran yang sama, untuk pembaruan persetujuan atau penyiapan link checkout bagi data lama. Event ini bukan bukti pembayaran dan tidak selalu berarti pencabutan persetujuan; baca nilai field pada snapshot. Saat link data lama disiapkan, `continue_payment_url` menjadi tersedia tanpa membuat transaksi gateway, sehingga `payment` masih dapat bernilai `null`.
 
 ### Payment Status Webhook
 

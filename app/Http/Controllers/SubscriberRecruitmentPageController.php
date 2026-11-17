@@ -47,6 +47,9 @@ class SubscriberRecruitmentPageController extends Controller
             ->orWhere('domicile', 'like', '%'.$search.'%')))
             ->latest('created_at')
             ->latest('id')
+            ->with(['latestEventPayment' => fn ($query) => $query->select([
+                'recruitment_event_payments.id', 'recruitment_event_payments.recruitment_lead_id', 'recruitment_event_payments.status',
+            ])])
             ->paginate(15)
             ->withQueryString();
 
@@ -56,6 +59,30 @@ class SubscriberRecruitmentPageController extends Controller
             'leadCount' => $leadCount,
             'search' => $search,
         ])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function preparePaymentLink(Request $request, int $lead, CrmWebhookOutbox $crm)
+    {
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+        ]);
+        $registration = DB::transaction(function () use ($request, $lead, $crm) {
+            $registration = $request->user()->recruitmentLeads()
+                ->where('source', RecruitmentLead::SOURCE)->lockForUpdate()->findOrFail($lead);
+            abort_if(in_array($registration->event_payment_status, ['paid', 'refunded'], true), 409, 'Pendaftaran ini tidak memerlukan pembayaran.');
+            abort_unless(preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $registration->source_slug), 422, 'Asal pendaftaran tidak memiliki link checkout yang valid.');
+
+            if (! $registration->event_checkout_id) {
+                $registration->update(['event_checkout_id' => (string) Str::uuid()]);
+                $crm->record($registration, 'registration.updated');
+            }
+
+            return $registration;
+        });
+
+        return redirect()->to(route('subscriber-recruitment.leads', $filters).'#lead-name-'.$registration->id, 303)
+            ->with('payment_link_ready', $registration->id);
     }
 
     public function show(Request $request, string $slug, GrowAdTracking $tracking)

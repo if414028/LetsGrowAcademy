@@ -25,6 +25,7 @@
 
             @if ($leads->count())
                 <div class="recruitment-leads-result-count" role="status">{{ $search !== '' ? 'Hasil pencarian: ' : 'Menampilkan ' }}{{ $leads->firstItem() }}–{{ $leads->lastItem() }} dari {{ $leads->total() }} pendaftaran</div>
+                <p class="recruitment-leads-status-help"><strong>Belum dibayar:</strong> belum ada tagihan aktif. <strong>Menunggu pembayaran:</strong> tagihan sudah dibuat dan belum terkonfirmasi lunas.</p>
                 <div class="recruitment-leads-columns" aria-hidden="true"><span>Peminat</span><span>Data form</span><span>Asal pendaftaran</span><span>Tindak lanjut</span></div>
                 <div class="recruitment-leads-list" role="list" aria-label="Peminat dari landing page Anda">
                     @foreach ($leads as $lead)
@@ -48,19 +49,39 @@
                                 @php
                                     $paymentStatus = match ($lead->event_payment_status) {
                                         'paid' => ['label' => 'Sudah dibayar', 'tone' => 'paid'],
-                                        'awaiting_payment', 'pending' => ['label' => 'Menunggu pembayaran', 'tone' => 'pending'],
+                                        'awaiting_payment', 'pending', 'unconfirmed' => $lead->latestEventPayment?->status === 'pending'
+                                            ? ['label' => 'Menunggu pembayaran', 'tone' => 'pending']
+                                            : ['label' => 'Belum dibayar', 'tone' => 'unpaid'],
                                         'failed' => ['label' => 'Pembayaran gagal', 'tone' => 'failed'],
                                         'expired' => ['label' => 'Pembayaran kedaluwarsa', 'tone' => 'neutral'],
                                         'refunded' => ['label' => 'Pembayaran dikembalikan', 'tone' => 'refunded'],
-                                        'unconfirmed' => ['label' => 'Belum dibayar', 'tone' => 'unpaid'],
                                         default => ['label' => 'Belum dikonfirmasi', 'tone' => 'neutral'],
                                     };
+                                    $paymentUrl = $lead->continuePaymentUrl();
                                 @endphp
                                 <p class="recruitment-lead-payment">
                                     <span class="recruitment-lead-payment-label">Status pembayaran</span>
                                     <strong class="recruitment-lead-payment-badge recruitment-lead-payment-badge--{{ $paymentStatus['tone'] }}">{{ $paymentStatus['label'] }}</strong>
                                 </p>
-                                <a href="{{ $lead->whatsapp_url }}" target="_blank" rel="noopener" aria-label="Hubungi {{ $lead->full_name }} melalui WhatsApp (tab baru)">Hubungi WhatsApp <span aria-hidden="true">↗</span></a>
+                                <div class="recruitment-lead-actions" @if ($paymentUrl) x-data="recruitmentPaymentLink(@js(session('payment_link_ready') === $lead->id))" @endif>
+                                    @if ($paymentUrl)
+                                        <button type="button" @click="copy" aria-describedby="lead-name-{{ $lead->id }}" :aria-label="copied ? 'Link pembayaran disalin' : 'Salin link pembayaran'">Salin link pembayaran</button>
+                                        <p class="recruitment-lead-copy-status" role="status" aria-live="polite" x-text="copyStatus">{{ session('payment_link_ready') === $lead->id ? 'Link pembayaran siap disalin.' : '' }}</p>
+                                        <input class="recruitment-lead-payment-link" x-cloak x-show="manualCopy" x-ref="paymentLink" type="text" readonly value="{{ $paymentUrl }}" aria-label="Link pembayaran {{ $lead->full_name }}">
+                                        <noscript><input class="recruitment-lead-payment-link" type="text" readonly value="{{ $paymentUrl }}" aria-label="Link pembayaran {{ $lead->full_name }}"></noscript>
+                                        <a href="{{ $lead->paymentFollowupWhatsappUrl() }}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" aria-label="Siapkan pesan pembayaran untuk {{ $lead->full_name }} di WhatsApp (tab baru)">Follow-up WhatsApp <span aria-hidden="true">↗</span></a>
+                                    @else
+                                        @if (! in_array($lead->event_payment_status, ['paid', 'refunded'], true))
+                                            <form method="POST" action="{{ route('subscriber-recruitment.payment-link', $lead->id) }}">
+                                                @csrf
+                                                <input type="hidden" name="q" value="{{ $search }}">
+                                                <input type="hidden" name="page" value="{{ $leads->currentPage() }}">
+                                                <button type="submit">Buat link pembayaran</button>
+                                            </form>
+                                        @endif
+                                        <a href="{{ $lead->whatsapp_url }}" target="_blank" rel="noopener noreferrer" aria-label="Hubungi {{ $lead->full_name }} melalui WhatsApp (tab baru)">Hubungi WhatsApp <span aria-hidden="true">↗</span></a>
+                                    @endif
+                                </div>
                             </div>
                         </article>
                     @endforeach
