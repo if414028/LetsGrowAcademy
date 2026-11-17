@@ -11,7 +11,8 @@ class LocalServeCommand extends ServeCommand
         $command = parent::serverCommand();
 
         // PHP applies upload limits before Laravel receives the request.
-        array_splice($command, 1, 0, ['-d', 'upload_max_filesize=30M', '-d', 'post_max_size=32M']);
+        $maxUploadMb = max((int) config('grow-ads.upload.image_max_mb'), (int) config('grow-ads.upload.video_max_mb'));
+        array_splice($command, 1, 0, ['-d', 'upload_max_filesize='.$maxUploadMb.'M', '-d', 'post_max_size='.($maxUploadMb + 10).'M']);
 
         return $command;
     }

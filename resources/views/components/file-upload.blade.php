@@ -4,6 +4,7 @@
     'label' => 'file',
     'accept' => '',
     'maxSize' => 2,
+    'maxVideoSize' => null,
     'hint' => '',
 ])
 
@@ -17,6 +18,7 @@
 <div class="file-upload" data-file-upload
     x-data="fileUpload({{ Illuminate\Support\Js::from([
         'maxSize' => (int) ($maxSize * 1024 * 1024),
+        'maxVideoSize' => $maxVideoSize === null ? null : (int) ($maxVideoSize * 1024 * 1024),
         'serverError' => $errors->first($name),
     ]) }})">
     <div class="file-upload__dropzone"

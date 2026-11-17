@@ -12,8 +12,9 @@
                     name="media"
                     label="gambar atau video iklan"
                     accept=".jpg,.jpeg,.png,.webp,.mp4,.mov"
-                    :max-size="30"
-                    hint="JPG, PNG, WebP, MP4, atau MOV · Maksimal 30 MB"
+                    :max-size="config('grow-ads.upload.image_max_mb')"
+                    :max-video-size="config('grow-ads.upload.video_max_mb')"
+                    :hint="'JPG, PNG, WebP · Maksimal '.config('grow-ads.upload.image_max_mb').' MB | Video MP4, MOV · Maksimal '.config('grow-ads.upload.video_max_mb').' MB'"
                     :required="! $content->exists"
                 />
             </div>

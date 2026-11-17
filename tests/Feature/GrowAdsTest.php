@@ -247,6 +247,57 @@ class GrowAdsTest extends TestCase
         $this->get(route('admin.grow-ads.contents.edit', $content))->assertOk();
     }
 
+    public function test_admin_can_upload_200_mb_videos_when_creating_and_replacing_content(): void
+    {
+        Storage::fake('public');
+        $this->actingAs($this->member('Head Admin', false));
+        $data = ['title' => 'Video besar', 'description' => 'Deskripsi video', 'is_active' => 1];
+        $this->get(route('admin.grow-ads.contents.create'))->assertOk()
+            ->assertSee('Video MP4, MOV · Maksimal 200 MB')->assertSee('Maksimal 30 MB')
+            ->assertSee('209715200')->assertSee('31457280');
+        $this->post(route('admin.grow-ads.contents.store'), $data + ['media' => UploadedFile::fake()->create('ad.mp4', 200 * 1024, 'video/mp4')])
+            ->assertSessionHasNoErrors()->assertRedirect(route('admin.grow-ads.contents'));
+        $content = GrowAdContent::sole();
+        $this->assertSame('video', $content->media_type);
+        Storage::disk('public')->assertExists($content->media_path);
+        $this->put(route('admin.grow-ads.contents.update', $content), $data + ['media' => UploadedFile::fake()->create('replacement.mov', 200 * 1024, 'video/quicktime')])
+            ->assertSessionHasNoErrors()->assertRedirect(route('admin.grow-ads.contents'));
+        $this->assertSame('video', $content->fresh()->media_type);
+        $this->assertNotSame($content->media_path, $content->fresh()->media_path);
+        Storage::disk('public')->assertExists($content->fresh()->media_path);
+        $this->post(route('admin.grow-ads.contents.store'), $data + ['media' => UploadedFile::fake()->create('container.mp4', 200 * 1024, 'application/mp4')])
+            ->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertSame('video', GrowAdContent::latest('id')->first()->media_type);
+    }
+
+    public function test_video_above_200_mb_is_rejected_without_replacing_existing_content(): void
+    {
+        Storage::fake('public');
+        $this->actingAs($this->member('Head Admin', false));
+        $data = ['title' => 'Video besar', 'description' => 'Deskripsi video', 'is_active' => 1];
+        $this->post(route('admin.grow-ads.contents.store'), $data + ['media' => UploadedFile::fake()->create('too-large.mp4', 200 * 1024 + 1, 'video/mp4')])
+            ->assertSessionHasErrors(['media' => 'Ukuran video maksimal 200 MB.']);
+        $this->assertDatabaseCount('grow_ad_contents', 0);
+        $content = $this->content();
+        $original = $content->only(['title', 'media_path', 'media_type']);
+        $this->put(route('admin.grow-ads.contents.update', $content), $data + ['media' => UploadedFile::fake()->create('too-large.mov', 200 * 1024 + 1, 'video/quicktime')])
+            ->assertSessionHasErrors(['media' => 'Ukuran video maksimal 200 MB.']);
+        $this->assertSame($original, $content->fresh()->only(['title', 'media_path', 'media_type']));
+    }
+
+    public function test_image_limit_stays_30_mb_and_uses_detected_type_instead_of_filename(): void
+    {
+        Storage::fake('public');
+        $this->actingAs($this->member('Head Admin', false));
+        $data = ['title' => 'Gambar besar', 'description' => 'Deskripsi gambar', 'is_active' => 1];
+        $this->post(route('admin.grow-ads.contents.store'), $data + ['media' => UploadedFile::fake()->image('ad.jpg')->size(30 * 1024)])
+            ->assertSessionHasNoErrors()->assertRedirect();
+        $this->assertSame('image', GrowAdContent::sole()->media_type);
+        $this->post(route('admin.grow-ads.contents.store'), $data + ['media' => UploadedFile::fake()->create('image-renamed.mp4', 30 * 1024 + 1, 'image/jpeg')])
+            ->assertSessionHasErrors(['media' => 'Ukuran gambar maksimal 30 MB.']);
+        $this->assertDatabaseCount('grow_ad_contents', 1);
+    }
+
     public function test_catalogues_show_latest_uploads_first_regardless_of_legacy_sort_order(): void
     {
         $this->freezeTime();

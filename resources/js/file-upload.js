@@ -1,4 +1,4 @@
-export default function fileUpload({ maxSize, serverError = '' }) {
+export default function fileUpload({ maxSize, maxVideoSize = null, serverError = '' }) {
     return {
         dragging: false,
         dragDepth: 0,
@@ -88,8 +88,10 @@ export default function fileUpload({ maxSize, serverError = '' }) {
                 this.error = 'Format file tidak didukung. Pilih format yang tercantum di atas.';
                 return false;
             }
-            if (file.size > maxSize) {
-                this.error = `Ukuran file terlalu besar. Maksimal ${maxSize / (1024 * 1024)} MB.`;
+            const isVideo = fileType.startsWith('video/') || /\.(mp4|mov)$/i.test(file.name);
+            const sizeLimit = isVideo && maxVideoSize !== null ? maxVideoSize : maxSize;
+            if (file.size > sizeLimit) {
+                this.error = `Ukuran file terlalu besar. Maksimal ${sizeLimit / (1024 * 1024)} MB.`;
                 return false;
             }
 

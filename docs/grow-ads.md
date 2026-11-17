@@ -24,7 +24,17 @@ Checkout yang gagal tidak menghilangkan draf. Order pembayaran pending mengunci 
 
 ## Operasional Admin
 
-- Unggah gambar JPG/PNG/WebP atau video MP4/MOV hingga 30 MB, isi judul dan deskripsi, lalu aktifkan atau arsipkan. Koleksi menampilkan konten yang pertama kali diunggah paling baru di bagian atas.
+- Unggah gambar JPG/PNG/WebP hingga 30 MB atau video MP4/MOV hingga 200 MB, isi judul dan deskripsi, lalu aktifkan atau arsipkan. Batas per jenis media ada pada `config/grow-ads.php`; validasi browser dan backend memakai nilai yang sama. Koleksi menampilkan konten yang pertama kali diunggah paling baru di bagian atas.
+
+Untuk upload video 200 MB, runtime PHP harus menerima file 200M dan body POST lebih besar (210M untuk overhead multipart). `php artisan serve` mengikuti batas pada konfigurasi Grow Ads. Pada VPS, gunakan `client_max_body_size 210M` di vhost aplikasi dan pastikan PHP-FPM menerima `upload_max_filesize=200M`, `post_max_size=210M`. Terapkan override PHP pada vhost aplikasi agar konfigurasi domain lain tetap terpisah; periksa `nginx -t` sebelum reload, lalu jalankan `php artisan optimize` setelah source ditarik. Batas ini berlaku saat membuat dan mengganti media konten.
+
+Contoh parameter pada blok PHP vhost Nginx:
+
+```nginx
+fastcgi_param PHP_VALUE "upload_max_filesize=200M\npost_max_size=210M";
+```
+
+Acuan konfigurasi: [batas body Nginx](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size) dan [override PHP melalui FastCGI](https://www.php.net/manual/en/install.fpm.configuration.php).
 - Arsip dan perubahan koleksi tidak mengganti snapshot konten yang dipilih dalam kampanye. Media lama dipertahankan untuk kampanye tersebut.
 - Buka kampanye yang sudah dibayar. Di bagian **Konten & data Meta Ads**, isi Meta Ad ID dan Meta Pixel ID berupa angka untuk setiap iklan. Iklan bisa memakai pixel yang sama atau berbeda.
 - Salin **tautan tujuan iklan untuk konten ini** ke CTA Meta Ads. Tautan tersebut menuju landing page rekrutmen yang sudah ada dan ditandatangani server.

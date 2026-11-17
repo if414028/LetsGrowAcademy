@@ -3,8 +3,8 @@ import { test } from 'node:test';
 import fileUpload from '../../resources/js/file-upload.js';
 
 // Model only the browser's file-input boundary; exercise the production controller.
-function mount({ accept = '.png,.pdf', maxSize = 5 * 1024 * 1024, serverError = '' } = {}) {
-    const upload = fileUpload({ maxSize, serverError });
+function mount({ accept = '.png,.pdf', maxSize = 5 * 1024 * 1024, maxVideoSize = null, serverError = '' } = {}) {
+    const upload = fileUpload({ maxSize, maxVideoSize, serverError });
     const form = new EventTarget();
     const input = new EventTarget();
     Object.assign(input, { accept, disabled: false, form, files: [], value: '' });
@@ -65,6 +65,39 @@ test('unsupported files get an inline error and a valid replacement clears it', 
     choose(input, new File(['image'], 'photo.webp', { type: 'image/webp' }));
     assert.equal(upload.error, '');
     assert.equal(upload.fileName, 'photo.webp');
+    upload.destroy();
+});
+
+test('video uploads accept 200 MB and reject files above the video limit', () => {
+    const { upload, input } = mount({ accept: '.jpg,.mp4,.mov', maxSize: 30 * 1024 * 1024, maxVideoSize: 200 * 1024 * 1024 });
+    // File metadata avoids allocating a 200 MB buffer just to test the limit.
+    choose(input, { name: 'ad.mp4', type: 'video/mp4', size: 200 * 1024 * 1024 });
+    assert.equal(upload.fileName, 'ad.mp4');
+    assert.equal(upload.fileSize, '200.0 MB');
+    assert.equal(upload.error, '');
+    assert.equal(upload.previewUrl, '');
+    choose(input, { name: 'large.mov', type: 'video/quicktime', size: 200 * 1024 * 1024 + 1 });
+    assert.equal(input.value, '');
+    assert.match(upload.error, /Maksimal 200 MB/);
+    choose(input, { name: 'AD.MOV', type: '', size: 200 * 1024 * 1024 });
+    assert.equal(upload.fileName, 'AD.MOV');
+    assert.equal(upload.error, '');
+    upload.destroy();
+});
+
+test('a higher video limit does not raise the image limit', () => {
+    const { upload, input } = mount({ accept: '.jpg,.mp4', maxSize: 30 * 1024 * 1024, maxVideoSize: 200 * 1024 * 1024 });
+    choose(input, { name: 'large.jpg', type: 'image/jpeg', size: 30 * 1024 * 1024 + 1 });
+    assert.equal(input.value, '');
+    assert.match(upload.error, /Maksimal 30 MB/);
+    upload.destroy();
+});
+
+test('video files keep the normal limit when a field has no video override', () => {
+    const { upload, input } = mount({ accept: '.mp4', maxSize: 5 * 1024 * 1024 });
+    choose(input, { name: 'ad.mp4', type: 'video/mp4', size: 6 * 1024 * 1024 });
+    assert.equal(input.value, '');
+    assert.match(upload.error, /Maksimal 5 MB/);
     upload.destroy();
 });
 

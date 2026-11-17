@@ -57,6 +57,9 @@ class AdminGrowAdController extends Controller
     private function contentData(Request $request, ?GrowAdContent $content = null): array
     {
         $media = $request->file('media');
+        $mimeType = $media instanceof UploadedFile && $media->isValid() ? (string) $media->getMimeType() : '';
+        $isVideo = str_starts_with($mimeType, 'video/') || $mimeType === 'application/mp4';
+        $maxSizeMb = (int) config($isVideo ? 'grow-ads.upload.video_max_mb' : 'grow-ads.upload.image_max_mb');
         $uploadError = $media instanceof UploadedFile && $media->getError() === UPLOAD_ERR_INI_SIZE
             ? 'Ukuran file melebihi batas unggah server ('.ini_get('upload_max_filesize').'). Pilih file yang lebih kecil.'
             : 'File gagal diterima server. Pilih kembali file dan coba simpan lagi.';
@@ -65,13 +68,16 @@ class AdminGrowAdController extends Controller
             'title' => ['required', 'string', 'max:120'],
             'description' => ['required', 'string', 'max:3000'],
             'is_active' => ['required', 'boolean'],
-            'media' => [$content ? 'nullable' : 'required', File::types(['jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov'])->max(30 * 1024)],
-        ], ['media.uploaded' => $uploadError]);
+            'media' => [$content ? 'nullable' : 'required', File::types(['jpg', 'jpeg', 'png', 'webp', 'mp4', 'mov'])->max($maxSizeMb * 1024)],
+        ], [
+            'media.uploaded' => $uploadError,
+            'media.max' => 'Ukuran '.($isVideo ? 'video' : 'gambar').' maksimal '.$maxSizeMb.' MB.',
+        ]);
         unset($data['media']);
         if ($request->hasFile('media')) {
             $file = $request->file('media');
             $data['media_path'] = $file->store('grow-ads', 'public');
-            $data['media_type'] = str_starts_with($file->getMimeType(), 'video/') ? 'video' : 'image';
+            $data['media_type'] = $isVideo ? 'video' : 'image';
         }
 
         return $data;
