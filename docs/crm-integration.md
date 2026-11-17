@@ -1,10 +1,10 @@
 # Dokumentasi API CRM - Let's Grow Academy
 
-Dokumen ini menjelaskan kontrak API v1.1 untuk integrasi data pendaftaran dan pembayaran antara Let's Grow Academy dan CRM. Integrasi WhatsApp, AI Agent, serta automation ditangani oleh CRM. Versi ini menambahkan environment, seminar/batch, link lanjut bayar, pembaruan persetujuan, dan informasi penghapusan; path API v1 tetap sama.
+Dokumen ini menjelaskan kontrak API v1.2 untuk integrasi data pendaftaran dan pembayaran antara Let's Grow Academy dan CRM. Integrasi WhatsApp, AI Agent, serta automation ditangani oleh CRM. Versi ini menambahkan rincian biaya transaksi dan PPN sesuai metode pembayaran. Environment, seminar/batch, link lanjut bayar, pembaruan persetujuan, dan penghapusan tetap tersedia; path API v1 tetap sama.
 
 ## Kontrak untuk vendor
 
-Base URL memakai domain HTTPS aplikasi yang disepakati untuk masing-masing environment. Seluruh respons dan webhook berbentuk JSON, menggunakan prefix `/api/v1/crm` dan `schema_version: "1.1"`. Host staging adalah `https://dev.letsgrowacademy.id`; host production yang direncanakan adalah `https://letsgrowacademy.id`, dengan kesiapan akses dikonfirmasi terpisah.
+Base URL memakai domain HTTPS aplikasi yang disepakati untuk masing-masing environment. Seluruh respons dan webhook berbentuk JSON, menggunakan prefix `/api/v1/crm` dan `schema_version: "1.2"`. Host staging adalah `https://dev.letsgrowacademy.id`; host production yang direncanakan adalah `https://letsgrowacademy.id`, dengan kesiapan akses dikonfirmasi terpisah.
 
 | Fitur | Arah | Endpoint/event |
 | --- | --- | --- |
@@ -85,7 +85,7 @@ Respons daftar membungkus objek-objek tersebut pada array `data`, disertai:
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "environment": "staging",
   "next_cursor": null,
   "has_more": false,
@@ -117,7 +117,7 @@ Envelope:
 
 | Field | Isi |
 | --- | --- |
-| `schema_version` | `"1.1"` |
+| `schema_version` | `"1.2"` |
 | `environment` | Environment sumber, misalnya `staging` atau `production` |
 | `event_id` | UUID unik; tetap sama pada setiap retry |
 | `event_type` | `registration.created` |
@@ -139,8 +139,14 @@ Envelope sama dengan Registration Webhook, dengan `event_type: "payment.updated"
   "paid_at": "2026-11-13T03:15:00.000000Z",
   "updated_at": "2026-11-13T03:15:02.000000Z",
   "class_amount": 88000,
-  "service_fee": 5000,
-  "total_amount": 93000,
+  "service_fee": 4440,
+  "selected_payment_method": "bni_va",
+  "payment_method_label": "BNI Virtual Account",
+  "transaction_fee": 4000,
+  "gateway_vat_percent": 11,
+  "gateway_vat_amount": 440,
+  "merchant_covers_fee": false,
+  "total_amount": 92440,
   "currency": "IDR"
 }
 ```
@@ -151,7 +157,11 @@ Status menggunakan huruf kecil: `pending`, `paid`, `failed`, `expired`, dan tamb
 
 `data.payment_status` adalah status **pendaftaran secara keseluruhan**. `transaction.payment_status` adalah status **percobaan transaksi yang berubah**. Gunakan status pendaftaran untuk automation peserta. Transaksi gagal lama tidak boleh membatalkan status pendaftaran yang sudah dibayar melalui percobaan lain. Bila peserta mencoba lagi setelah Failed/Expired, `order_id` baru dibuat dan status kembali Pending. `data.payment` menunjuk pembayaran sukses bila ada, atau percobaan terbaru jika belum ada yang sukses.
 
-Pembayaran mengikuti harga yang ada: **kelas Rp88.000 + layanan Rp5.000 = total gateway Rp93.000**. Nominal dipisahkan agar CRM dapat membedakan harga kelas dan jumlah yang benar-benar ditagih.
+Harga kelas adalah **Rp88.000**. Untuk transaksi baru, biaya tambahan mengikuti metode pembayaran yang dipilih peserta dan konfigurasi tarif merchant yang juga digunakan checkout subscription. PPN hanya dikenakan atas biaya transaksi. Contoh konfigurasi saat ini: VA Rp4.000 + PPN Rp440, sehingga total Rp92.440; GoPay total Rp92.090 dengan biaya Rp3.684 + PPN Rp406; GoPay Dynamic QRIS total Rp88.000 karena biaya dan PPN gateway ditanggung Academy. Tarif dapat berubah; gunakan nominal pada snapshot API, jangan menetapkan total tetap di CRM.
+
+`service_fee` tetap tersedia sebagai **total biaya tambahan yang ditagihkan kepada peserta**, yaitu `transaction_fee + gateway_vat_amount`. `total_amount = class_amount + service_fee`; jangan menambahkan PPN kembali ke `total_amount`. `selected_payment_method` adalah pilihan checkout, misalnya `gopay_qris`, dan bukan klaim mengenai nama kanal aktual yang dilaporkan gateway. Untuk QRIS, `service_fee`, `transaction_fee`, dan `gateway_vat_amount` bernilai 0 serta `merchant_covers_fee=true`.
+
+Rincian dan metode disimpan saat transaksi dibuat. Tagihan Pending memakai snapshot tersebut meskipun tarif aktif berubah. Setelah Failed/Expired, peserta dapat memilih metode lain untuk percobaan baru. Transaksi lama tetap memakai nominal aslinya (termasuk biaya tambahan Rp5.000 pada tagihan lama); field rincian/metode yang dahulu belum dicatat bernilai `null`, bukan 0. Snapshot webhook lama tidak diubah atau dikirim ulang hanya karena pembaruan skema.
 
 Status dibaca server-to-server dari Midtrans setelah validasi signature notifikasi, kecocokan order, nominal, dan status antifraud. Callback browser tidak menjadi bukti pembayaran. Acuan gateway: [Midtrans HTTP notifications](https://docs.midtrans.com/docs/https-notification-webhooks) dan [Get Transaction Status](https://docs.midtrans.com/reference/get-transaction-status).
 
@@ -183,7 +193,7 @@ Retry otomatis setelah 1 menit, 5 menit, 15 menit, 1 jam, 3 jam, 6 jam, lalu 24 
 
 Delivery bersifat **at least once**. Misalnya, CRM sudah menyimpan data tetapi responsnya timeout, event akan dikirim ulang. Vendor wajib deduplikasi dengan `event_id` dan upsert dengan pasangan `(environment, registration_id)`. Urutan kedatangan tidak dijamin: event pendaftaran/pembayaran membawa snapshot lengkap agar payment event dapat membuat record terlebih dahulu. Abaikan snapshot dengan sequence lebih kecil dari state yang sudah diterapkan.
 
-Upsert tetap memakai pasangan `(environment, registration_id)`. Event v1.0 yang sudah tersimpan sebelum pembaruan mempertahankan snapshot lamanya dan dapat dikirim selama recovery. Untuk event tersebut, environment ditentukan dari konfigurasi koneksi sumber; field baru yang belum ada dapat dilengkapi lewat GET. Event penghapusan mempunyai bentuk data minimal, seperti dijelaskan berikut.
+Upsert tetap memakai pasangan `(environment, registration_id)`. Event v1.0/v1.1 yang sudah tersimpan sebelum pembaruan mempertahankan snapshot lamanya dan dapat dikirim selama recovery. Untuk event v1.0, environment ditentukan dari konfigurasi koneksi sumber; field baru yang belum ada dapat dilengkapi lewat GET jika datanya tersedia. Event penghapusan mempunyai bentuk data minimal, seperti dijelaskan berikut.
 
 ### Persetujuan WhatsApp dan data lama
 
@@ -201,7 +211,7 @@ Setelah Academy memproses permintaan penghapusan, record tidak lagi muncul di da
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "environment": "staging",
   "event_id": "3d7db659-7a6a-498f-8b48-e31770b05b16",
   "event_type": "registration.deleted",
@@ -228,4 +238,4 @@ Halaman sukses pembayaran serta halaman pembayaran Pending/Failed/Expired dapat 
 
 Tombol hanya membuka WhatsApp dengan pesan terisi. Peserta tetap perlu menekan Kirim; klik tombol tidak mengubah persetujuan dan tidak dianggap sebagai pesan masuk. CRM menghubungkan chat dengan peserta setelah memverifikasi pendaftaran/nomor pengirim. Status lunas tetap mengacu ke API/webhook pembayaran yang telah diverifikasi Academy.
 
-Checkout menggunakan Snap Redirect. Callback JavaScript `onPending`, `onClose`, dan `onError` tidak digunakan. Tombol mengikuti status halaman Academy yang diverifikasi server. CRM menangani percakapan setelah peserta mengirim pesan, sesuai persetujuan dan aturan platform.
+Transaksi baru menggunakan Snap popup agar metode dan mode QRIS/e-wallet sesuai pilihan peserta. Callback `onSuccess`, `onPending`, `onClose`, dan `onError` membawa peserta ke pemeriksaan status Academy; callback tidak mengubah status lunas. Setelah verifikasi server, Academy menampilkan halaman sukses atau halaman pembayaran beserta tombol WA sesuai status. Tagihan lama yang belum mempunyai token popup tetap dilanjutkan melalui Snap Redirect. CRM menangani percakapan setelah peserta mengirim pesan, sesuai persetujuan dan aturan platform.

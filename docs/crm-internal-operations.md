@@ -7,7 +7,7 @@ Dokumen ini untuk operator Academy. Dokumentasi yang dibagikan ke vendor tetap [
 - `CRM_ENVIRONMENT`: nama environment stabil, misalnya `staging` atau `production`. Default mengikuti `APP_ENV`. Gunakan kredensial berbeda dan pisahkan data CRM untuk masing-masing environment; `registration_id` dapat sama di database berbeda.
 - `CRM_WHATSAPP_NUMBER`: nomor bisnis CRM format Indonesia, misalnya `62...`. Tombol chat disembunyikan jika nomor belum tersedia/tidak valid.
 - `CRM_API_TOKEN` dan `CRM_WEBHOOK_SECRET`: minimal 32 karakter. Pastikan pemetaan dua nilai kiriman vendor telah dikonfirmasi. Tidak ada token asli di repository/PDF.
-- `CRM_REGISTRATION_WEBHOOK_URL` dan `CRM_PAYMENT_WEBHOOK_URL`: dua URL HTTPS vendor. Endpoint pendaftaran juga harus menerima `registration.updated` dan `registration.deleted` sebelum webhook v1.1 diaktifkan.
+- `CRM_REGISTRATION_WEBHOOK_URL` dan `CRM_PAYMENT_WEBHOOK_URL`: dua URL HTTPS vendor. Endpoint pendaftaran juga harus menerima `registration.updated` dan `registration.deleted` serta rincian pembayaran v1.2 sebelum pengiriman diaktifkan.
 - `CRM_WEBHOOKS_ENABLED=false` sampai konfigurasi dan penerimaan vendor siap. Event tetap disimpan untuk retry; saat diaktifkan, backlog ikut dikirim.
 
 ## Satu batch aktif untuk semua pendamping
@@ -19,11 +19,13 @@ Nilai kosong diperbolehkan dan menghasilkan `null`. Form tidak menerima perubaha
 ## Deployment dan pemeriksaan
 
 1. Backup database dan `.env` environment tujuan. Pertahankan `APP_KEY` yang sudah digunakan.
-2. Deploy source dan jalankan migration `2026_11_17_000001_extend_recruitment_crm_contract.php` melalui `php artisan migrate --force` dalam maintenance singkat.
+2. Deploy source dan jalankan migration `2026_11_17_000001_extend_recruitment_crm_contract.php` serta `2026_11_17_000002_add_pricing_details_to_recruitment_event_payments.php` melalui `php artisan migrate --force` dalam maintenance singkat. Migration rincian biaya hanya menambahkan kolom nullable; tidak menulis ulang tagihan lama.
 3. Jalankan `npm ci --include=dev` dan `npm run build`, atau unggah hasil build melalui pipeline yang digunakan. Perubahan CTA menambahkan CSS baru.
 4. Perbarui cache dengan `php artisan optimize`; buka kembali aplikasi setelah seluruh perintah berhasil.
 5. Jalankan `php artisan crm:integration-status`. Command ini menampilkan jumlah historis yang akan diambil API, status konfigurasi, mode Midtrans, batch aktif, dan backlog tanpa mencetak token atau data kontak.
 6. Verifikasi GET tanpa token (401), dengan token (200), GET penghapusan, timestamp Z, serta tombol WA dan link lanjut bayar. Jangan menilai status lunas dari query string atau callback browser.
+
+Checkout event memakai katalog kanal aktif, tarif, dan PPN dari `config/subscription.php` (`SUBSCRIPTION_PAYMENT_METHODS`, `SUBSCRIPTION_GATEWAY_VAT_PERCENT`). Pastikan kedua kunci Midtrans server/client tersedia. Biaya tetap event Rp5.000 tidak digunakan untuk transaksi baru. Uji VA, e-wallet, dan GoPay Dynamic QRIS: QRIS harus membuka mode `qr` dan menagih hanya harga kelas; e-wallet memakai mode `deeplink`. Status tetap diverifikasi server. Tagihan Pending menyimpan metode dan rincian biaya semula; peserta baru dapat memilih ulang setelah transaksi Failed/Expired. Transaksi lama tanpa snapshot/token tetap memakai URL dan nominal lama, tanpa mengarang rincian PPN.
 
 Cron CRM yang sudah terpasang pada development adalah `/etc/cron.d/letsgrowacademy-dev-crm` dan menjalankan `crm:deliver-webhooks` setiap menit dengan `flock`. Jika menggunakan scheduler Laravel global pada environment lain, job sudah terdaftar di `routes/console.php`. Hindari menambahkan jadwal pengiriman duplikat.
 

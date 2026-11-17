@@ -6,7 +6,9 @@ use App\Models\RecruitmentEventPayment;
 use App\Models\RecruitmentLead;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use RuntimeException;
 
 class RecruitmentEventCheckout
@@ -14,11 +16,12 @@ class RecruitmentEventCheckout
     public function __construct(
         private readonly MidtransService $midtrans,
         private readonly CrmWebhookOutbox $crm,
+        private readonly GatewayPricing $pricing,
     ) {}
 
-    public function start(RecruitmentLead $lead): ?RecruitmentEventPayment
+    public function start(RecruitmentLead $lead, mixed $paymentMethod = null): ?RecruitmentEventPayment
     {
-        return DB::transaction(function () use ($lead) {
+        return DB::transaction(function () use ($lead, $paymentMethod) {
             $lead = RecruitmentLead::lockForUpdate()->findOrFail($lead->id);
             if (in_array($lead->event_payment_status, ['paid', 'refunded'], true)) {
                 return null;
@@ -29,24 +32,44 @@ class RecruitmentEventCheckout
                 return $payment;
             }
 
-            if (! config('midtrans.server_key')) {
+            $validated = Validator::make(['payment_method' => $paymentMethod], [
+                'payment_method' => ['required', 'string', Rule::in(array_keys($this->pricing->paymentMethods()))],
+            ], [], ['payment_method' => 'metode pembayaran'])->validate();
+
+            if (! config('midtrans.server_key') || ! config('midtrans.client_key')) {
                 throw new RuntimeException('Event payment is not configured.');
             }
 
-            $price = $payment?->only(['class_amount', 'service_fee']) ?? config('recruitment.event_payment');
+            $quote = $this->pricing->quote((int) ($payment?->class_amount ?? config('recruitment.event_payment.class_amount')), $validated['payment_method']);
             $orderId = 'REVT-'.Str::uuid();
             $returnUrl = route('subscriber-recruitment.payment.return', [$lead->source_slug, $lead->event_checkout_id]);
-            $url = $this->midtrans->createSnapRedirectUrl([
-                'transaction_details' => ['order_id' => $orderId, 'gross_amount' => array_sum($price)],
-                'item_details' => [
-                    ['id' => 'event-class', 'name' => 'Kelas pengenalan', 'price' => $price['class_amount'], 'quantity' => 1],
-                    ['id' => 'app-service', 'name' => 'Biaya layanan aplikasi', 'price' => $price['service_fee'], 'quantity' => 1],
-                ],
+            $items = [['id' => 'event-class', 'name' => 'Kelas pengenalan', 'price' => $quote['subtotal'], 'quantity' => 1]];
+            if ($quote['transaction_fee'] > 0) {
+                $items[] = ['id' => 'transaction-fee', 'name' => 'Biaya transaksi', 'price' => $quote['transaction_fee'], 'quantity' => 1];
+            }
+            if ($quote['gateway_vat_amount'] > 0) {
+                $items[] = ['id' => 'gateway-vat', 'name' => 'PPN biaya transaksi '.$quote['gateway_vat_percent'].'%', 'price' => $quote['gateway_vat_amount'], 'quantity' => 1];
+            }
+            $snap = $this->midtrans->createSnapTransaction([
+                'transaction_details' => ['order_id' => $orderId, 'gross_amount' => $quote['total']],
+                'item_details' => $items,
+                'enabled_payments' => [$quote['snap_payment_method']],
                 'customer_details' => ['first_name' => $lead->full_name, 'phone' => $lead->phone_number],
                 'callbacks' => ['finish' => $returnUrl, 'error' => $returnUrl],
             ]);
 
-            $payment = $lead->eventPayments()->create($price + ['midtrans_order_id' => $orderId, 'checkout_url' => $url]);
+            if (empty($snap->token) || empty($snap->redirect_url)) {
+                throw new RuntimeException('Incomplete event checkout response.');
+            }
+            $payment = $lead->eventPayments()->create([
+                'class_amount' => $quote['subtotal'],
+                'service_fee' => $quote['transaction_fee'] + $quote['gateway_vat_amount'],
+                'selected_payment_method' => $validated['payment_method'],
+                'pricing_details' => $quote,
+                'snap_token' => $snap->token,
+                'midtrans_order_id' => $orderId,
+                'checkout_url' => $snap->redirect_url,
+            ]);
             $lead->update(['event_payment_status' => 'awaiting_payment', 'event_paid_at' => null]);
             $lead->touch();
             $this->crm->record($lead, 'payment.updated', $payment);

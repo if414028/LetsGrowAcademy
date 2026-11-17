@@ -236,6 +236,11 @@
 .recruitment-field input, .recruitment-field select { display: block; width: 100%; min-height: 52px; border: 1px solid #d4e1e8; border-radius: 12px; background-color: #fafcfd; padding: .8rem 1rem; color: var(--recruitment-ink); font-size: 1rem; line-height: 1.5; }
 .recruitment-field input::placeholder { color: #718590; opacity: 1; }
 .recruitment-field select { padding-right: 2.5rem; }
+.recruitment-payment-method { margin-top: 1.5rem; }
+.recruitment-payment-help { margin-top: .75rem; color: var(--recruitment-muted); font-size: .8125rem; line-height: 1.7; }
+.recruitment-checkout-prices .recruitment-fee-detail { margin-top: -.5rem; color: var(--recruitment-muted); font-size: .8125rem; }
+.recruitment-checkout-prices dd { flex-shrink: 0; }
+.recruitment-checkout-card .recruitment-button:disabled { cursor: not-allowed; opacity: .6; }
 .recruitment-field input:focus, .recruitment-field select:focus { border-color: #0ea5e9; box-shadow: 0 0 0 3px #0ea5e914; }
 .recruitment-field [aria-invalid=true] { border-color: #c74747; }
 .recruitment-field-error { color: #b33737; font-size: .8125rem; margin-top: .4rem !important; }

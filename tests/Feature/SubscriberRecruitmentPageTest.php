@@ -213,25 +213,26 @@ class SubscriberRecruitmentPageTest extends TestCase
         $success = route('subscriber-recruitment.thank-you', $parameters);
         $response->assertRedirect($checkout);
         $this->get($checkout)->assertOk()
-            ->assertSeeInOrder(['Harga kelas', 'Rp88.000', 'Biaya layanan aplikasi', 'Rp5.000', 'Total pembayaran', 'Rp93.000', 'Bayar'])
+            ->assertSeeInOrder(['Harga kelas', 'Rp88.000', 'Biaya tambahan', 'Rp4.440', 'Total pembayaran', 'Rp92.440', 'Bayar'])
             ->assertDontSee('Midtrans')->assertDontSee('Calon Mitra');
         $this->get($success)->assertRedirect($checkout);
         $this->get(route('subscriber-recruitment.thank-you', [$other->landing_page_slug, $lead->event_checkout_id]))->assertNotFound();
         $this->get(route('subscriber-recruitment.thank-you', $owner->landing_page_slug))->assertNotFound();
 
-        config(['midtrans.server_key' => 'server-test']);
+        config(['midtrans.server_key' => 'server-test', 'midtrans.client_key' => 'client-test']);
         $gateway = $this->mock(MidtransService::class);
         $gatewayUrl = 'https://app.sandbox.midtrans.com/snap/v2/vtweb/checkout-test';
-        $gateway->shouldReceive('createSnapRedirectUrl')->once()
-            ->with(Mockery::on(fn ($payload) => $payload['transaction_details']['gross_amount'] === 93000
-                && array_column($payload['item_details'], 'price') === [88000, 5000]
+        $gateway->shouldReceive('createSnapTransaction')->once()
+            ->with(Mockery::on(fn ($payload) => $payload['transaction_details']['gross_amount'] === 92440
+                && $payload['enabled_payments'] === ['bni_va']
+                && array_column($payload['item_details'], 'price') === [88000, 4000, 440]
                 && $payload['callbacks']['finish'] === $return))
-            ->andReturn($gatewayUrl);
-        $this->post($pay, ['gross_amount' => 1])->assertStatus(303)->assertRedirect($gatewayUrl);
-        $this->post($pay)->assertStatus(303)->assertRedirect($gatewayUrl);
+            ->andReturn((object) ['token' => 'event-snap-token', 'redirect_url' => $gatewayUrl]);
+        $this->post($pay, ['payment_method' => 'bni_va', 'gross_amount' => 1])->assertStatus(303)->assertRedirect($checkout);
+        $this->post($pay)->assertStatus(303)->assertRedirect($checkout);
         $payment = $lead->eventPayments()->sole();
 
-        $status = ['order_id' => $payment->midtrans_order_id, 'gross_amount' => '93000.00', 'status_code' => '200'];
+        $status = ['order_id' => $payment->midtrans_order_id, 'gross_amount' => '92440.00', 'status_code' => '200'];
         $gateway->shouldReceive('transactionStatus')->with($payment->midtrans_order_id)
             ->twice()->andReturn((object) ($status + ['transaction_status' => 'pending']), (object) ($status + ['transaction_status' => 'settlement']));
         $this->get($return.'?transaction_status=settlement')->assertRedirect($checkout);
@@ -257,25 +258,25 @@ class SubscriberRecruitmentPageTest extends TestCase
         $this->post(route('subscriber-recruitment.submit', $owner->landing_page_slug), $this->lead())->assertStatus(303);
         $lead = RecruitmentLead::sole();
         $pay = route('subscriber-recruitment.payment.pay', [$owner->landing_page_slug, $lead->event_checkout_id]);
-        config(['midtrans.server_key' => 'server-test']);
+        config(['midtrans.server_key' => 'server-test', 'midtrans.client_key' => 'client-test']);
         $gateway = $this->mock(MidtransService::class);
-        $gateway->shouldReceive('createSnapRedirectUrl')->twice()->andReturn('https://app.sandbox.midtrans.com/snap/v2/vtweb/event-test');
-        $this->post($pay)->assertStatus(303);
+        $gateway->shouldReceive('createSnapTransaction')->twice()->andReturn((object) ['token' => 'event-test', 'redirect_url' => 'https://app.sandbox.midtrans.com/snap/v2/vtweb/event-test']);
+        $this->post($pay, ['payment_method' => 'bni_va'])->assertStatus(303);
         $expired = $lead->eventPayments()->sole();
         $gateway->shouldReceive('transactionStatus')->once()->with($expired->midtrans_order_id)
-            ->andReturn((object) ['order_id' => $expired->midtrans_order_id, 'gross_amount' => '93000.00', 'transaction_status' => 'expire']);
+            ->andReturn((object) ['order_id' => $expired->midtrans_order_id, 'gross_amount' => '92440.00', 'transaction_status' => 'expire']);
         $this->get(route('subscriber-recruitment.payment.return', [$owner->landing_page_slug, $lead->event_checkout_id]))->assertRedirect();
         $this->assertSame('expired', $expired->fresh()->status);
         $this->assertSame('expired', $lead->fresh()->event_payment_status);
 
-        $this->post($pay)->assertStatus(303);
+        $this->post($pay, ['payment_method' => 'bni_va'])->assertStatus(303);
         $payment = $lead->eventPayments()->latest('id')->first();
         $this->assertNotSame($expired->midtrans_order_id, $payment->midtrans_order_id);
-        $notification = ['order_id' => $payment->midtrans_order_id, 'status_code' => '200', 'gross_amount' => '93000.00'];
+        $notification = ['order_id' => $payment->midtrans_order_id, 'status_code' => '200', 'gross_amount' => '92440.00'];
         $endpoint = route('payments.midtrans.notification');
         $this->postJson($endpoint, $notification + ['signature_key' => 'invalid'])->assertForbidden();
         $notification['signature_key'] = hash('sha512', implode('', $notification).'server-test');
-        $status = (object) ['order_id' => $payment->midtrans_order_id, 'status_code' => '200', 'gross_amount' => '93000.00', 'transaction_status' => 'settlement'];
+        $status = (object) ['order_id' => $payment->midtrans_order_id, 'status_code' => '200', 'gross_amount' => '92440.00', 'transaction_status' => 'settlement'];
         $wrongAmount = clone $status;
         $wrongAmount->gross_amount = '88000.00';
         $gateway->shouldReceive('transactionStatus')->with($payment->midtrans_order_id)->times(3)->andReturn($wrongAmount, $status, $status);

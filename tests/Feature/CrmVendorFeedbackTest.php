@@ -55,7 +55,7 @@ class CrmVendorFeedbackTest extends TestCase
             ->assertJsonPath('data.seminar_name', 'Seminar Pengantar')
             ->assertJsonPath('data.batch_starts_at', '2026-11-25T12:00:00.000000Z');
         $event = CrmWebhookDelivery::where('recruitment_lead_id', $lead->id)->sole();
-        $this->assertSame('1.1', $event->payload['schema_version']);
+        $this->assertSame('1.2', $event->payload['schema_version']);
         $this->assertSame('staging', $event->payload['environment']);
         $this->assertSame('staging', $event->payload['data']['environment']);
         $this->assertSame('BATCH-NOV-01', $event->payload['data']['batch_id']);
@@ -67,7 +67,7 @@ class CrmVendorFeedbackTest extends TestCase
         $this->post(route('subscriber-recruitment.submit', $owner->landing_page_slug), $this->form());
         $url = 'https://localhost/api/v1/crm/registrations';
         $response = $this->withToken(self::TOKEN)->getJson($url)->assertOk()
-            ->assertJsonPath('meta.environment', 'staging')->assertJsonPath('meta.schema_version', '1.1');
+            ->assertJsonPath('meta.environment', 'staging')->assertJsonPath('meta.schema_version', '1.2');
         $watermark = $response->json('meta.sync_started_at');
         $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/', $watermark);
         $this->getJson($url.'?updated_since='.urlencode($watermark))->assertOk();

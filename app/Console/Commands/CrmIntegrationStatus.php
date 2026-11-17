@@ -19,7 +19,8 @@ class CrmIntegrationStatus extends Command
 
     public function handle(RecruitmentEventDetails $details): int
     {
-        $ready = Schema::hasTable('crm_registration_tombstones');
+        $ready = Schema::hasTable('crm_registration_tombstones')
+            && Schema::hasColumns('recruitment_event_payments', ['selected_payment_method', 'pricing_details', 'snap_token']);
         try {
             $event = $details->snapshot();
             $eventError = null;

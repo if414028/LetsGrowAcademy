@@ -7,6 +7,7 @@ import fileUpload from './file-upload';
 import { initSalesTrend } from './sales-trend';
 import birthdayGreetings from './birthday-greetings';
 import recruitmentShare, { initRecruitmentLanding } from './recruitment';
+import recruitmentPayment from './recruitment-payment';
 import { growAdSelection, growAdBudget, growAdPayment, growAdCopy, initGrowAdMotion } from './grow-ads';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -16,6 +17,7 @@ window.Alpine = Alpine;
 Alpine.data('fileUpload', fileUpload);
 Alpine.data('birthdayGreetings', birthdayGreetings);
 Alpine.data('recruitmentShare', recruitmentShare);
+Alpine.data('recruitmentPayment', recruitmentPayment);
 Alpine.data('growAdSelection', growAdSelection);
 Alpine.data('growAdBudget', growAdBudget);
 Alpine.data('growAdPayment', growAdPayment);

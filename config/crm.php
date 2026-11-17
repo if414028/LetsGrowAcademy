@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'schema_version' => '1.1',
+    'schema_version' => '1.2',
     'environment' => env('CRM_ENVIRONMENT', env('APP_ENV', 'production')),
     'api_token' => env('CRM_API_TOKEN'),
     'require_https' => env('CRM_REQUIRE_HTTPS', true),

@@ -18,7 +18,7 @@
     @include('grow-ads.pixel', [
         'pixelId' => $growAdPixelId,
         'formClickUrl' => route('subscriber-recruitment.form-click', $consultant->landing_page_slug),
-        'checkoutValue' => array_sum($content['event_payment']),
+        'checkoutValue' => $content['event_payment']['class_amount'],
     ])
 </head>
 <body class="recruitment-page recruitment-community-page" data-recruitment-landing>

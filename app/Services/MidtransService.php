@@ -30,4 +30,9 @@ class MidtransService
     {
         return Transaction::status($orderId);
     }
+
+    public function createSnapTransaction(array $payload): object
+    {
+        return Snap::createTransaction($payload);
+    }
 }

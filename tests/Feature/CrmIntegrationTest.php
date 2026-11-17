@@ -189,11 +189,11 @@ class CrmIntegrationTest extends TestCase
         $this->assertSame('expired', $lead->fresh()->event_payment_status);
         $this->assertSame('expired', CrmWebhookDelivery::sole()->payload['transaction']['payment_status']);
 
-        config(['midtrans.server_key' => 'test']);
-        $this->mock(MidtransService::class)->shouldReceive('createSnapRedirectUrl')->once()
-            ->andReturn('https://gateway.example.test/checkout');
+        config(['midtrans.server_key' => 'test', 'midtrans.client_key' => 'client-test']);
+        $this->mock(MidtransService::class)->shouldReceive('createSnapTransaction')->once()
+            ->andReturn((object) ['token' => 'event-test', 'redirect_url' => 'https://gateway.example.test/checkout']);
         $service = app(RecruitmentEventCheckout::class);
-        $retry = $service->start($lead);
+        $retry = $service->start($lead, 'bni_va');
         $this->assertSame('awaiting_payment', $lead->fresh()->event_payment_status);
         $this->assertSame('pending', CrmWebhookDelivery::latest('id')->first()->payload['data']['payment_status']);
         $service->update($retry, $this->gatewayStatus($retry, 'deny'));
@@ -317,7 +317,7 @@ class CrmIntegrationTest extends TestCase
     private function gatewayStatus(RecruitmentEventPayment $payment, string $status): object
     {
         return (object) [
-            'order_id' => $payment->midtrans_order_id, 'gross_amount' => '93000.00', 'status_code' => '200',
+            'order_id' => $payment->midtrans_order_id, 'gross_amount' => number_format($payment->total(), 2, '.', ''), 'status_code' => '200',
             'transaction_id' => 'transaction-'.$payment->id, 'transaction_status' => $status,
         ];
     }

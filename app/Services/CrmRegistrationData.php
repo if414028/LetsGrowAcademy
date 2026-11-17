@@ -56,6 +56,12 @@ class CrmRegistrationData
             'updated_at' => $payment->updated_at->toISOString(),
             'class_amount' => (int) $payment->class_amount,
             'service_fee' => (int) $payment->service_fee,
+            'selected_payment_method' => $payment->selected_payment_method,
+            'payment_method_label' => $payment->pricing_details['payment_method_label'] ?? null,
+            'transaction_fee' => $payment->pricing_details['transaction_fee'] ?? null,
+            'gateway_vat_percent' => $payment->pricing_details['gateway_vat_percent'] ?? null,
+            'gateway_vat_amount' => $payment->pricing_details['gateway_vat_amount'] ?? null,
+            'merchant_covers_fee' => $payment->pricing_details['merchant_covers_fee'] ?? null,
             'total_amount' => $payment->total(),
             'currency' => 'IDR',
         ];

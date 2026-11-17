@@ -11,7 +11,6 @@ return [
     ],
     'event_payment' => [
         'class_amount' => 88000,
-        'service_fee' => 5000,
     ],
     'activities' => [
         'Karyawan',

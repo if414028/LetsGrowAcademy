@@ -30,7 +30,7 @@ Checkout yang gagal tidak menghilangkan draf. Order pembayaran pending mengunci 
 - Salin **tautan tujuan iklan untuk konten ini** ke CTA Meta Ads. Tautan tersebut menuju landing page rekrutmen yang sudah ada dan ditandatangani server.
 - Setelah penyiapan di Meta selesai, pilih **Sedang berjalan**. Selama periode kampanye, tautan iklan yang valid memuat pixel yang diisi untuk iklan tersebut. Migrasi menyalin Pixel ID kampanye lama ke setiap iklan terkait.
 - Perbarui angka kumulatif tayangan dan klik dari Meta Ads. Keduanya boleh kosong; nilai yang belum tersedia ditampilkan `—`. Waktu pembaruan ditampilkan kepada pemilik.
-- Form minat mencatat calon peserta dan membuka pembayaran event Rp93.000 (kelas Rp88.000 dan biaya layanan aplikasi Rp5.000). Pendaftaran online terkonfirmasi setelah status pembayaran diverifikasi. Admin masih bisa memperbarui status pendaftaran lama yang dicatat sebelum checkout online.
+- Form minat mencatat calon peserta dan membuka pembayaran event: kelas Rp88.000 dengan biaya transaksi dan PPN sesuai metode pilihan peserta, mengikuti kalkulator subscription. Tagihan lama mempertahankan nominal aslinya. Pendaftaran online terkonfirmasi setelah status pembayaran diverifikasi. Admin masih bisa memperbarui status pendaftaran lama yang dicatat sebelum checkout online.
 
 ## Atribusi landing page
 
