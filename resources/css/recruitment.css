@@ -42,6 +42,15 @@
 .recruitment-lead-consent .recruitment-icon { width: 1rem; height: 1rem; margin-top: .1rem; }
 .recruitment-lead-followup time { display: block; font-size: .8125rem; font-weight: 700; }
 .recruitment-lead-followup time > span { display: block; margin-top: .1rem; color: #526b7b; font-weight: 500; }
+.recruitment-lead-payment { margin-top: .7rem; }
+.recruitment-lead-payment-label { display: block; margin-bottom: .3rem; color: #526b7b; font-size: .6875rem; }
+.recruitment-lead-payment-badge { display: inline-flex; max-width: 100%; padding: .3rem .55rem; border: 1px solid transparent; border-radius: 6px; font-size: .6875rem; font-weight: 800; line-height: 1.5; }
+.recruitment-lead-payment-badge--unpaid { border-color: #fed7aa; background: #fff7ed; color: #9a3412; }
+.recruitment-lead-payment-badge--pending { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+.recruitment-lead-payment-badge--paid { border-color: #a7f3d0; background: #ecfdf5; color: #065f46; }
+.recruitment-lead-payment-badge--failed { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+.recruitment-lead-payment-badge--neutral { border-color: #cbd5e1; background: #f1f5f9; color: #475569; }
+.recruitment-lead-payment-badge--refunded { border-color: #bfdbfe; background: #eff6ff; color: #1e40af; }
 .recruitment-lead-followup > a { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; margin-top: .9rem; padding: .55rem .75rem; border: 1px solid #cce5f2; border-radius: 10px; color: #075985; font-size: .75rem; font-weight: 800; transition: background .2s; }
 .recruitment-lead-followup > a:hover { background: #edf7fc; }
 .recruitment-leads-pagination { border-top: 1px solid #dce8ee; padding: 1.2rem 1.5rem; }

@@ -45,9 +45,21 @@
                             </div>
                             <div class="recruitment-lead-followup">
                                 <time datetime="{{ $lead->created_at->toIso8601String() }}">{{ $lead->created_at->timezone('Asia/Jakarta')->locale('id')->translatedFormat('d M Y') }}<span>{{ $lead->created_at->timezone('Asia/Jakarta')->format('H.i') }} WIB</span></time>
-                                @if ($lead->event_checkout_id)
-                                    <p>{{ match ($lead->event_payment_status) { 'paid' => 'Sudah dibayar', 'refunded' => 'Pembayaran dikembalikan', default => 'Menunggu pembayaran' } }}</p>
-                                @endif
+                                @php
+                                    $paymentStatus = match ($lead->event_payment_status) {
+                                        'paid' => ['label' => 'Sudah dibayar', 'tone' => 'paid'],
+                                        'awaiting_payment', 'pending' => ['label' => 'Menunggu pembayaran', 'tone' => 'pending'],
+                                        'failed' => ['label' => 'Pembayaran gagal', 'tone' => 'failed'],
+                                        'expired' => ['label' => 'Pembayaran kedaluwarsa', 'tone' => 'neutral'],
+                                        'refunded' => ['label' => 'Pembayaran dikembalikan', 'tone' => 'refunded'],
+                                        'unconfirmed' => ['label' => 'Belum dibayar', 'tone' => 'unpaid'],
+                                        default => ['label' => 'Belum dikonfirmasi', 'tone' => 'neutral'],
+                                    };
+                                @endphp
+                                <p class="recruitment-lead-payment">
+                                    <span class="recruitment-lead-payment-label">Status pembayaran</span>
+                                    <strong class="recruitment-lead-payment-badge recruitment-lead-payment-badge--{{ $paymentStatus['tone'] }}">{{ $paymentStatus['label'] }}</strong>
+                                </p>
                                 <a href="{{ $lead->whatsapp_url }}" target="_blank" rel="noopener" aria-label="Hubungi {{ $lead->full_name }} melalui WhatsApp (tab baru)">Hubungi WhatsApp <span aria-hidden="true">↗</span></a>
                             </div>
                         </article>
