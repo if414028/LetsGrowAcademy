@@ -17,6 +17,8 @@
             </div>
             <h1 id="checkout-title">Pembayaran kelas</h1>
             <p class="recruitment-checkout-intro">Selesaikan pembayaran untuk mengonfirmasi pendaftaran Anda.</p>
+            <p class="recruitment-registration-code">Kode pendaftaran: <strong>{{ $lead->registrationId() }}</strong></p>
+            @include('subscriber-recruitment.event-details', ['eventDetails' => $lead->only(['seminar_name', 'batch_id', 'batch_starts_at'])])
 
             <dl class="recruitment-checkout-prices">
                 <div><dt>Harga kelas</dt><dd>Rp{{ number_format($price['class_amount'], 0, ',', '.') }}</dd></div>
@@ -44,6 +46,12 @@
             @endif
             @if ($payment?->status === 'pending')
                 <a class="recruitment-checkout-refresh" href="{{ route('subscriber-recruitment.payment.return', [$lead->source_slug, $lead->event_checkout_id]) }}">Cek status pembayaran</a>
+            @endif
+            @if ($crmWhatsappUrl)
+                <div class="recruitment-chat-action">
+                    <a class="recruitment-button recruitment-button-light" href="{{ $crmWhatsappUrl }}" target="_blank" rel="noopener noreferrer">Chat via WhatsApp <x-recruitment-icon name="chat" /></a>
+                    <p>Tekan Kirim di WhatsApp agar tim dapat membantu pendaftaran dan pembayaran Anda.</p>
+                </div>
             @endif
         </div>
     </main>

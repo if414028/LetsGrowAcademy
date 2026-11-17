@@ -1,19 +1,22 @@
 # Dokumentasi API CRM - Let's Grow Academy
 
-Dokumen ini menjelaskan kontrak API untuk integrasi data pendaftaran dan pembayaran antara Let's Grow Academy dan CRM. Integrasi WhatsApp, AI Agent, serta automation ditangani oleh CRM.
+Dokumen ini menjelaskan kontrak API v1.1 untuk integrasi data pendaftaran dan pembayaran antara Let's Grow Academy dan CRM. Integrasi WhatsApp, AI Agent, serta automation ditangani oleh CRM. Versi ini menambahkan environment, seminar/batch, link lanjut bayar, pembaruan persetujuan, dan informasi penghapusan; path API v1 tetap sama.
 
 ## Kontrak untuk vendor
 
-Base URL memakai domain HTTPS aplikasi yang digunakan saat deployment. Seluruh respons dan webhook berbentuk JSON. Versi pertama menggunakan prefix `/api/v1/crm` dan `schema_version: "1.0"`.
+Base URL memakai domain HTTPS aplikasi yang disepakati untuk masing-masing environment. Seluruh respons dan webhook berbentuk JSON, menggunakan prefix `/api/v1/crm` dan `schema_version: "1.1"`. Host staging adalah `https://dev.letsgrowacademy.id`; host production yang direncanakan adalah `https://letsgrowacademy.id`, dengan kesiapan akses dikonfirmasi terpisah.
 
 | Fitur | Arah | Endpoint/event |
 | --- | --- | --- |
 | Registration Webhook | Academy → CRM | POST ke URL vendor; `registration.created` |
+| Pembaruan persetujuan WA | Academy → CRM | POST ke URL pendaftaran; `registration.updated` |
+| Penghapusan pendaftar | Academy → CRM | POST ke URL pendaftaran; `registration.deleted` |
 | Payment Status Webhook | Academy → CRM | POST ke URL vendor; `payment.updated` |
 | Daftar pendaftar | CRM → Academy | `GET /api/v1/crm/registrations` |
+| Riwayat ID pendaftar dihapus | CRM → Academy | `GET /api/v1/crm/registrations/deleted` |
 | Detail pendaftar | CRM → Academy | `GET /api/v1/crm/registrations/LGA-123` |
 
-`registration_id` berbentuk `LGA-{nomor}`, unik dan stabil selama umur pendaftaran. Nomor WhatsApp yang sama boleh mempunyai beberapa pendaftaran, termasuk melalui pemilik halaman berbeda. Gunakan `registration_id` sebagai kunci upsert, bukan nomor telepon. ID ini berbeda dari ID rahasia untuk membuka checkout; URL dan ID checkout tidak diberikan ke CRM.
+`registration_id` berbentuk `LGA-{nomor}`, unik dan stabil selama umur pendaftaran dalam satu environment. Nomor WhatsApp yang sama boleh mempunyai beberapa pendaftaran, termasuk melalui pemilik halaman berbeda. Gunakan pasangan `(environment, registration_id)` sebagai kunci upsert. Contohnya, `LGA-1` di staging dan production adalah dua record berbeda. Kredensial dan penyimpanan data uji dipisahkan dari production. ID checkout tidak diberikan sebagai field terpisah; link lanjut bayar yang mengandung akses checkout hanya diberikan melalui API yang terautentikasi.
 
 Kredensial CRM adalah kredensial integrasi pusat: mempunyai akses baca seluruh pendaftaran dengan sumber `recruitment_landing`, lintas pemilik landing page. Login member tidak memberikan akses API ini. Data pelanggan, subscription, dan pembayaran iklan tidak termasuk.
 
@@ -32,7 +35,7 @@ Token acak minimal 32 karakter disimpan pada server kedua pihak, terpisah dari s
 | --- | --- |
 | `per_page` | Integer 1–100; default 50 |
 | `cursor` | Nilai `meta.next_cursor` dari halaman sebelumnya |
-| `updated_since` | Opsional, waktu ISO 8601 dengan offset, tanpa pecahan detik; contoh `2026-11-13T10:00:00+07:00` atau `2026-11-13T03:00:00Z`. Batas inklusif (`>=`), termasuk perubahan pembayaran. URL-encode tanda `+`. |
+| `updated_since` | Opsional, waktu ISO 8601 dengan offset atau `Z`, dengan atau tanpa pecahan detik (1–6 digit). Contoh `2026-11-17T10:00:00+07:00` atau `2026-11-17T03:00:00.123Z`. Batas inklusif (`>=`), termasuk perubahan pembayaran/persetujuan. URL-encode tanda `+`. |
 
 Contoh request:
 
@@ -49,6 +52,7 @@ Contoh satu objek pendaftaran (schema `data` yang juga dipakai webhook):
 ```json
 {
   "registration_id": "LGA-123",
+  "environment": "staging",
   "full_name": "Peserta Contoh",
   "whatsapp_number": "+6281234567890",
   "domicile": "Bandung",
@@ -59,6 +63,13 @@ Contoh satu objek pendaftaran (schema `data` yang juga dipakai webhook):
   "whatsapp_consent": true,
   "whatsapp_consented_at": "2026-11-13T03:00:00.000000Z",
   "whatsapp_consent_version": "2026-11-13",
+  "whatsapp_consent_revoked_at": null,
+  "seminar_id": "SEM-01",
+  "seminar_name": "Seminar Pengantar",
+  "batch_id": "BATCH-01",
+  "batch_starts_at": "2026-11-25T12:00:00.000000Z",
+  "continue_payment_url":
+    "https://academy.example/rekrutmen/nama-pendamping/pembayaran/6e9e9bd6-e088-43e5-b869-1fb45b61c0a0",
   "source": {
     "type": "recruitment_landing",
     "slug": "nama-pendamping",
@@ -74,17 +85,27 @@ Respons daftar membungkus objek-objek tersebut pada array `data`, disertai:
 
 ```json
 {
+  "schema_version": "1.1",
+  "environment": "staging",
   "next_cursor": null,
   "has_more": false,
-  "sync_started_at": "2026-11-13T10:05:00+07:00"
+  "sync_started_at": "2026-11-17T03:05:00Z"
 }
 ```
 
-Objek di atas berada pada key `meta`. Detail menggunakan `{ "data": objek_pendaftaran }`. Semua field timestamp pada data pendaftaran/transaksi/webhook memakai ISO 8601 UTC (`Z`); `sync_started_at` menyertakan offset zona aplikasi.
+Objek di atas berada pada key `meta`. Detail menggunakan `{ "data": objek_pendaftaran }`. Semua timestamp respons, termasuk `meta.sync_started_at`, memakai ISO 8601 UTC (`Z`). Nilai seminar, batch, dan jadwal pada contoh bersifat ilustratif.
 
 Untuk recovery, ambil semua halaman menggunakan filter yang sama. Simpan `sync_started_at` **dari halaman pertama** hanya setelah seluruh halaman berhasil. Pada putaran berikutnya, pakai waktu awal tersebut dikurangi 60 detik sebagai `updated_since`, lalu upsert ulang berdasarkan ID. Overlap mencegah perubahan selama pagination dan ketelitian timestamp database terlewat. Jangan menjadikan waktu selesai sinkronisasi sebagai watermark. Putaran awal tanpa `updated_since` mengambil seluruh data yang tersimpan, termasuk data lama. API membaca status lokal terakhir yang telah diverifikasi; API ini tidak melakukan polling Midtrans secara langsung.
 
-`last_event_sequence` adalah nomor event terakhir untuk pendaftaran tersebut (0 untuk data historis tanpa event). Saat menggabungkan hasil GET dengan webhook, pertahankan state dengan sequence terbesar; jangan menurunkan state karena webhook lama tiba belakangan. Jika sequence sama, hasil GET boleh memperbarui snapshot.
+`last_event_sequence` adalah nomor event terakhir untuk pendaftaran tersebut (0 untuk data historis tanpa event). Saat menggabungkan hasil GET dengan webhook, pertahankan state dengan sequence terbesar dalam environment yang sama; jangan menurunkan state karena webhook lama tiba belakangan. Jika sequence sama, hasil GET boleh memperbarui snapshot.
+
+Polling setiap lima menit didukung. Gunakan `per_page=100` jika diperlukan, jeda sekitar dua detik antarhalaman, dan tangani `429` dengan mengikuti header `Retry-After`. Batas 60 request per menit berlaku untuk seluruh endpoint CRM dari IP yang sama.
+
+### Seminar, batch, dan link lanjut bayar
+
+Satu batch aktif dipakai bersama oleh seluruh landing page pendamping. `seminar_id`, `seminar_name`, `batch_id`, dan `batch_starts_at` dicatat saat pendaftaran diterima. Perubahan batch aktif berikutnya tidak mengubah nilai pada peserta yang sudah terdaftar. Field yang belum diketahui, termasuk pada data historis, bernilai `null`; source slug dan `owner_user_id` menunjukkan atribusi pendamping, bukan identitas seminar.
+
+`continue_payment_url` mengarah ke halaman pembayaran Academy untuk peserta yang belum membayar, termasuk Failed/Expired. Membuka link ini tidak langsung membuat transaksi baru. Academy membuat atau melanjutkan transaksi saat peserta menekan tombol bayar. Nilainya `null` untuk peserta Paid/Refunded dan pendaftaran lama yang tidak mempunyai checkout online. Link ini merupakan akses pribadi ke checkout; CRM membagikannya kepada peserta yang sudah dicocokkan dengan pendaftaran terkait, bukan berdasarkan kode pendaftaran saja. Jangan mengubahnya menjadi link Midtrans atau membuat QR/transaksi dari sisi CRM.
 
 Error: `401` token salah/tidak ada; `403` akses HTTP; `404` ID tidak ditemukan/di luar sumber rekrutmen; `422` filter/cursor tidak valid; `429` rate limit; `503` token integrasi belum dikonfigurasi. Respons data menggunakan `Cache-Control: private, no-store`.
 
@@ -96,7 +117,8 @@ Envelope:
 
 | Field | Isi |
 | --- | --- |
-| `schema_version` | `"1.0"` |
+| `schema_version` | `"1.1"` |
+| `environment` | Environment sumber, misalnya `staging` atau `production` |
 | `event_id` | UUID unik; tetap sama pada setiap retry |
 | `event_type` | `registration.created` |
 | `sequence` | Integer urut global; urutkan state per registration berdasarkan nilai ini |
@@ -159,12 +181,51 @@ CRM harus menyimpan event/upsert secara durable sebelum memberikan respons **2xx
 
 Retry otomatis setelah 1 menit, 5 menit, 15 menit, 1 jam, 3 jam, 6 jam, lalu 24 jam berulang sampai berhasil. Timeout request 10 detik; connect timeout 3 detik. Waktu aktual mengikuti jadwal pengiriman. Event yang belum mendapat respons 2xx tetap dijadwalkan untuk retry hingga berhasil.
 
-Delivery bersifat **at least once**. Misalnya, CRM sudah menyimpan data tetapi responsnya timeout, event akan dikirim ulang. Vendor wajib deduplikasi dengan `event_id` dan upsert dengan `registration_id`. Urutan kedatangan tidak dijamin: setiap event membawa snapshot lengkap pendaftaran agar payment event dapat membuat record terlebih dahulu. Abaikan snapshot dengan sequence lebih kecil dari state yang sudah diterapkan.
+Delivery bersifat **at least once**. Misalnya, CRM sudah menyimpan data tetapi responsnya timeout, event akan dikirim ulang. Vendor wajib deduplikasi dengan `event_id` dan upsert dengan pasangan `(environment, registration_id)`. Urutan kedatangan tidak dijamin: event pendaftaran/pembayaran membawa snapshot lengkap agar payment event dapat membuat record terlebih dahulu. Abaikan snapshot dengan sequence lebih kecil dari state yang sudah diterapkan.
+
+Upsert tetap memakai pasangan `(environment, registration_id)`. Event v1.0 yang sudah tersimpan sebelum pembaruan mempertahankan snapshot lamanya dan dapat dikirim selama recovery. Untuk event tersebut, environment ditentukan dari konfigurasi koneksi sumber; field baru yang belum ada dapat dilengkapi lewat GET. Event penghapusan mempunyai bentuk data minimal, seperti dijelaskan berikut.
 
 ### Persetujuan WhatsApp dan data lama
 
-API memberikan `whatsapp_consent`, `whatsapp_consented_at`, dan `whatsapp_consent_version` sebagai status, waktu, dan versi teks persetujuan komunikasi WhatsApp. `true` berarti peserta memilih setuju; `false` berarti tidak memberikan persetujuan pada form baru; `null` berarti status historis belum diketahui. CRM hanya menjalankan komunikasi WhatsApp bila nilainya `true`. Persetujuan data historis tidak diasumsikan sebagai persetujuan WhatsApp.
+API memberikan `whatsapp_consent`, `whatsapp_consented_at`, dan `whatsapp_consent_version` sebagai status, waktu, dan versi teks persetujuan komunikasi WhatsApp. `true` berarti peserta memilih setuju; `false` berarti tidak memberikan persetujuan atau sudah mencabutnya; `null` berarti status historis belum diketahui. Pencabutan ditandai `whatsapp_consent_revoked_at`. Waktu persetujuan awal tetap disimpan. Persetujuan data historis tidak diasumsikan sebagai persetujuan WhatsApp.
+
+Saat pencabutan dicatat oleh Academy, CRM menerima `registration.updated` pada URL webhook pendaftaran, dengan envelope yang sama dan `data` berisi snapshot terbaru (`whatsapp_consent=false`). Snapshot lama yang belum terkirim digantikan pembaruan ini agar persetujuan lama tidak diterapkan kembali. CRM harus menghentikan automation tindak lanjut dan menghormati permintaan berhenti. Penanganan pesan yang sedang dalam perjalanan dan penghentian komunikasi dari sisi CRM perlu dikoordinasikan kedua operator.
 
 Objek `source` menyediakan asal pendaftaran dan `owner_user_id` untuk atribusi peserta ke pemilik landing page terkait.
 
-Pendaftar lama dapat diambil melalui GET. Event pendaftaran lama tidak dibuat ulang otomatis. ID transaksi dan waktu pembayaran per transaksi lama dapat kosong sampai tersedia dari verifikasi gateway; `data.paid_at` tetap menyediakan waktu pembayaran historis yang sudah tersimpan. Sinkronisasi penghapusan/revokasi consent bukan bagian dari kontrak v1 ini dan perlu dikoordinasikan oleh operator kedua pihak.
+Pendaftar lama dapat diambil melalui GET. Event pendaftaran lama tidak dibuat ulang otomatis. ID transaksi dan waktu pembayaran per transaksi lama dapat kosong sampai tersedia dari verifikasi gateway; `data.paid_at` tetap menyediakan waktu pembayaran historis yang sudah tersimpan.
+
+### Penghapusan dan recovery penghapusan
+
+Setelah Academy memproses permintaan penghapusan, record tidak lagi muncul di daftar GET dan endpoint detail mengembalikan `404`. Snapshot lama terkait peserta dihapus dari outbox. Academy mengirim event `registration.deleted` ke URL webhook pendaftaran dengan bentuk berikut:
+
+```json
+{
+  "schema_version": "1.1",
+  "environment": "staging",
+  "event_id": "3d7db659-7a6a-498f-8b48-e31770b05b16",
+  "event_type": "registration.deleted",
+  "sequence": 530,
+  "occurred_at": "2026-11-17T03:20:00.000000Z",
+  "data": {
+    "registration_id": "LGA-123",
+    "environment": "staging",
+    "deleted_at": "2026-11-17T03:20:00.000000Z",
+    "last_event_sequence": 530
+  }
+}
+```
+
+Event penghapusan tidak membawa nama, nomor WhatsApp, domisili, atau link checkout. CRM menghapus data pribadi terkait dan mempertahankan penanda minimal/sequence untuk mencegah snapshot lama membuat peserta tersebut muncul lagi. Retry, HMAC, dan respons 2xx mengikuti aturan webhook yang sama.
+
+Jika webhook terlewat, gunakan `GET /api/v1/crm/registrations/deleted` dengan token dan parameter `updated_since`, `per_page`, serta `cursor` yang sama seperti endpoint daftar. Responsnya `{ "data": [objek_penghapusan], "meta": metadata_pagination }`; schema setiap objek sama dengan `data` pada contoh event di atas. Watermark recovery memakai `meta.sync_started_at` dari halaman pertama, dikurangi overlap 60 detik, setelah seluruh halaman berhasil diproses. Sinkronisasi berkala perlu membaca daftar pendaftaran dan daftar penghapusan.
+
+Permintaan pencabutan/penghapusan diterima dan diverifikasi oleh operator Academy, termasuk permintaan yang diterima melalui CRM. API token CRM tetap hanya memberikan akses baca; tidak ada endpoint DELETE/PATCH untuk vendor. Penghapusan data pendaftaran bukan pembatalan atau refund pembayaran gateway.
+
+### Tombol WhatsApp dan alur peserta
+
+Halaman sukses pembayaran serta halaman pembayaran Pending/Failed/Expired dapat menampilkan tombol `Chat via WhatsApp` ke nomor bisnis CRM yang disepakati. Teks awal menyertakan `registration_id`: Paid menggunakan “Halo, saya sudah daftar seminar.”; Pending/Expired menggunakan “Halo, saya ingin melanjutkan pembayaran.”; Failed menggunakan “Halo, pembayaran saya gagal.”, masing-masing diikuti “Kode: LGA-123”.
+
+Tombol hanya membuka WhatsApp dengan pesan terisi. Peserta tetap perlu menekan Kirim; klik tombol tidak mengubah persetujuan dan tidak dianggap sebagai pesan masuk. CRM menghubungkan chat dengan peserta setelah memverifikasi pendaftaran/nomor pengirim. Status lunas tetap mengacu ke API/webhook pembayaran yang telah diverifikasi Academy.
+
+Checkout menggunakan Snap Redirect. Callback JavaScript `onPending`, `onClose`, dan `onError` tidak digunakan. Tombol mengikuti status halaman Academy yang diverifikasi server. CRM menangani percakapan setelah peserta mengirim pesan, sesuai persetujuan dan aturan platform.

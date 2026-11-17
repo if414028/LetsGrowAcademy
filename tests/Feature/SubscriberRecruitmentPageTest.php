@@ -240,7 +240,7 @@ class SubscriberRecruitmentPageTest extends TestCase
         $this->get($success)->assertOk()
             ->assertSee("Let's Grow Community", false)
             ->assertSee('Terima kasih sudah mendaftar!')
-            ->assertSee('Dalam waktu dekat, admin akan menghubungi Anda untuk mengikuti event.')
+            ->assertSee('Simpan kode pendaftaran Anda untuk keperluan informasi seminar.')
             ->assertDontSee('wa.me', false)
             ->assertDontSee('Calon Mitra')
             ->assertDontSee('<form', false);

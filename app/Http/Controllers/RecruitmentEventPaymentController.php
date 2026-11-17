@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\RecruitmentLead;
+use App\Services\CrmWhatsappLink;
 use App\Services\GrowAdTracking;
 use App\Services\RecruitmentEventCheckout;
 use Throwable;
@@ -23,6 +24,7 @@ class RecruitmentEventPaymentController extends Controller
             'lead' => $lead,
             'payment' => $payment,
             'price' => $price,
+            'crmWhatsappUrl' => app(CrmWhatsappLink::class)->forRegistration($lead),
         ])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
     }
 
@@ -77,6 +79,8 @@ class RecruitmentEventPaymentController extends Controller
         $payment = $sendPixel ? $lead->eventPayments()->where('status', 'paid')->latest('id')->first() : null;
 
         return response()->view('subscriber-recruitment.thank-you', [
+            'lead' => $lead,
+            'crmWhatsappUrl' => app(CrmWhatsappLink::class)->forRegistration($lead),
             'growAdPixelId' => $sendPixel ? $pixelId : null,
             'purchase' => $payment ? ['value' => $payment->total(), 'currency' => 'IDR'] : null,
         ])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');

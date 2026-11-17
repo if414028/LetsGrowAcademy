@@ -1,6 +1,14 @@
 <?php
 
 return [
+    // One active batch shared by all recruitment landing pages. Values are
+    // snapshotted on submission; historical registrations are never reassigned.
+    'event' => [
+        'seminar_id' => env('RECRUITMENT_SEMINAR_ID'),
+        'seminar_name' => env('RECRUITMENT_SEMINAR_NAME'),
+        'batch_id' => env('RECRUITMENT_BATCH_ID'),
+        'batch_starts_at' => env('RECRUITMENT_BATCH_STARTS_AT'),
+    ],
     'event_payment' => [
         'class_amount' => 88000,
         'service_fee' => 5000,
@@ -318,7 +326,7 @@ return [
         'whatsapp_consent' => 'Saya bersedia dihubungi melalui WhatsApp oleh tim Let’s Grow Community dan penyedia CRM yang ditunjuk untuk informasi pendaftaran, pengingat pembayaran, dan jadwal sesi ini. (Opsional)',
         'whatsapp_consent_version' => '2026-11-13',
         'cta' => 'KIRIM MINAT SAYA',
-        'helper' => 'Lanjutkan ke pembayaran setelah mengirim form. Informasi pendaftaran, pengingat pembayaran, dan jadwal dapat dikirim melalui WhatsApp jika Anda menyetujuinya.',
+        'helper' => 'Lanjutkan ke pembayaran setelah mengirim form. Gunakan tombol Chat via WhatsApp di halaman pembayaran atau konfirmasi untuk memulai percakapan dengan tim.',
     ],
     'footer' => [
         'brand' => 'PROYEK KEMITRAAN AIR MINUM',

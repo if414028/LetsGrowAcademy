@@ -24,6 +24,11 @@ class RecruitmentLead extends Model
         'whatsapp_consent',
         'whatsapp_consented_at',
         'whatsapp_consent_version',
+        'whatsapp_consent_revoked_at',
+        'seminar_id',
+        'seminar_name',
+        'batch_id',
+        'batch_starts_at',
         'grow_ad_placement_id',
         'event_payment_status',
         'event_paid_at',
@@ -35,6 +40,7 @@ class RecruitmentLead extends Model
         return [
             'consented_at' => 'datetime', 'event_paid_at' => 'datetime',
             'whatsapp_consent' => 'boolean', 'whatsapp_consented_at' => 'datetime',
+            'whatsapp_consent_revoked_at' => 'datetime', 'batch_starts_at' => 'datetime',
         ];
     }
 
@@ -86,5 +92,21 @@ class RecruitmentLead extends Model
     public function getWhatsappUrlAttribute(): string
     {
         return 'https://wa.me/'.$this->phone_number;
+    }
+
+    public function registrationId(): string
+    {
+        return 'LGA-'.$this->id;
+    }
+
+    public function continuePaymentUrl(): ?string
+    {
+        if (! $this->event_checkout_id || in_array($this->event_payment_status, ['paid', 'refunded'], true)) {
+            return null;
+        }
+
+        // Use the configured Academy origin rather than the incoming Host header.
+        return rtrim((string) config('app.url'), '/')
+            .route('subscriber-recruitment.payment.show', [$this->source_slug, $this->event_checkout_id], false);
     }
 }

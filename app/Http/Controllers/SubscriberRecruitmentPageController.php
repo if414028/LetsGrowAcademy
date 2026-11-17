@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\RecruitmentLead;
 use App\Models\User;
 use App\Services\CrmWebhookOutbox;
+use App\Services\CrmWhatsappLink;
 use App\Services\GrowAdTracking;
+use App\Services\RecruitmentEventDetails;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -77,6 +79,8 @@ class SubscriberRecruitmentPageController extends Controller
             'content' => config('recruitment'),
             'growAdToken' => $token,
             'growAdPixelId' => $tracking->pixelId($placement),
+            'eventDetails' => app(RecruitmentEventDetails::class)->snapshot(),
+            'crmWhatsappAvailable' => app(CrmWhatsappLink::class)->number() !== null,
         ]);
     }
 
@@ -133,8 +137,10 @@ class SubscriberRecruitmentPageController extends Controller
         $placement = $tracking->placementFromToken(is_string($request->input('grow_ad_token')) ? $request->input('grow_ad_token') : null, $consultant);
 
         // Save before confirming registration. The URL determines attribution, not hidden form fields.
-        $lead = DB::transaction(function () use ($consultant, $validated, $placement, $crm) {
+        $event = app(RecruitmentEventDetails::class)->snapshot();
+        $lead = DB::transaction(function () use ($consultant, $validated, $placement, $crm, $event) {
             $lead = $consultant->recruitmentLeads()->create([
+                ...$event,
                 'source' => RecruitmentLead::SOURCE,
                 'source_slug' => $consultant->landing_page_slug,
                 'source_url' => route('subscriber-recruitment.show', $consultant->landing_page_slug),

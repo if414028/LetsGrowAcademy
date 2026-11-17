@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CrmRegistrationTombstone;
 use App\Models\RecruitmentEventPayment;
 use App\Models\RecruitmentLead;
 
@@ -16,7 +17,8 @@ class CrmRegistrationData
             : $payments->first();
 
         return [
-            'registration_id' => 'LGA-'.$lead->id,
+            'registration_id' => $lead->registrationId(),
+            'environment' => config('crm.environment'),
             'full_name' => $lead->full_name,
             'whatsapp_number' => '+'.$lead->phone_number,
             'domicile' => $lead->domicile,
@@ -27,6 +29,12 @@ class CrmRegistrationData
             'whatsapp_consent' => $lead->whatsapp_consent,
             'whatsapp_consented_at' => $lead->whatsapp_consented_at?->toISOString(),
             'whatsapp_consent_version' => $lead->whatsapp_consent_version,
+            'whatsapp_consent_revoked_at' => $lead->whatsapp_consent_revoked_at?->toISOString(),
+            'seminar_id' => $lead->seminar_id,
+            'seminar_name' => $lead->seminar_name,
+            'batch_id' => $lead->batch_id,
+            'batch_starts_at' => $lead->batch_starts_at?->toISOString(),
+            'continue_payment_url' => $lead->continuePaymentUrl(),
             'source' => [
                 'type' => $lead->source,
                 'slug' => $lead->source_slug,
@@ -50,6 +58,14 @@ class CrmRegistrationData
             'service_fee' => (int) $payment->service_fee,
             'total_amount' => $payment->total(),
             'currency' => 'IDR',
+        ];
+    }
+
+    public function deletion(CrmRegistrationTombstone $tombstone): array
+    {
+        return $tombstone->only(['registration_id', 'environment']) + [
+            'deleted_at' => $tombstone->deleted_at->toISOString(),
+            'last_event_sequence' => $tombstone->last_event_sequence,
         ];
     }
 

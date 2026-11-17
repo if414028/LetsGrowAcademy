@@ -94,7 +94,7 @@ class CrmIntegrationTest extends TestCase
         $this->getJson('https://localhost'.$path)->assertStatus(503);
     }
 
-    public function test_backup_paginates_pending_and_historical_registrations_without_exposing_checkout_credentials(): void
+    public function test_backup_paginates_registrations_and_provides_an_academy_continuation_link(): void
     {
         $owner = $this->subscriber();
         $this->post(route('subscriber-recruitment.submit', $owner->landing_page_slug), $this->form());
@@ -108,7 +108,9 @@ class CrmIntegrationTest extends TestCase
             ->assertJsonPath('data.0.payment_status', 'pending')
             ->assertJsonPath('data.0.whatsapp_consent', false)
             ->assertJsonPath('meta.has_more', true);
-        $this->assertStringNotContainsString($first->event_checkout_id, $response->getContent());
+        $this->assertSame($first->continuePaymentUrl(), $response->json('data.0.continue_payment_url'));
+        $this->assertArrayNotHasKey('event_checkout_id', $response->json('data.0'));
+        $this->assertArrayNotHasKey('checkout_url', $response->json('data.0'));
         $cursor = $response->json('meta.next_cursor');
         $this->getJson($url.'?per_page=1&cursor='.urlencode($cursor))->assertOk()
             ->assertJsonPath('data.0.registration_id', 'LGA-'.$legacy->id)

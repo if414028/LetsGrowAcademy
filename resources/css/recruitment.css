@@ -212,6 +212,16 @@
 .recruitment-success-icon .recruitment-icon { width: 32px; height: 32px; }
 .recruitment-success h1 { font-size: clamp(2rem, 4.5vw, 3.5rem); line-height: 1.15; letter-spacing: -.045em; text-wrap: balance; }
 .recruitment-success p { max-width: 34rem; margin: 1.25rem auto 0; color: var(--recruitment-muted); font-size: 1.0625rem; line-height: 1.8; }
+.recruitment-page .recruitment-registration-code { margin-block: 1rem; color: var(--recruitment-muted); font-size: .9375rem; }
+.recruitment-registration-code strong { color: var(--recruitment-ink); font-variant-numeric: tabular-nums; }
+.recruitment-chat-action { display: grid; justify-items: center; gap: .8rem; margin-top: 1.5rem; }
+.recruitment-chat-action .recruitment-button { min-height: 48px; width: 100%; max-width: 22rem; }
+.recruitment-chat-action p, .recruitment-success .recruitment-chat-action p { margin: 0; max-width: 30rem; color: var(--recruitment-muted); font-size: .875rem; line-height: 1.7; text-align: center; }
+.recruitment-event-details { display: grid; gap: .55rem; margin-block: 1rem 1.25rem; padding: 1rem; border: 1px solid var(--recruitment-line); border-radius: 12px; background: var(--recruitment-surface); text-align: left; }
+.recruitment-event-details > div { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: .75rem; }
+.recruitment-event-details dt { color: var(--recruitment-muted); font-size: .8125rem; }
+.recruitment-event-details dd { margin: 0; color: var(--recruitment-ink); font-size: .875rem; font-weight: 700; overflow-wrap: anywhere; }
+.recruitment-success .recruitment-event-details { max-width: 34rem; margin-inline: auto; }
 .recruitment-form-card { width: 100%; max-width: 720px; margin-inline: auto; padding: 3rem; background: white; border-radius: 28px; box-shadow: 0 20px 65px #0b3a5c08; }
 .recruitment-form-card h2 { margin-top: 1rem; font-size: clamp(1.9rem, 3.2vw, 2.4rem); }
 .recruitment-form-card > p:not(.recruitment-eyebrow) { color: var(--recruitment-muted); margin-top: 1.25rem; font-size: .9rem; }

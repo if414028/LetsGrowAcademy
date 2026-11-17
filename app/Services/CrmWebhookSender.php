@@ -42,14 +42,22 @@ class CrmWebhookSender
             return;
         }
 
-        $delivery->refresh();
+        $delivery = CrmWebhookDelivery::whereKey($delivery->id)->where('lease_token', $lease)->first();
+        if (! $delivery) {
+            return;
+        }
         $httpStatus = null;
         $errorCode = null;
         try {
             $body = json_encode($delivery->payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
             $timestamp = (string) now()->timestamp;
             $signature = hash_hmac('sha256', $timestamp.'.'.$body, (string) config('crm.webhook_secret'));
-            $url = config('crm.'.($delivery->event_type === 'registration.created' ? 'registration_webhook_url' : 'payment_webhook_url'));
+            $endpoint = match ($delivery->event_type) {
+                'registration.created', 'registration.updated', 'registration.deleted' => 'registration_webhook_url',
+                'payment.updated' => 'payment_webhook_url',
+                default => throw new RuntimeException('Unsupported CRM event type.'),
+            };
+            $url = config('crm.'.$endpoint);
             $response = Http::acceptJson()->connectTimeout(3)->timeout(10)->withoutRedirecting()
                 ->withHeaders([
                     'X-LGA-Event-Id' => $delivery->event_id,
